@@ -317,11 +317,38 @@ type fhirSearch struct {
 var hl7Categories = []string{"social-history", "vital-signs", "imaging", "laboratory", "procedure",
 	"survey", "exam", "therapy", "activity"}
 
+// fhirParams are the search parameters the Observation search takes.
+var fhirParams = []string{"type", "code", "category", "start", "end", "limit", "cursor", "view"}
+
+// fhirHints name the supported parameter that does what a standard FHIR
+// search parameter would.
+var fhirHints = map[string]string{
+	"date":   "use start and end (RFC 3339 or YYYY-MM-DD)",
+	"_count": "use limit",
+}
+
 // parseFHIRSearch reads the code and category search parameters: at most
-// one value each, a single token (no comma list). It returns a message for a
-// 400.
+// one value each, a single token (no comma list). Any other parameter than
+// fhirParams is refused rather than ignored, so a client never takes an
+// unfiltered list for a filtered one (_format may ask for JSON, the only
+// format served). It returns a message for a 400.
 func parseFHIRSearch(qs url.Values) (fhirSearch, string) {
 	var fs fhirSearch
+	names := make([]string, 0, len(qs))
+	for name := range qs {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	for _, name := range names {
+		switch {
+		case slices.Contains(fhirParams, name):
+		case name == "_format" && slices.Contains([]string{"json", "application/json", fhirJSON}, qs.Get(name)):
+		case fhirHints[name] != "":
+			return fs, "search parameter " + name + " is not supported: " + fhirHints[name]
+		default:
+			return fs, "search parameter " + name + " is not supported: use " + strings.Join(fhirParams, ", ")
+		}
+	}
 	for _, name := range []string{"code", "category"} {
 		switch v := qs[name]; {
 		case len(v) == 0:

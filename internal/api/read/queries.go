@@ -729,8 +729,10 @@ type CoverageDay struct {
 
 // Coverage is what the ETL has landed for a user and what it still has to do.
 type Coverage struct {
-	// PendingJobs counts ETL jobs not finished yet (pending or running). Zero
-	// means every accepted upload has been processed.
+	// PendingJobs counts the user's work not finished yet: ETL jobs and
+	// provider pulls (backfill, scheduled or notified) pending or running.
+	// Zero means every accepted upload and every queued pull has been
+	// processed.
 	PendingJobs int64 `json:"pending_jobs"`
 	// ParkedJobs counts ETL jobs that exhausted their attempts.
 	ParkedJobs int64 `json:"parked_jobs"`
@@ -752,8 +754,8 @@ type Coverage struct {
 var MaxCoverageDays = 10000
 
 // UserCoverage reports per provider per local day record counts (from
-// ohs_sync.pull_coverage), the user's unfinished ETL jobs and the lines the
-// ETL rejected.
+// ohs_sync.pull_coverage), the user's unfinished ETL jobs and pulls, and the
+// lines the ETL rejected.
 func UserCoverage(ctx context.Context, db Querier, tenantID, userID uuid.UUID, q CoverageQuery) (Coverage, error) {
 	if !q.Start.IsZero() && !q.End.IsZero() && q.Start.After(q.End) {
 		return Coverage{}, &QueryError{Msg: "start must not be after end"}
@@ -762,8 +764,13 @@ func UserCoverage(ctx context.Context, db Querier, tenantID, userID uuid.UUID, q
 		return Coverage{}, err
 	}
 	c := Coverage{Days: []CoverageDay{}}
+	// A pull lands its data through ETL jobs it queues when it ends, so a
+	// connection's backfill counts as pending until it is pulled. Parked pulls
+	// are not counted: a pull is parked when its connection is disconnected
+	// or needs reauthorization, which freshness reports.
 	if err := db.QueryRow(ctx, `SELECT
-			count(*) FILTER (WHERE status IN ('pending', 'running')),
+			count(*) FILTER (WHERE status IN ('pending', 'running')) + (SELECT count(*) FROM ohs_sync.pull_jobs p
+				WHERE p.tenant_id = $1 AND p.user_id = $2 AND p.status IN ('pending', 'running')),
 			count(*) FILTER (WHERE status = 'parked')
 		FROM ohs_sync.etl_jobs WHERE tenant_id = $1 AND user_id = $2`, tenantID, userID).
 		Scan(&c.PendingJobs, &c.ParkedJobs); err != nil {

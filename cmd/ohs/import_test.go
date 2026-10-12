@@ -82,7 +82,8 @@ func TestImportAppleHealth(t *testing.T) {
 	if err := run([]string{"import", "apple-health", "--token", "ohs_ut_cli_test", "--url", srv.URL, fixtureXML}, &out); err != nil {
 		t.Fatalf("second import: %v", err)
 	}
-	if len(stub.batches) != 1 || strings.Contains(out.String(), "already stored    0") {
+	if len(stub.batches) != 1 || !strings.Contains(out.String(), "stored now        0") ||
+		strings.Contains(out.String(), "already stored    0") {
 		t.Errorf("second run should reuse the batch and find every part stored:\n%s", out.String())
 	}
 }

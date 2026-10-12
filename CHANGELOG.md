@@ -337,6 +337,23 @@ release may change the API, the configuration or the database schema.
   so the lookup is an index range, not a scan.
 - A token refresh that returns no new refresh token keeps the stored one (RFC 6749 section 6);
   this was already the behaviour and is now covered by a test.
+- `pending_jobs` in `GET /v1/users/{id}/coverage` (and the MCP `get_coverage`) also counts the
+  provider pulls not done yet. Before, it read 0 right after a provider connection while the
+  backfill had not run, so a client waiting on it concluded too early.
+- The FHIR Observation search answers 400 for a parameter it does not support instead of
+  ignoring it: `date` and `_count` used to return the whole list unfiltered. The message names
+  `start`/`end` and `limit`. `_format` asking for JSON is accepted.
+- `ohs import apple-health` prints its first progress line two seconds in (a short import
+  prints only the summary), and the summary splits parts into `stored now` and
+  `already stored` instead of `uploaded`, which counted both.
+
+### Fixed
+
+- Disconnecting or deleting a user now revokes the Oura access token (`GET /oauth/revoke`),
+  like WHOOP, Strava and Polar.
+- A provider deletion notice (Oura, WHOOP, Strava) now updates the connection's
+  `last_event_at`, so `push_healthy` no longer reads false for a connection whose only recent
+  notifications were deletions.
 
 ### Security
 

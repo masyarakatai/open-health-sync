@@ -65,6 +65,11 @@ matches every one given.
 | `start`, `end` | RFC 3339 or `YYYY-MM-DD`; `start` <= the record's time above < `end` |
 | `limit`, `cursor` | page size (default 100, at most 1000) and the cursor of the `next` link |
 
+Any other parameter is a 400 rather than being ignored, so a client never takes the whole list
+for a filtered one: use `start` and `end` where FHIR has `date`, and `limit` where it has
+`_count`. `_format` is accepted when it asks for JSON (`json`, `application/json` or
+`application/fhir+json`), the only format served.
+
 | `code` | Finds |
 |---|---|
 | `http://loinc.org\|8867-4` (any LOINC code) | the Observations whose code carries it: the quantity types the catalog codes with it, and the types the profile adds it to (8867-4 also finds resting heart rate, 2708-6 SpO2) |

@@ -185,7 +185,8 @@ func inboundOwners(ctx context.Context, q interface {
 
 // storeInbound stores the raw lines of each event for every active
 // connection of its provider user: one raw object and one ETL job per
-// connection, filed under the day the notification arrived. The batch name
+// connection, filed under the day the notification arrived, and marks the
+// connection as having heard from its provider (touchInbound). The batch name
 // carries the arrival time, so two notifications never share a key; the same
 // bytes delivered twice are stored once (storeRaw skips registered bytes). A
 // user being deleted is skipped.
@@ -208,6 +209,11 @@ func (h *Handlers) storeInbound(ctx context.Context, provider string, events []c
 				continue
 			}
 			if err != nil {
+				return err
+			}
+			// A deletion is a notification like any other: it shows the
+			// push channel works.
+			if err := touchInbound(ctx, h.d.Pool, o, provider, now); err != nil {
 				return err
 			}
 		}
@@ -248,26 +254,35 @@ func (h *Handlers) enqueueInbound(ctx context.Context, provider string, events [
 			}); err != nil {
 				return err
 			}
-			// A health signal, not data: skip a row another transaction holds
-			// (a token refresh waits on the provider under that lock) rather
-			// than keep the provider's request waiting.
-			if _, err := tx.Exec(ctx, `
-				UPDATE ohs_sync.connections c SET last_event_at = $4
-				WHERE c.ctid = (SELECT ctid FROM ohs_sync.connections
-					WHERE tenant_id = $1 AND user_id = $2 AND provider = $3
-					FOR UPDATE SKIP LOCKED)`,
-				o.tenant, o.user, provider, now); err != nil {
-				return fmt.Errorf("touch connection: %w", err)
-			}
-			if _, err := tx.Exec(ctx, `
-				UPDATE ohs_sync.inbound_subscriptions SET last_received_at = $4
-				WHERE tenant_id = $1 AND user_id = $2 AND provider = $3 AND status = 'subscribed'`,
-				o.tenant, o.user, provider, now); err != nil {
-				return fmt.Errorf("touch subscription: %w", err)
+			if err := touchInbound(ctx, tx, o, provider, now); err != nil {
+				return err
 			}
 		}
 	}
 	return tx.Commit(ctx)
+}
+
+// touchInbound records that a verified notification for the connection
+// arrived: the push health signal freshness reports and the scheduler slows
+// its backstop pulls on. A health signal, not data: it skips a row another
+// transaction holds (a token refresh waits on the provider under that lock)
+// rather than keep the provider's request waiting.
+func touchInbound(ctx context.Context, q execer, o inboundOwner, provider string, now time.Time) error {
+	if _, err := q.Exec(ctx, `
+		UPDATE ohs_sync.connections c SET last_event_at = $4
+		WHERE c.ctid = (SELECT ctid FROM ohs_sync.connections
+			WHERE tenant_id = $1 AND user_id = $2 AND provider = $3
+			FOR UPDATE SKIP LOCKED)`,
+		o.tenant, o.user, provider, now); err != nil {
+		return fmt.Errorf("touch connection: %w", err)
+	}
+	if _, err := q.Exec(ctx, `
+		UPDATE ohs_sync.inbound_subscriptions SET last_received_at = $4
+		WHERE tenant_id = $1 AND user_id = $2 AND provider = $3 AND status = 'subscribed'`,
+		o.tenant, o.user, provider, now); err != nil {
+		return fmt.Errorf("touch subscription: %w", err)
+	}
+	return nil
 }
 
 // maxCoalesced bounds the window a pending job may grow to by absorbing

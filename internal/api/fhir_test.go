@@ -122,6 +122,16 @@ func TestParseFHIRSearch(t *testing.T) {
 		{query: "category=", bad: true},
 		{query: "category=http://example.org/c|activity", bad: true},
 		{query: "category=activity,laboratory", bad: true},
+		// The other supported parameters, and _format asking for JSON.
+		{query: "type=heart_rate&start=2026-03-01&end=2026-03-02&limit=10&cursor=x&view=all"},
+		{query: "_format=json"},
+		{query: "_format=" + url.QueryEscape(fhirJSON)},
+		// Anything else is refused, never ignored: an unfiltered answer would
+		// pass for a filtered one.
+		{query: "_format=xml", bad: true},
+		{query: "date=ge2026-03-01", bad: true},
+		{query: "_count=10", bad: true},
+		{query: "patient=x", bad: true},
 	}
 	for _, c := range cases {
 		qs, err := url.ParseQuery(c.query)

@@ -222,3 +222,26 @@ func TestRefresh_ErrorsCarryNoToken(t *testing.T) {
 	assert.NotContains(t, err.Error(), "secret-refresh-value")
 	assert.NotContains(t, err.Error(), "test-client-secret")
 }
+
+// Disconnecting or deleting a user revokes the grant at Oura: the access token
+// goes to /oauth/revoke, and a failure is reported without the token.
+func TestRevoke(t *testing.T) {
+	f := newFakeOura(t)
+	c := f.connector()
+	_, ok := connector.Connector(c).(connector.Revoker)
+	require.True(t, ok)
+
+	require.NoError(t, c.Revoke(context.Background(), connector.Tokens{Access: "tok-a", Refresh: "tok-r"}))
+	calls := f.Calls("/oauth/revoke")
+	require.Len(t, calls, 1)
+	assert.Equal(t, http.MethodGet, calls[0].Method)
+	assert.Equal(t, "tok-a", calls[0].Query.Get("access_token"))
+
+	require.NoError(t, c.Revoke(context.Background(), connector.Tokens{Refresh: "tok-r"}), "nothing to revoke")
+	assert.Len(t, f.Calls("/oauth/revoke"), 1)
+
+	f.RevokeStatus = http.StatusServiceUnavailable
+	err := c.Revoke(context.Background(), connector.Tokens{Access: "tok-a"})
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "tok-a")
+}

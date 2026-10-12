@@ -75,6 +75,8 @@ type Server struct {
 	// PageSize is how many documents one page holds (2 by default), so the
 	// fixtures span several pages.
 	PageSize int
+	// RevokeStatus is the HTTP status of GET /oauth/revoke (200 when zero).
+	RevokeStatus int
 	// TokenStatus and TokenBody override the token endpoint answer.
 	TokenStatus int
 	TokenBody   string
@@ -206,6 +208,24 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-RateLimit-Tier", "token")
 		w.WriteHeader(http.StatusTooManyRequests)
 		write([]byte(`{"detail":"rate limit exceeded"}`))
+		return
+	}
+
+	if r.URL.Path == "/oauth/revoke" {
+		if r.Method != http.MethodGet {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		if s.RevokeStatus != 0 {
+			w.WriteHeader(s.RevokeStatus)
+			return
+		}
+		if s.Rotate {
+			s.mu.Lock()
+			delete(s.access, r.URL.Query().Get("access_token"))
+			s.mu.Unlock()
+		}
+		write([]byte(`{}`))
 		return
 	}
 
