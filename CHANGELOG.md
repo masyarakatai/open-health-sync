@@ -288,6 +288,11 @@ release may change the API, the configuration or the database schema.
 
 ### Changed
 
+- FHIR Observation pages read back their records within the page's time range, and the blood
+  pressure pairing subqueries carry that range too, so TimescaleDB plans only the chunks the
+  page lies in instead of every chunk of the user's history. On a user with 400 days of
+  samples (58 chunks, compressed), a page of 1,000 went from 260 ms to 75 ms (median), and
+  the full export of 125,200 Observations from 47 s to 24 s.
 - `quantity_samples` chunks older than 30 days are compressed (TimescaleDB compression,
   segmented by tenant and user): about 7 times less disk in our benchmark of 10.5 million
   samples. Builds of TimescaleDB without compression keep the table as it is.
