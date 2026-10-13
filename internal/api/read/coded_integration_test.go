@@ -156,3 +156,104 @@ func TestObservationsReadOnlyThePagesChunks(t *testing.T) {
 	_, single := ObservationByID(ctx, pool, tn.ID, u.ID, KindQuantity, false, panel, ViewAll)
 	assert.True(t, (err == nil) != (single == nil), "a sample is either a panel or a single sample")
 }
+
+// The merged view's lookups of a better ranked record carry the page's
+// window, so they plan only the chunks near the page, and a page with no
+// end is read through windows: the pages still hold every record the merged
+// view keeps, once.
+func TestMergedReadsAreWindowed(t *testing.T) {
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, db.TestDB(t))
+	require.NoError(t, err)
+	t.Cleanup(pool.Close)
+	store := tenant.New(pool)
+	tn, _, err := store.CreateTenant(ctx, "windows")
+	require.NoError(t, err)
+	u, err := store.CreateUser(ctx, tn.ID, "u")
+	require.NoError(t, err)
+
+	// Twelve weeks: a blood pressure pair from a cuff, and the same heart
+	// rate from a watch (ranked first by default) and from the cuff.
+	t0 := time.Date(2026, 1, 5, 8, 0, 0, 0, time.UTC)
+	insert := func(provider, typ, unit string, v float64, at time.Time) {
+		_, err := pool.Exec(ctx, `INSERT INTO ohs_data.quantity_samples
+			(tenant_id, user_id, provider, source_slug, device_id, quantity_type, value, unit, start_date, content_hash)
+			VALUES ($1, $2, $3, $3, 'dev-1', $4, $5, $6, $7, $8)`,
+			tn.ID, u.ID, provider, typ, v, unit, at, uuid.NewString())
+		require.NoError(t, err)
+	}
+	for d := 0; d < 84; d++ {
+		at := t0.AddDate(0, 0, d)
+		insert("withings", Systolic, "mmHg", 120, at)
+		insert("withings", Diastolic, "mmHg", 80, at)
+		insert("apple_health", "heart_rate", "bpm", 60, at.Add(time.Hour))
+		insert("withings", "heart_rate", "bpm", 61, at.Add(time.Hour+time.Minute))
+	}
+	var all int
+	require.NoError(t, pool.QueryRow(ctx, `SELECT count(*) FROM show_chunks('ohs_data.quantity_samples')`).Scan(&all))
+	require.GreaterOrEqual(t, all, 12)
+
+	// coverChunks is the most chunks a merged lookup of the statements plans.
+	coverChunks := func(r *recorder) int {
+		most := 0
+		for _, st := range r.stmts {
+			if strings.Contains(st.sql, "_cover") {
+				most = max(most, len(planChunks(t, pool, st)))
+			}
+		}
+		return most
+	}
+
+	// One week: the lookups stay within the week and a day and a half on
+	// each side.
+	r := &recorder{Querier: pool}
+	page, err := Observations(ctx, r, tn.ID, u.ID, Query{Start: t0.AddDate(0, 0, 28), End: t0.AddDate(0, 0, 35), Limit: 100}, AllObservations())
+	require.NoError(t, err)
+	require.Len(t, page.Records, 14) // 7 panels, 7 heart rates of the watch
+	for _, rec := range page.Records {
+		if rec.Sample.Type == "heart_rate" {
+			assert.Equal(t, "apple_health", rec.Sample.Provider)
+		}
+	}
+	assert.LessOrEqual(t, coverChunks(r), 3, "of %d chunks", all)
+
+	// No end: paged through windows, every page's lookups plan a few chunks,
+	// and the pages hold each kept record once.
+	seen := map[int64]bool{}
+	cursor := ""
+	for {
+		r := &recorder{Querier: pool}
+		page, err := Observations(ctx, r, tn.ID, u.ID, Query{Cursor: cursor, Limit: 10}, AllObservations())
+		require.NoError(t, err)
+		assert.LessOrEqual(t, coverChunks(r), 4, "of %d chunks", all)
+		for _, rec := range page.Records {
+			assert.False(t, seen[rec.Sample.ID])
+			seen[rec.Sample.ID] = true
+			if rec.Sample.Type == "heart_rate" {
+				assert.Equal(t, "apple_health", rec.Sample.Provider, "the cuff's heart rate is covered")
+			}
+		}
+		if cursor = page.NextCursor; cursor == "" {
+			break
+		}
+	}
+	assert.Len(t, seen, 2*84)
+
+	// The REST list too.
+	n := 0
+	cursor = ""
+	for {
+		r := &recorder{Querier: pool}
+		page, err := Samples(ctx, r, tn.ID, u.ID, Query{Type: "heart_rate", Cursor: cursor, Limit: 10})
+		require.NoError(t, err)
+		assert.LessOrEqual(t, coverChunks(r), 4, "of %d chunks", all)
+		for _, s := range page.Records {
+			assert.Equal(t, "apple_health", s.Provider)
+			n++
+		}
+		if cursor = page.NextCursor; cursor == "" {
+			break
+		}
+	}
+	assert.Equal(t, 84, n)
+}

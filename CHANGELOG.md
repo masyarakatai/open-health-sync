@@ -343,6 +343,13 @@ release may change the API, the configuration or the database schema.
 - The FHIR Observation search answers 400 for a parameter it does not support instead of
   ignoring it: `date` and `_count` used to return the whole list unfiltered. The message names
   `start`/`end` and `limit`. `_format` asking for JSON is accepted.
+- Merged view reads are faster on a long history: a merged page's lookups of a better ranked
+  record are bounded by the page's dates, a page with no end is read through growing windows
+  (2, 16, 128 days), and these statements are planned for their parameters at every run (a
+  generic plan scanned whole chunks for each record). On a user with 400 days of data, a
+  FHIR page of 1,000 over a recent week went from 5.5 s to 0.35 s, a one-day page from
+  0.74 s to 0.06 to 0.15 s, and `/samples` of 1,000 heart rates from 1.2 s to 0.17 to 0.5 s.
+  Pages over compressed history still cost about 2 ms per record.
 - FHIR: an ECG's atrial fibrillation classification (`ecg_afib_classification`, Withings) is
   served as `valueCodeableConcept` (`negative`, `positive`, `inconclusive`) instead of a
   quantity in the unit "classification".

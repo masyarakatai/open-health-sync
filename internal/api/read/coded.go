@@ -250,7 +250,41 @@ type obsKey struct {
 // sample paired with a diastolic one comes with it as Partner, and the
 // diastolic one is not listed on its own, so a pair is never split across
 // pages.
+//
+// A page of the merged view with no end is read through windows (see
+// windowed).
 func Observations(ctx context.Context, db Querier, tenantID, userID uuid.UUID, q Query, f ObservationFilter) (Page[ObservationRecord], error) {
+	if !q.merged() || !q.End.IsZero() || f.Empty() {
+		return observations(ctx, db, tenantID, userID, q, f)
+	}
+	since := q.Start
+	if q.Cursor != "" {
+		t, _, _, err := decodeObsCursor(q.Cursor)
+		if err != nil {
+			return Page[ObservationRecord]{}, err
+		}
+		if t.After(since) {
+			since = t
+		}
+	}
+	mine := "tenant_id = $1 AND user_id = $2"
+	sets := []timed{
+		{"ohs_data.quantity_samples WHERE " + mine, "start_date"},
+		{"ohs_data.sleep_sessions WHERE " + mine, "bedtime_start"},
+		{"ohs_data.workouts WHERE " + mine, "start_date"},
+		{"ohs_data.daily_summaries WHERE " + mine, "(summary_date::timestamp AT TIME ZONE 'UTC')"},
+	}
+	first := func(from time.Time) (time.Time, error) {
+		return firstFrom(ctx, db, sets, []any{tenantID, userID}, from)
+	}
+	return windowed(since, first, func(end time.Time) (Page[ObservationRecord], error) {
+		wq := q
+		wq.End = end
+		return observations(ctx, db, tenantID, userID, wq, f)
+	})
+}
+
+func observations(ctx context.Context, db Querier, tenantID, userID uuid.UUID, q Query, f ObservationFilter) (Page[ObservationRecord], error) {
 	cursor := q.Cursor
 	q.Cursor = ""
 	n, err := q.normalize(false)
@@ -289,6 +323,11 @@ func Observations(ctx context.Context, db Querier, tenantID, userID uuid.UUID, q
 	var mp *mergeParams
 	if pol != nil {
 		mp = bindMerge(*pol, append(fusion.KnownMetrics(), f.Types...), arg)
+		since := n.Start
+		if after != nil && after.t.After(since) {
+			since = after.t
+		}
+		mp.window(since, n.End)
 	}
 	// mergedOut adds the merged view's condition for a branch.
 	mergedOut := func(where []string, cond func() string) []string {
@@ -361,6 +400,9 @@ func Observations(ctx context.Context, db Querier, tenantID, userID uuid.UUID, q
 			mergedOut(nil, func() string { return dailyOwnsAny(mp, "d") }))
 	}
 	sql := "SELECT kind, ts, id FROM (" + strings.Join(branches, " UNION ALL ") + ") k ORDER BY ts, kind, id LIMIT " + limit
+	if pol != nil {
+		args = append([]any{customPlan}, args...)
+	}
 	rows, err := db.Query(ctx, sql, args...)
 	if err != nil {
 		return Page[ObservationRecord]{}, fmt.Errorf("read: observations: %w", err)
@@ -544,6 +586,7 @@ func fetchRecords(ctx context.Context, db Querier, tenantID, userID uuid.UUID, k
 				args = append(args, v)
 				return "$" + strconv.Itoa(len(args))
 			})
+			mp.window(spans[KindDaily].from, spans[KindDaily].to)
 			cols, extra = dailyMaskedCols(mp, "r"), args[3:]
 		}
 		err := fetchByIDs(ctx, db, "ohs_data.daily_summaries", cols, tenantID, userID, ids[KindDaily], spans[KindDaily], "summary_date", "date", func(r pgx.Rows) error {
