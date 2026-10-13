@@ -64,6 +64,7 @@ import type {
   RoutePointPage,
   Sample,
   SamplePage,
+  SampleStats,
   SetConsentRequest,
   SetupRequest,
   SetupResult,
@@ -259,6 +260,30 @@ export interface ListSamplesParams {
   /** The next_cursor of the previous page. */
   cursor?: string;
   limit?: number;
+}
+
+/** Query and header parameters of {@link OpenHealthSync.sampleStats}. */
+export interface SampleStatsParams {
+  /** Canonical quantity type, as for listSamples. */
+  type: string;
+  /** Inclusive lower bound, RFC 3339 or YYYY-MM-DD (midnight in tz). Widened to a whole interval. */
+  start: string;
+  /** Exclusive upper bound, RFC 3339 or YYYY-MM-DD (midnight in tz). Widened to a whole interval; at most 10000 intervals after start. */
+  end: string;
+  /** Width of the intervals. */
+  interval?: "hour" | "day";
+  /** IANA time zone of the intervals; a day runs from local midnight to local midnight. */
+  tz?: string;
+  /** Keep one provider. */
+  provider?: string;
+  /**
+   * `merged` (the default): when several sources recorded the same thing (a ring and a
+   * watch the same night, a phone and a watch the same steps, one sample directly and
+   * through an aggregator), only the best ranked source's record is listed, so nothing
+   * counts twice. The order of sources is the user's (see source-priorities). `all`:
+   * every stored record of every source.
+   */
+  view?: "merged" | "all";
 }
 
 /** Query and header parameters of {@link OpenHealthSync.listCategorySamples}. */
@@ -1384,6 +1409,44 @@ export class OpenHealthSync {
     options?: RequestOptions,
   ): AsyncGenerator<Sample> {
     return paginate((cursor) => this.listSamples(userId, { ...params, cursor }, options));
+  }
+
+  /**
+   * Statistics of one quantity type per hour or per local day.
+   *
+   * `GET /v1/users/{id}/samples/stats`
+   *
+   * Count, sum, mean, min and max of the samples whose start falls in each interval. With
+   * `view=merged` (the default) each interval holds one row, from the best ranked source
+   * that recorded something in it (see source-priorities), so nothing counts twice; the
+   * choice is made per interval, not per record. With `view=all` there is one series per
+   * provider, source and unit: a phone and a watch counting the same steps stay apart.
+   * Not paged.
+   *
+   * Served from a continuous aggregate when the database has one and `tz` has a whole-hour
+   * offset over the range, else computed from the samples (same answer). Data written for a
+   * past hour (an imported history, a provider deletion) shows within about 5 minutes.
+   */
+  sampleStats(
+    userId: string,
+    params: SampleStatsParams,
+    options?: RequestOptions,
+  ): Promise<SampleStats> {
+    return this.#request<SampleStats>({
+      method: "GET",
+      path: `/v1/users/${encode(userId)}/samples/stats`,
+      query: {
+        type: params.type,
+        start: params.start,
+        end: params.end,
+        interval: params.interval,
+        tz: params.tz,
+        provider: params.provider,
+        view: params.view,
+      },
+      expect: "json",
+      options,
+    });
   }
 
   /**

@@ -982,6 +982,70 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /v1/users/{id}/samples/stats:
+    parameters:
+      - $ref: "#/components/parameters/UserID"
+    get:
+      tags: [read]
+      operationId: sampleStats
+      summary: Statistics of one quantity type per hour or per local day
+      description: |
+        Count, sum, mean, min and max of the samples whose start falls in each interval. With
+        `view=merged` (the default) each interval holds one row, from the best ranked source
+        that recorded something in it (see source-priorities), so nothing counts twice; the
+        choice is made per interval, not per record. With `view=all` there is one series per
+        provider, source and unit: a phone and a watch counting the same steps stay apart.
+        Not paged.
+
+        Served from a continuous aggregate when the database has one and `tz` has a whole-hour
+        offset over the range, else computed from the samples (same answer). Data written for a
+        past hour (an imported history, a provider deletion) shows within about 5 minutes.
+      parameters:
+        - name: type
+          in: query
+          required: true
+          description: Canonical quantity type, as for listSamples.
+          schema: { type: string }
+        - name: interval
+          in: query
+          description: Width of the intervals.
+          schema: { type: string, enum: [hour, day], default: day }
+        - name: tz
+          in: query
+          description: IANA time zone of the intervals; a day runs from local midnight to local midnight.
+          schema: { type: string, default: UTC, example: Europe/Paris }
+        - name: start
+          in: query
+          required: true
+          description: Inclusive lower bound, RFC 3339 or YYYY-MM-DD (midnight in tz). Widened to a whole interval.
+          schema:
+            oneOf:
+              - { type: string, format: date-time }
+              - { type: string, format: date }
+        - name: end
+          in: query
+          required: true
+          description: Exclusive upper bound, RFC 3339 or YYYY-MM-DD (midnight in tz). Widened to a whole interval; at most 10000 intervals after start.
+          schema:
+            oneOf:
+              - { type: string, format: date-time }
+              - { type: string, format: date }
+        - name: provider
+          in: query
+          description: Keep one provider.
+          schema: { type: string }
+        - $ref: "#/components/parameters/View"
+      responses:
+        "200":
+          description: The intervals that hold samples, by start, provider, source and unit.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SampleStats" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /v1/users/{id}/category-samples:
     parameters:
       - $ref: "#/components/parameters/UserID"
@@ -3318,6 +3382,35 @@ components:
                 type: object
                 additionalProperties: { type: integer }
               last_synced_at: { type: string, format: date-time }
+
+    SampleStats:
+      type: object
+      required: [type, interval, tz, view, start, end, buckets, truncated]
+      properties:
+        type: { type: string }
+        interval: { type: string, enum: [hour, day] }
+        tz: { type: string }
+        view: { type: string, enum: [merged, all] }
+        start: { type: string, format: date-time, description: "Start of the range after widening, with the offset of tz." }
+        end: { type: string, format: date-time }
+        truncated:
+          type: boolean
+          description: True when more than 50000 rows matched; buckets holds the earliest.
+        buckets:
+          type: array
+          items:
+            type: object
+            required: [start, provider, source, unit, count, sum, avg, min, max]
+            properties:
+              start: { type: string, format: date-time, description: "Start of the interval, with the offset of tz." }
+              provider: { type: string }
+              source: { type: string, description: "App, bundle or device that recorded the samples; empty when the provider names none." }
+              unit: { type: [string, "null"] }
+              count: { type: integer }
+              sum: { type: number }
+              avg: { type: number }
+              min: { type: number }
+              max: { type: number }
 
     SamplePage:
       allOf:

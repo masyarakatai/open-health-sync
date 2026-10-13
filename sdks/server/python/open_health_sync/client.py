@@ -72,6 +72,7 @@ from .models import (
     RoutePointPage,
     Sample,
     SamplePage,
+    SampleStats,
     SetConsentRequest,
     SetupRequest,
     SetupResult,
@@ -902,6 +903,60 @@ class OpenHealthSync:
                 cursor=cursor,
                 limit=limit,
             )
+        )
+
+    def sample_stats(
+        self,
+        user_id: str,
+        *,
+        type: str,
+        start: str,
+        end: str,
+        interval: Optional[Literal["hour", "day"]] = None,
+        tz: Optional[str] = None,
+        provider: Optional[str] = None,
+        view: Optional[Literal["merged", "all"]] = None,
+    ) -> SampleStats:
+        """Statistics of one quantity type per hour or per local day.
+
+        ``GET /v1/users/{id}/samples/stats``
+
+        Count, sum, mean, min and max of the samples whose start falls in each interval. With
+        `view=merged` (the default) each interval holds one row, from the best ranked source
+        that recorded something in it (see source-priorities), so nothing counts twice; the
+        choice is made per interval, not per record. With `view=all` there is one series per
+        provider, source and unit: a phone and a watch counting the same steps stay apart.
+        Not paged.
+
+        Served from a continuous aggregate when the database has one and `tz` has a whole-hour
+        offset over the range, else computed from the samples (same answer). Data written for a
+        past hour (an imported history, a provider deletion) shows within about 5 minutes.
+
+        Args:
+            type: Canonical quantity type, as for listSamples.
+            start: Inclusive lower bound, RFC 3339 or YYYY-MM-DD (midnight in tz). Widened to a whole interval.
+            end: Exclusive upper bound, RFC 3339 or YYYY-MM-DD (midnight in tz). Widened to a whole interval; at most 10000 intervals after start.
+            interval: Width of the intervals.
+            tz: IANA time zone of the intervals; a day runs from local midnight to local midnight.
+            provider: Keep one provider.
+            view: `merged` (the default): when several sources recorded the same thing (a ring and a
+                watch the same night, a phone and a watch the same steps, one sample directly and
+                through an aggregator), only the best ranked source's record is listed, so nothing
+                counts twice. The order of sources is the user's (see source-priorities). `all`:
+                every stored record of every source.
+        """
+        return self._request(
+            "GET",
+            f"/v1/users/{_path(user_id)}/samples/stats",
+            query={
+                "type": type,
+                "start": start,
+                "end": end,
+                "interval": interval,
+                "tz": tz,
+                "provider": provider,
+                "view": view,
+            },
         )
 
     def list_category_samples(

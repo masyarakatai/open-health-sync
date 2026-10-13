@@ -719,6 +719,33 @@ export interface CoverageDay {
   last_synced_at: string;
 }
 
+export interface SampleStats {
+  type: string;
+  interval: "hour" | "day";
+  tz: string;
+  view: "merged" | "all";
+  /** Start of the range after widening, with the offset of tz. */
+  start: string;
+  end: string;
+  /** True when more than 50000 rows matched; buckets holds the earliest. */
+  truncated: boolean;
+  buckets: SampleStatsBucket[];
+}
+
+export interface SampleStatsBucket {
+  /** Start of the interval, with the offset of tz. */
+  start: string;
+  provider: string;
+  /** App, bundle or device that recorded the samples; empty when the provider names none. */
+  source: string;
+  unit: string | null;
+  count: number;
+  sum: number;
+  avg: number;
+  min: number;
+  max: number;
+}
+
 export interface SamplePage {
   data: Sample[];
   /** Null on the last page. */

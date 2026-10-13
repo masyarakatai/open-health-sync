@@ -77,7 +77,11 @@ Every row in `ohs_sync` and `ohs_data` carries `tenant_id` and `user_id`, except
 reference tables. `quantity_samples`, the largest table, is compressed once a chunk is 30 days
 old (about 7 times smaller on disk). Compression is a Timescale License feature, included in
 the default `timescale/timescaledb` image; on an Apache-only build the migration leaves the
-table uncompressed and everything else works the same. No continuous aggregates are used.
+table uncompressed and everything else works the same. One continuous aggregate,
+`quantity_hourly` (same license), keeps count, sum, min and max of quantity samples per user,
+type, provider, source, unit and hour; `GET /v1/users/{id}/samples/stats` sums its hours into
+local days and falls back to the samples when it is absent or the time zone has a
+half-hour offset. Daily summaries are still written by the ETL (they do not need it).
 
 Duplicates are dropped on write. Most tables do it with a unique index on `(tenant_id,
 user_id, content_hash, <time>)`. `quantity_samples` has no such index, because checking a unique

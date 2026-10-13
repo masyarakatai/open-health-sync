@@ -53,6 +53,14 @@ func parseTime(v string) (time.Time, error) {
 	return time.Time{}, errors.New("not an RFC 3339 time or a YYYY-MM-DD date")
 }
 
+// parseTimeIn is parseTime with a YYYY-MM-DD date read as midnight in loc.
+func parseTimeIn(v string, loc *time.Location) (time.Time, error) {
+	if t, err := time.ParseInLocation(time.DateOnly, v, loc); err == nil {
+		return t, nil
+	}
+	return parseTime(v)
+}
+
 // parseReadQuery reads type, start, end, cursor, limit and view.
 func parseReadQuery(r *http.Request) (read.Query, error) {
 	qs := r.URL.Query()

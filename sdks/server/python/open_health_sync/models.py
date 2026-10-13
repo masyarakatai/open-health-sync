@@ -757,6 +757,33 @@ class CoverageDay(TypedDict):
     last_synced_at: str
 
 
+class SampleStats(TypedDict):
+    type: str
+    interval: Literal["hour", "day"]
+    tz: str
+    view: Literal["merged", "all"]
+    # Start of the range after widening, with the offset of tz.
+    start: str
+    end: str
+    # True when more than 50000 rows matched; buckets holds the earliest.
+    truncated: bool
+    buckets: List[SampleStatsBucket]
+
+
+class SampleStatsBucket(TypedDict):
+    # Start of the interval, with the offset of tz.
+    start: str
+    provider: str
+    # App, bundle or device that recorded the samples; empty when the provider names none.
+    source: str
+    unit: Optional[str]
+    count: int
+    sum: float
+    avg: float
+    min: float
+    max: float
+
+
 class SamplePage(TypedDict):
     data: List[Sample]
     # Null on the last page.
@@ -1485,6 +1512,8 @@ __all__ = [
     "RoutePointPage",
     "Sample",
     "SamplePage",
+    "SampleStats",
+    "SampleStatsBucket",
     "SetConsentRequest",
     "SetupRequest",
     "SetupResult",

@@ -180,6 +180,7 @@ All reads are `GET /v1/users/{id}/<resource>` with a tenant key, paged as above.
 | Resource | Filters | Ordered by |
 |---|---|---|
 | `samples` | `type` (required), `start`, `end`, `view` | `start_date` |
+| `samples/stats` | `type`, `start`, `end` (required), `interval`, `tz`, `provider`, `view` | interval, not paged |
 | `category-samples` | `type` (optional), `start`, `end`, `view` | `start_date` |
 | `sleep` | `start`, `end`, `view` | `bedtime_start` |
 | `sleep/{session_id}/phases` | `start`, `end` | `start_date` |
@@ -198,6 +199,31 @@ All reads are `GET /v1/users/{id}/<resource>` with a tenant key, paged as above.
 `samples` answers 400 when `type` is not a quantity type of the catalog (a typo such as
 `heartrate`), so a wrong name is not mistaken for missing data. The names are listed in
 [data-model.md](data-model.md) and by the MCP tool `list_quantity_types`.
+
+`samples/stats` gives count, sum, mean, min and max per `hour` or per local `day` (the default)
+in the IANA zone `tz` (default UTC), one series per provider, source and unit. A phone and a
+watch that both count steps stay two series: pick one, or the largest, rather than adding
+them up. A year of daily heart rate is one call:
+
+```sh
+curl -s "$OHS/v1/users/$USER_ID/samples/stats?type=heart_rate&interval=day&tz=Europe/Paris&start=2026-01-01&end=2027-01-01" \
+  -H "Authorization: Bearer $KEY"
+```
+
+```json
+{
+  "type": "heart_rate", "interval": "day", "tz": "Europe/Paris",
+  "start": "2026-01-01T00:00:00+01:00", "end": "2027-01-01T00:00:00+01:00", "truncated": false,
+  "buckets": [
+    { "start": "2026-01-01T00:00:00+01:00", "provider": "apple_health", "source": "com.apple.health",
+      "unit": "count/min", "count": 1412, "sum": 98840, "avg": 70, "min": 48, "max": 151 }
+  ]
+}
+```
+
+With TimescaleDB's continuous aggregates (the default image) it reads an hourly aggregate, so
+long ranges stay fast; without them it computes the same answer from the samples. Data written
+for a past hour, such as an imported history, shows in the statistics within about 5 minutes.
 
 ```sh
 curl -s "$OHS/v1/users/$USER_ID/samples?type=heart_rate&start=2026-03-01&end=2026-03-02&limit=500" \

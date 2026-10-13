@@ -436,6 +436,11 @@ traces.
   written to the uncompressed part of the chunk and folded in when the job runs again.
   `SELECT * FROM chunk_compression_stats('ohs_data.quantity_samples')` shows the sizes before
   and after.
+- **Hourly statistics.** A TimescaleDB job refreshes the `quantity_hourly` continuous
+  aggregate every 5 minutes, recomputing only the hours that changed, so late data and
+  deletions (an erased user included) leave the statistics within about 5 minutes. On an
+  existing install its first run builds the whole history once (about 11 s for 10 million
+  samples in our test). `SELECT * FROM timescaledb_information.job_stats` shows its runs.
 - **Large uploads.** An instance processes a bounded number of uploads at once
   (`OHS_INGEST_CONCURRENCY`, default 8, 2 on the Pi) and answers 503 with `Retry-After` above it;
   clients retry.

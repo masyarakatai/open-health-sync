@@ -1230,6 +1230,74 @@
           }
         },
         {
+          "name": "Statistics of one quantity type per hour or per local day",
+          "request": {
+            "method": "GET",
+            "description": "Statistics of one quantity type per hour or per local day.\n\n`GET /v1/users/{id}/samples/stats`\n\nCount, sum, mean, min and max of the samples whose start falls in each interval. With\n`view=merged` (the default) each interval holds one row, from the best ranked source\nthat recorded something in it (see source-priorities), so nothing counts twice; the\nchoice is made per interval, not per record. With `view=all` there is one series per\nprovider, source and unit: a phone and a watch counting the same steps stay apart.\nNot paged.\n\nServed from a continuous aggregate when the database has one and `tz` has a whole-hour\noffset over the range, else computed from the samples (same answer). Data written for a\npast hour (an imported history, a provider deletion) shows within about 5 minutes.",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/:id/samples/stats?type=&start=2026-01-01T00:00:00Z&end=2026-01-01T00:00:00Z",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                ":id",
+                "samples",
+                "stats"
+              ],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "",
+                  "description": "Canonical quantity type, as for listSamples."
+                },
+                {
+                  "key": "start",
+                  "value": "2026-01-01T00:00:00Z",
+                  "description": "Inclusive lower bound, RFC 3339 or YYYY-MM-DD (midnight in tz). Widened to a whole interval."
+                },
+                {
+                  "key": "end",
+                  "value": "2026-01-01T00:00:00Z",
+                  "description": "Exclusive upper bound, RFC 3339 or YYYY-MM-DD (midnight in tz). Widened to a whole interval; at most 10000 intervals after start."
+                },
+                {
+                  "key": "interval",
+                  "value": "day",
+                  "description": "Width of the intervals.",
+                  "disabled": true
+                },
+                {
+                  "key": "tz",
+                  "value": "Europe/Paris",
+                  "description": "IANA time zone of the intervals; a day runs from local midnight to local midnight.",
+                  "disabled": true
+                },
+                {
+                  "key": "provider",
+                  "value": "",
+                  "description": "Keep one provider.",
+                  "disabled": true
+                },
+                {
+                  "key": "view",
+                  "value": "merged",
+                  "description": "`merged` (the default): when several sources recorded the same thing (a ring and a\nwatch the same night, a phone and a watch the same steps, one sample directly and\nthrough an aggregator), only the best ranked source's record is listed, so nothing\ncounts twice. The order of sources is the user's (see source-priorities). `all`:\nevery stored record of every source.",
+                  "disabled": true
+                }
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{userId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
           "name": "Category samples (events)",
           "request": {
             "method": "GET",
