@@ -98,6 +98,17 @@ type coverageArgs struct {
 	windowArgs
 }
 
+type statsArgs struct {
+	userArgs
+	Type     string `json:"type" jsonschema:"canonical quantity type, for example heart_rate or step_count (see list_quantity_types)"`
+	Interval string `json:"interval,omitempty" jsonschema:"hour or day (the default)"`
+	TZ       string `json:"tz,omitempty" jsonschema:"IANA time zone of the intervals, for example Europe/Paris; default UTC"`
+	Start    string `json:"start" jsonschema:"inclusive lower bound, RFC 3339 or YYYY-MM-DD (midnight in tz)"`
+	End      string `json:"end" jsonschema:"exclusive upper bound, RFC 3339 or YYYY-MM-DD (midnight in tz)"`
+	Provider string `json:"provider,omitempty" jsonschema:"filter on one provider, for example apple_health"`
+	viewArgs
+}
+
 type tagsArgs struct {
 	userArgs
 	Kind string `json:"kind,omitempty" jsonschema:"filter on one kind: illness, injury, travel, jet_lag, vaccination, medication, alcohol or other"`
@@ -209,6 +220,7 @@ func addTools(s *sdk.Server, t *tools) {
 		func(ctx context.Context, a listArgs) (any, error) {
 			return listTool(ctx, t, a.userArgs, read.Query{}, a.windowArgs, a.pageArgs, read.MenstrualCycles)
 		})
+	add(s, "get_sample_stats", "Count, sum, mean, min and max of one quantity type per hour or per local day, by default from the best ranked source of each interval so nothing counts twice; view all gives one series per provider and source. Prefer it to get_samples for trends over weeks or months.", t.sampleStats)
 	add(s, "get_coverage", "What has been synced: records per provider per local day with per metric counts, and the processing jobs still pending.", t.coverage)
 	add(s, "get_tags", "Time tags of the user: intervals that give context to the data (illness, injury, travel, jet lag, "+
 		"vaccination, medication, alcohol), by start time. With start and end, the tags that overlap that window, "+
@@ -424,6 +436,40 @@ func (t *tools) coverage(ctx context.Context, a coverageArgs) (any, error) {
 	pg := newPage(c.Days, "")
 	pg.Truncated = c.Truncated
 	return coveragePage{page: pg, PendingJobs: c.PendingJobs, ParkedJobs: c.ParkedJobs, RejectedRecords: c.RejectedRecords}, nil
+}
+
+func (t *tools) sampleStats(ctx context.Context, a statsArgs) (any, error) {
+	id, err := t.user(a.userArgs)
+	if err != nil {
+		return nil, err
+	}
+	q := read.StatsQuery{Type: a.Type, Interval: a.Interval, Provider: a.Provider, Location: time.UTC, View: read.View(a.View)}
+	if q.Interval == "" {
+		q.Interval = read.IntervalDay
+	}
+	if a.TZ != "" {
+		if q.Location, err = time.LoadLocation(a.TZ); err != nil || a.TZ == "Local" {
+			return nil, toolError("tz is not an IANA time zone name such as Europe/Paris")
+		}
+	}
+	for _, f := range []struct {
+		name, v string
+		dst     *time.Time
+	}{{"start", a.Start, &q.Start}, {"end", a.End, &q.End}} {
+		if f.v == "" {
+			continue
+		}
+		if day, err := time.ParseInLocation(time.DateOnly, f.v, q.Location); err == nil {
+			*f.dst = day
+		} else if *f.dst, err = parseTime(f.name, f.v); err != nil {
+			return nil, err
+		}
+	}
+	st, err := read.SampleStats(ctx, t.d.DB, t.p.TenantID, id, q)
+	if err != nil {
+		return nil, readErr(err, errUserNotFound)
+	}
+	return st, nil
 }
 
 func (t *tools) connections(ctx context.Context, a userArgs) (any, error) {

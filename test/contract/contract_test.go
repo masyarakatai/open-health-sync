@@ -262,6 +262,8 @@ func TestQuickstartMatchesOpenAPI(t *testing.T) {
 		u + "/category-samples",
 		u + "/nutrition",
 		u + "/daily",
+		u + "/samples/stats?type=heart_rate&start=2026-01-01&end=2026-02-01",
+		u + "/samples/stats?type=step_count&interval=hour&tz=Asia/Kolkata&start=2026-01-10&end=2026-01-12T00:00:00Z",
 		u + "/daily?view=all",
 		u + "/samples?type=step_count&view=all",
 		u + "/sleep?view=merged",

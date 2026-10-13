@@ -164,10 +164,13 @@ func TestTenantIsolation(t *testing.T) {
 	e := newEnv(t)
 	csB := Connect(t, e.srv.URL+"/mcp", e.keyB)
 	for _, tool := range []string{"get_samples", "get_category_samples", "get_sleep", "get_workouts",
-		"get_nutrition", "get_daily", "get_rr_intervals", "get_hrv", "get_menstrual_cycles", "get_coverage", "list_connections"} {
+		"get_nutrition", "get_daily", "get_rr_intervals", "get_hrv", "get_menstrual_cycles", "get_coverage", "list_connections", "get_sample_stats"} {
 		args := map[string]any{"user_id": e.userA.String()}
 		if tool == "get_samples" {
 			args["type"] = "heart_rate"
+		}
+		if tool == "get_sample_stats" {
+			args["type"], args["start"], args["end"] = "heart_rate", "2026-03-01", "2026-03-02"
 		}
 		msg, isErr := call(t, csB, tool, args)
 		assert.True(t, isErr, tool)

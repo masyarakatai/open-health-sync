@@ -33,6 +33,15 @@ release may change the API, the configuration or the database schema.
 
 ### Added
 
+- `GET /v1/users/{id}/samples/stats` and the MCP tool `get_sample_stats`: count, sum, mean,
+  min and max of a quantity type per hour or per local day in any IANA time zone (`tz`), for
+  ranges up to 10,000 intervals. By default (`view=merged`) each interval keeps the best
+  ranked source that recorded in it; `view=all` returns one series per provider, source and
+  unit. Migration 0035
+  adds the `quantity_hourly` continuous aggregate it reads (refreshed every 5 minutes); a year
+  of daily heart rate takes 31 ms instead of 443 ms from the samples. Builds without
+  continuous aggregates, and zones with a half-hour offset, get the same answer from the
+  samples.
 - Client SDKs 0.1.0 under [sdks/](sdks), AGPL-3.0-only like the server, not on package registries yet:
   Kotlin (Android and JVM), Swift (iOS, macOS, Linux; with a HealthKit sync that uploads what
   changed since the last run), React Native (TypeScript, also Node and browsers) and Flutter

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -15,6 +16,7 @@ import (
 
 func (s *server) mountReads(mux *http.ServeMux) {
 	s.tenantRoute(mux, "GET /v1/users/{id}/samples", listRoute(s, read.Samples))
+	s.tenantRoute(mux, "GET /v1/users/{id}/samples/stats", s.sampleStats)
 	s.tenantRoute(mux, "GET /v1/users/{id}/category-samples", listRoute(s, read.CategorySamples))
 	s.tenantRoute(mux, "GET /v1/users/{id}/sleep", listRoute(s, read.Sleep))
 	s.tenantRoute(mux, "GET /v1/users/{id}/sleep/{session_id}/phases", childRoute(s, "session_id", "sleep session", read.SleepPhases))
@@ -141,4 +143,48 @@ func (s *server) coverage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, c)
+}
+
+func (s *server) sampleStats(w http.ResponseWriter, r *http.Request) {
+	p, user, ok := pathUser(w, r)
+	if !ok {
+		return
+	}
+	qs := r.URL.Query()
+	q := read.StatsQuery{Type: qs.Get("type"), Interval: qs.Get("interval"), Provider: qs.Get("provider"), Location: time.UTC}
+	if q.Interval == "" {
+		q.Interval = read.IntervalDay
+	}
+	if v := qs.Get("tz"); v != "" {
+		loc, err := time.LoadLocation(v)
+		if err != nil || v == "Local" {
+			badRequest(w, "tz: not an IANA time zone name such as Europe/Paris")
+			return
+		}
+		q.Location = loc
+	}
+	for name, dst := range map[string]*time.Time{"start": &q.Start, "end": &q.End} {
+		if v := qs.Get(name); v != "" {
+			t, err := parseTimeIn(v, q.Location)
+			if err != nil {
+				badRequest(w, name+": "+err.Error())
+				return
+			}
+			*dst = t
+		}
+	}
+	view, err := read.ParseView(qs.Get("view"))
+	if err != nil {
+		badRequest(w, err.Error())
+		return
+	}
+	rq := read.Query{View: view}
+	s.mergePolicy(r, p.TenantID, user, &rq)
+	q.View, q.Policy = rq.View, rq.Policy
+	st, err := read.SampleStats(r.Context(), s.d.Pool, p.TenantID, user, q)
+	if err != nil {
+		readError(w, r, err, "user")
+		return
+	}
+	writeJSON(w, http.StatusOK, st)
 }
