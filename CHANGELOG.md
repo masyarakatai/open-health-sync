@@ -7,6 +7,17 @@ release may change the API, the configuration or the database schema.
 
 ## [Unreleased]
 
+### Added
+
+- Rate limits on the provider-facing routes (`POST` and `GET /inbound/{provider}`,
+  `GET /oauth/{provider}/callback`): an in-memory token bucket per client address, plus one per
+  provider for notifications, answers 429 with `Retry-After` before any work. Defaults 30/s
+  (bursts of 120) per address and 300/s per provider for notifications, 2/s (bursts of 20) per
+  address for callbacks; `OHS_RATE_LIMIT_INBOUND`, `OHS_RATE_LIMIT_INBOUND_PROVIDER` and
+  `OHS_RATE_LIMIT_OAUTH` change them (`0` disables). `OHS_TRUSTED_PROXIES` lists the reverse
+  proxies whose `X-Forwarded-For` is read. Refusals are counted in `ohs_rate_limited_total`.
+  See [docs/self-hosting.md](docs/self-hosting.md#rate-limits).
+
 ### Fixed
 
 - MCP `get_coverage` without `start` reports the last 30 days. On years of Apple Health history
