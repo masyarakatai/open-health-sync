@@ -68,7 +68,7 @@ func Operation(sql string) string {
 		}
 		break
 	}
-	end := strings.IndexFunc(s, func(r rune) bool { return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z') })
+	end := strings.IndexFunc(s, func(r rune) bool { return (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') })
 	if end < 0 {
 		end = len(s)
 	}

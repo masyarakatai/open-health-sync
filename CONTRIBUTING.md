@@ -9,13 +9,16 @@ privately, as described in [SECURITY.md](SECURITY.md).
 
 ## Set up
 
-You need Go 1.26 and, for integration tests, Docker.
+You need Go 1.26 and, for integration tests, Docker. `make lint` needs golangci-lint v2.14.0
+(`go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0`), the version CI
+runs.
 
 ```sh
 git clone https://github.com/soma-intelligence/open-health-sync.git && cd open-health-sync
 make setup        # installs the pre-commit hook
 make build        # bin/ohs
 make test         # unit tests, no Docker
+make lint         # golangci-lint with .golangci.yml, integration files included
 make integration  # tests tagged integration, need Docker (testcontainers)
 ```
 

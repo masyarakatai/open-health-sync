@@ -39,8 +39,7 @@ func Sanitize(in string) string {
 	if len(in) > 0 && len(in) <= maxLen {
 		ok := true
 		for i := 0; i < len(in); i++ {
-			c := in[i]
-			if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_' || c == '.') {
+			if !idByte(in[i]) {
 				ok = false
 				break
 			}
@@ -52,6 +51,11 @@ func Sanitize(in string) string {
 	var b [16]byte
 	_, _ = rand.Read(b[:])
 	return hex.EncodeToString(b[:])
+}
+
+// idByte reports whether c may appear in a kept id.
+func idByte(c byte) bool {
+	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_' || c == '.'
 }
 
 // Handler wraps h so that a record logged with a context carrying an id gets

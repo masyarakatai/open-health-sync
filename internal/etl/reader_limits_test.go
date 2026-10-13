@@ -22,9 +22,9 @@ func gzipRepeated(line string, n int) []byte {
 	var buf bytes.Buffer
 	gz := gzip.NewWriter(&buf)
 	for range n {
-		gz.Write([]byte(line + "\n"))
+		mustGzip(gz.Write([]byte(line + "\n")))
 	}
-	gz.Close()
+	mustGzip(0, gz.Close())
 	return buf.Bytes()
 }
 

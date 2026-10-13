@@ -403,7 +403,7 @@ func dropTombstonedRecords(acc *model.MapResult, isDead func(provider, id string
 	if len(deadSleep) > 0 {
 		allGone := len(acc.SleepSessions) == 0
 		acc.SleepPhases = filterKeep(acc.SleepPhases, tPhases, c, func(p model.SleepPhase) bool {
-			return !deadSleep[p.ParentContentHash] && !(allGone && p.ParentContentHash == "")
+			return !deadSleep[p.ParentContentHash] && (!allGone || p.ParentContentHash != "")
 		})
 	}
 
@@ -414,7 +414,7 @@ func dropTombstonedRecords(acc *model.MapResult, isDead func(provider, id string
 	if len(deadWorkout) > 0 {
 		allGone := len(acc.Workouts) == 0
 		acc.RoutePoints = filterKeep(acc.RoutePoints, tRoutes, c, func(p model.RoutePoint) bool {
-			return !deadWorkout[p.ParentContentHash] && !(allGone && p.ParentContentHash == "")
+			return !deadWorkout[p.ParentContentHash] && (!allGone || p.ParentContentHash != "")
 		})
 	}
 

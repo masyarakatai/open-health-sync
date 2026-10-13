@@ -39,9 +39,9 @@ func gzipLines(lines []string) []byte {
 	var buf bytes.Buffer
 	gz := gzip.NewWriter(&buf)
 	for _, line := range lines {
-		gz.Write([]byte(line + "\n"))
+		mustGzip(gz.Write([]byte(line + "\n")))
 	}
-	gz.Close()
+	mustGzip(0, gz.Close())
 	return buf.Bytes()
 }
 
@@ -49,9 +49,17 @@ func gzipLines(lines []string) []byte {
 func gzipBytes(data []byte) []byte {
 	var buf bytes.Buffer
 	gz := gzip.NewWriter(&buf)
-	gz.Write(data)
-	gz.Close()
+	mustGzip(gz.Write(data))
+	mustGzip(0, gz.Close())
 	return buf.Bytes()
+}
+
+// mustGzip panics on a gzip write error. The helpers write to a bytes.Buffer,
+// so an error means a broken fixture, not a test outcome.
+func mustGzip(_ int, err error) {
+	if err != nil {
+		panic(err)
+	}
 }
 
 // --- Tests ---

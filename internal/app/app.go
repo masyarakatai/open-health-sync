@@ -256,6 +256,11 @@ func runWith(ctx context.Context, cfg config.Config, logOut io.Writer, opts opti
 			Version:     Version,
 			// Non-empty mounts the first-run setup routes (/v1/setup).
 			SetupToken: cfg.SetupToken,
+			// Zero (a Config not built by Load) means no rate limit.
+			RateLimitInbound:         api.RateLimit(cfg.RateLimitInbound),
+			RateLimitInboundProvider: api.RateLimit(cfg.RateLimitInboundProvider),
+			RateLimitOAuth:           api.RateLimit(cfg.RateLimitOAuth),
+			TrustedProxies:           cfg.TrustedProxies,
 		}
 		if cfg.Roles["etl"] {
 			deps.ETLMetrics = etlMetrics

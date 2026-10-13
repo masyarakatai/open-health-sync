@@ -63,15 +63,14 @@ func (s *fsStore) Put(ctx context.Context, key string, r io.Reader) error {
 		return err
 	}
 	defer os.Remove(tmp.Name())
-	if _, err := io.Copy(tmp, &ctxReader{ctx: ctx, r: r}); err != nil {
-		tmp.Close()
-		return err
+	_, err = io.Copy(tmp, &ctxReader{ctx: ctx, r: r})
+	if err == nil {
+		err = tmp.Sync()
 	}
-	if err := tmp.Sync(); err != nil {
-		tmp.Close()
-		return err
+	if cerr := tmp.Close(); err == nil {
+		err = cerr
 	}
-	if err := tmp.Close(); err != nil {
+	if err != nil {
 		return err
 	}
 	if err := os.Link(tmp.Name(), dst); err != nil {
@@ -95,7 +94,7 @@ func (s *fsStore) Get(ctx context.Context, key string) (io.ReadCloser, error) {
 		return nil, err
 	}
 	if st, err := f.Stat(); err != nil || st.IsDir() {
-		f.Close()
+		_ = f.Close() // opened read-only: nothing to lose, the answer is ErrNotFound
 		return nil, ErrNotFound
 	}
 	return f, nil
