@@ -21,7 +21,7 @@ func TestSanitize(t *testing.T) {
 			t.Errorf("%q: got %q, want a fresh 32 character id", in, got)
 		}
 	}
-	if Sanitize("") == Sanitize("") {
+	if a, b := Sanitize(""), Sanitize(""); a == b {
 		t.Fatal("fresh ids differ")
 	}
 }

@@ -10,6 +10,26 @@ updates:
     commit-message:
       prefix: build(deps)
 
+  - package-ecosystem: npm
+    directory: /docs-site
+    schedule:
+      interval: weekly
+    groups:
+      npm-minor-and-patch:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: build(deps)
+
+  - package-ecosystem: npm
+    directory: /sdks/server/typescript
+    schedule:
+      interval: weekly
+    groups:
+      sdk-npm-minor-and-patch:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: build(deps)
+
   - package-ecosystem: github-actions
     directory: /
     schedule:

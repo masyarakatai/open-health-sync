@@ -75,7 +75,7 @@ func TestRequestSpanNamedByRoutePattern(t *testing.T) {
 
 	attrs := map[string]string{}
 	for _, kv := range s.Attributes() {
-		attrs[string(kv.Key)] = kv.Value.Emit()
+		attrs[string(kv.Key)] = kv.Value.String()
 	}
 	assert.Equal(t, "GET", attrs["http.request.method"])
 	assert.Equal(t, "/v1/users/{id}/samples", attrs["http.route"])
@@ -107,8 +107,8 @@ func TestRequestSpanWithoutParentAndUnmatchedRoute(t *testing.T) {
 	assert.Equal(t, "HTTP /", spans[1].Name(), "an unknown method is not recorded as sent")
 	for _, s := range spans {
 		for _, kv := range s.Attributes() {
-			assert.False(t, strings.Contains(kv.Value.Emit(), "12345") || strings.Contains(kv.Value.Emit(), "BREW"),
-				"attribute %s = %q", kv.Key, kv.Value.Emit())
+			assert.False(t, strings.Contains(kv.Value.String(), "12345") || strings.Contains(kv.Value.String(), "BREW"),
+				"attribute %s = %q", kv.Key, kv.Value.String())
 		}
 	}
 }

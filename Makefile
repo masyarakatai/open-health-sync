@@ -3,7 +3,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
 LDFLAGS := -X main.version=$(VERSION) -X main.commit=$(COMMIT)
 
-.PHONY: setup build image test test-js integration contract e2e backup-test reliability upgrade-test guard fhir-validate release-check record sdk sdk-test
+.PHONY: setup build image test test-js lint integration contract e2e backup-test reliability upgrade-test guard fhir-validate release-check record sdk sdk-test
 
 setup:
 	git config core.hooksPath .githooks
@@ -24,6 +24,12 @@ test:
 # The admin console's pure JavaScript helpers (Node 22+, no npm install).
 test-js:
 	node --test internal/console/app.test.mjs
+
+# golangci-lint v2 with .golangci.yml (the integration suites included). CI
+# runs the same version: go install
+# github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
+lint:
+	golangci-lint run ./...
 
 integration:
 	go test -tags integration ./...

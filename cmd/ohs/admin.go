@@ -70,8 +70,8 @@ func runAdmin(rest []string, out io.Writer) error {
 		return audit.Record(ctx, pool, audit.Event{Tenant: tenantID, ActorType: audit.Admin, ActorID: "ohs admin",
 			Action: action, Detail: detail})
 	}
-	switch {
-	case cmd == "tenant create":
+	switch cmd {
+	case "tenant create":
 		n := strings.TrimSpace(*name)
 		if n == "" {
 			return usageErr(adminUsage)
@@ -87,7 +87,7 @@ func runAdmin(rest []string, out io.Writer) error {
 			_, err = fmt.Fprintf(out, "tenant %s created (id %s)\nAPI key, shown only this once, store it now:\n%s\n", t.Name, t.ID, k)
 			return err
 		}
-	case cmd == "personal setup":
+	case "personal setup":
 		if !personPattern.MatchString(*person) {
 			return usageErr("--person takes 1 to 64 letters, digits, '.', '_' or '-' (" + adminUsage + ")")
 		}
@@ -104,7 +104,7 @@ func runAdmin(rest []string, out io.Writer) error {
 		do = func(ctx context.Context, s *tenant.Store) error {
 			return personalSetup(ctx, s, *person, strings.TrimRight(u, "/"), out, record)
 		}
-	case cmd == "tenant list":
+	case "tenant list":
 		do = func(ctx context.Context, s *tenant.Store) error { return listTenants(ctx, s, out) }
 	default: // key create, list, revoke
 		if *tenantFlag == "" || (key != nil && *key == "") {

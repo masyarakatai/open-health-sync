@@ -2,8 +2,6 @@
 
 package polar
 
-import "encoding/json"
-
 // Data types this connector stores. Each raw object holds one of them, and
 // Map dispatches on it. A line of each type is one AccessLink JSON object,
 // kept as Polar sent it except for the additions documented on each
@@ -137,16 +135,3 @@ type PhysicalInfo struct {
 	RestingHeartRate *float64 `json:"resting_heart_rate"`
 	VO2Max           *float64 `json:"vo2_max"`
 }
-
-// sleepList, rechargeList and hrList are the list answers.
-type (
-	sleepList struct {
-		Nights []json.RawMessage `json:"nights"`
-	}
-	rechargeList struct {
-		Recharges []json.RawMessage `json:"recharges"`
-	}
-	hrList struct {
-		HeartRates []json.RawMessage `json:"heart_rates"`
-	}
-)

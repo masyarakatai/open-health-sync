@@ -85,7 +85,7 @@ func MiddlewareAny(lookup Lookup, wants ...Scope) func(http.Handler) http.Handle
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			raw, ok := bearer(r)
-			if !ok || !(strings.HasPrefix(raw, PrefixSecretKey) || strings.HasPrefix(raw, PrefixUserToken)) {
+			if !ok || (!strings.HasPrefix(raw, PrefixSecretKey) && !strings.HasPrefix(raw, PrefixUserToken)) {
 				unauthorized(w)
 				return
 			}
