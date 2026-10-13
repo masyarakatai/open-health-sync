@@ -7,6 +7,11 @@ release may change the API, the configuration or the database schema.
 
 ## [Unreleased]
 
+### Fixed
+
+- MCP `get_coverage` without `start` reports the last 30 days. On years of Apple Health history
+  it answered with over a megabyte of JSON, more than an agent can read.
+
 ## [0.1.0] - 2026-10-13
 
 Eleven new sources, FHIR R4 and Open mHealth output, CSV and Parquet exports, outgoing
@@ -313,8 +318,6 @@ sources (`view=all` keeps every source's rows). Migrations `0008` to `0034` appl
 
 ### Fixed
 
-- MCP `get_coverage` without `start` reports the last 30 days. On years of Apple Health history
-  it answered with over a megabyte of JSON, more than an agent can read.
 - The merged view tells apart the apps behind Apple Health for sleep and workouts. A night the
   watch and the phone (or a sleep app) both recorded was returned twice; the watch's session now
   covers the others. On a real export of six years, 1,310 of 14,662 sessions were such doubles.
