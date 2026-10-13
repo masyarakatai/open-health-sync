@@ -17,6 +17,14 @@ release may change the API, the configuration or the database schema.
   compared in constant time and never logged, creation recorded in the audit log. The console's
   sign-in screen links to the page while it is needed; the console itself stays read only.
   Unset, the routes are not mounted. See [docs/setup.md](docs/setup.md).
+- MCP prompts: the prompt library is now served by the MCP server (`prompts/list`,
+  `prompts/get`). Twelve ready-made questions about a person's own training, sleep and recovery
+  (morning check, taper check, after a break, a new habit, two devices side by side...), each
+  with its blanks as arguments and an optional `user_id`, and each ending with the same rules:
+  read the data first and show the numbers, compare with the person's own history, one source
+  per figure, say when a figure is missing instead of filling it in, wellness only. The same
+  library generates [docs/learn/prompts.md](docs/learn/prompts.md) and a new agent skill,
+  [skills/open-health-sync](skills/open-health-sync/SKILL.md). See [docs/mcp.md](docs/mcp.md#prompts).
 - Rate limits on the provider-facing routes (`POST` and `GET /inbound/{provider}`,
   `GET /oauth/{provider}/callback`): an in-memory token bucket per client address, plus one per
   provider for notifications, answers 429 with `Retry-After` before any work. Defaults 30/s
@@ -25,6 +33,14 @@ release may change the API, the configuration or the database schema.
   `OHS_RATE_LIMIT_OAUTH` change them (`0` disables). `OHS_TRUSTED_PROXIES` lists the reverse
   proxies whose `X-Forwarded-For` is read. Refusals are counted in `ohs_rate_limited_total`.
   See [docs/self-hosting.md](docs/self-hosting.md#rate-limits).
+- Encryption key rotation: `OHS_PREVIOUS_ENCRYPTION_KEYS` lists, comma separated, the keys
+  `OHS_ENCRYPTION_KEY` replaced; they still open what they sealed and never seal. Sealed values
+  (OAuth tokens, webhook signing secrets) now start with a format version and the id of their
+  key; values written before open as they are. `ohs admin rekey` re-seals every stored secret
+  under the active key, in batches of short row-locked transactions, safe while the instance
+  runs, and prints how many it rewrote, found current or could not open (left as they are).
+  `ohs doctor` counts the secrets still under a previous or unknown key and says when the
+  previous keys can go. See [docs/key-rotation.md](docs/key-rotation.md).
 
 ### Fixed
 
