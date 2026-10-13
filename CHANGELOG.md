@@ -343,6 +343,11 @@ release may change the API, the configuration or the database schema.
 - The FHIR Observation search answers 400 for a parameter it does not support instead of
   ignoring it: `date` and `_count` used to return the whole list unfiltered. The message names
   `start`/`end` and `limit`. `_format` asking for JSON is accepted.
+- FHIR: an ECG's atrial fibrillation classification (`ecg_afib_classification`, Withings) is
+  served as `valueCodeableConcept` (`negative`, `positive`, `inconclusive`) instead of a
+  quantity in the unit "classification".
+- WHOOP energy (`total_kcal` of a cycle, a workout's `active_energy_kcal`) is rounded to a
+  tenth of a kcal instead of carrying the conversion's dozen digits.
 - `ohs import apple-health` prints its first progress line two seconds in (a short import
   prints only the summary), and the summary splits parts into `stored now` and
   `already stored` instead of `uploaded`, which counted both.

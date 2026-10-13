@@ -173,7 +173,7 @@ func TestMapCycle(t *testing.T) {
 	d := res.DailySummaries[0]
 	assert.Equal(t, time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC), d.SummaryDate, "a cycle starting at 23:30 local is the next day's")
 	assert.InDelta(t, 8.25, *d.StrainScore, 1e-9)
-	assert.InDelta(t, 8400/4.184, *d.TotalKcal, 1e-6)
+	assert.Equal(t, 2007.6, *d.TotalKcal, "8400 kJ, to a tenth of a kcal")
 	assert.Nil(t, d.ActiveKcal)
 	assert.Nil(t, d.RecoveryScore, "left for the recovery to fill")
 	assert.True(t, d.Replaceable)

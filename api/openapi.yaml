@@ -3678,6 +3678,9 @@ components:
           format: date-time
           description: When the record was ingested (the later of a panel's two samples).
         valueQuantity: { $ref: "#/components/schemas/FHIRQuantity" }
+        valueCodeableConcept:
+          allOf: [{ $ref: "#/components/schemas/FHIRCodeableConcept" }]
+          description: Instead of valueQuantity for a classification (ecg_afib_classification).
         dataAbsentReason: { $ref: "#/components/schemas/FHIRCodeableConcept" }
         device: { $ref: "#/components/schemas/FHIRReference" }
         component:

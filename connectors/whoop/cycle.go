@@ -90,7 +90,7 @@ func mapCycle(line []byte, userID string) (*model.MapResult, error) {
 		d := dailySummary(userID, cycleDay(start, cy.TimezoneOffset), cy.TimezoneOffset, start)
 		d.StrainScore = sc.Strain
 		if sc.Kilojoule != nil {
-			d.TotalKcal = ptrFloat(*sc.Kilojoule * kcalPerKilojoule)
+			d.TotalKcal = kcal(*sc.Kilojoule)
 		}
 		if steps != nil {
 			n := int(math.Round(*steps))

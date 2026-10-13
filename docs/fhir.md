@@ -173,6 +173,7 @@ into a [panel](#blood-pressure).
 | `effectiveDateTime` | `start_date`, when the sample is an instant (no `end_date`, or the same) |
 | `effectivePeriod` | `start_date` to `end_date`, when the sample covers an interval |
 | `valueQuantity` | `value`; `unit` is the storage unit as the REST API spells it, `system` UCUM and `code` its UCUM code (see [Units](#units)) |
+| `valueCodeableConcept` | instead of `valueQuantity` for `ecg_afib_classification` (Withings): the class `negative`, `positive` or `inconclusive` (stored 0, 1, 2) in `.../CodeSystem/ecg-afib-classification` |
 | `dataAbsentReason` | instead of `valueQuantity` when the stored value is NaN or infinite |
 | `meta.profile` | the R4 vital signs profiles the Observation meets (see [Vital signs](#vital-signs)) |
 
@@ -449,6 +450,7 @@ are identifiers, documented here; nothing is served at them.
 | `.../CodeSystem/quantity-type` | `code.coding`: the canonical quantity names of [data-model.md](data-model.md) |
 | `.../CodeSystem/record-type` | `code.coding`: `blood_pressure`, `sleep_session`, `workout`, `daily_summary` |
 | `.../CodeSystem/observation-component` | `component.code.coding`: the REST field a component comes from (`deep_sleep_seconds`, `distance_m`...) |
+| `.../CodeSystem/ecg-afib-classification` | `valueCodeableConcept` of an ECG's atrial fibrillation classification: `negative`, `positive`, `inconclusive` |
 | `.../CodeSystem/workout-activity` | a workout's activity type: the canonical activity names (`running`, `cycling`...) |
 | `.../CodeSystem/source` | `meta.tag`: the vendor that produced the record |
 | `.../provider/{provider}` | `meta.source`: the provider the record came through |
