@@ -1,4 +1,4 @@
-name: no-claude-attribution
+name: no-ai-attribution
 
 on:
   pull_request:
