@@ -313,6 +313,9 @@ sources (`view=all` keeps every source's rows). Migrations `0008` to `0034` appl
 
 ### Fixed
 
+- The merged view tells apart the apps behind Apple Health for sleep and workouts. A night the
+  watch and the phone (or a sleep app) both recorded was returned twice; the watch's session now
+  covers the others. On a real export of six years, 1,310 of 14,662 sessions were such doubles.
 - Apple Health walking and running speed are stored. HealthKit spells them in `km/hr` (or
   `mi/hr`), which had no conversion to `m/s`, so every such sample was parked as a unit error. An
   instance restarted on this version replays the parked records. The recorded-contract replay now
