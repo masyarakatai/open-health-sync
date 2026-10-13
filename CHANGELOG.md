@@ -16,7 +16,9 @@ release may change the API, the configuration or the database schema.
   one shot, atomic under concurrent calls, closed for good (409) once any tenant exists, token
   compared in constant time and never logged, creation recorded in the audit log. The console's
   sign-in screen links to the page while it is needed; the console itself stays read only.
-  Unset, the routes are not mounted. See [docs/setup.md](docs/setup.md).
+  Unset, the routes are not mounted. Tries are rate limited per client address like the OAuth
+  callback (`OHS_RATE_LIMIT_OAUTH`, its own bucket, `route_group="setup"` in
+  `ohs_rate_limited_total`). See [docs/setup.md](docs/setup.md).
 - A reproducible ingestion benchmark against Open Wearables: `bench/openwearables/` and
   [the method and results](docs/benchmarks/open-wearables.md).
 - MCP prompts: the prompt library is now served by the MCP server (`prompts/list`,

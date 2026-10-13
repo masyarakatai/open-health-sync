@@ -48,7 +48,10 @@ func (s *server) mountSetup(mux *http.ServeMux) {
 	}
 	h := &setupHandler{store: s.d.Store, want: sha256.Sum256([]byte(s.d.SetupToken))}
 	mux.HandleFunc("GET /v1/setup", h.status)
-	mux.HandleFunc("POST /v1/setup", h.create)
+	// Wrong tokens are tried from one address at the pace of the OAuth
+	// callback, the other unauthenticated route a browser drives.
+	limit := newRateLimiter(s.d.RateLimitOAuth, RateLimit{})
+	mux.Handle("POST /v1/setup", s.rateLimit(groupSetup, limit, nil, http.HandlerFunc(h.create)))
 }
 
 type setupHandler struct {

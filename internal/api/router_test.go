@@ -173,6 +173,31 @@ func TestSetupRefusals(t *testing.T) {
 	assert.Equal(t, "GET, HEAD, POST", rec.Header().Get("Allow"))
 }
 
+func TestSetupRateLimit(t *testing.T) {
+	pool, err := pgxpool.New(context.Background(), "postgres://nobody@127.0.0.1:1/none?connect_timeout=1")
+	require.NoError(t, err)
+	t.Cleanup(pool.Close)
+	h := NewRouter(Deps{
+		Pool: pool, Store: tenant.New(pool), SetupToken: "the-right-setup-token",
+		RateLimitOAuth: RateLimit{Rate: 0.001, Burst: 2},
+	})
+	do := func(method, remote string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		r := httptest.NewRequest(method, "/v1/setup", strings.NewReader(`{"setup_token":"a-wrong-setup-token"}`))
+		r.RemoteAddr = remote
+		h.ServeHTTP(rec, r)
+		return rec
+	}
+	for range 2 {
+		assert.NotEqual(t, http.StatusTooManyRequests, do("POST", "192.0.2.1:1").Code)
+	}
+	rec := do("POST", "192.0.2.1:1")
+	require.Equal(t, http.StatusTooManyRequests, rec.Code, "the third try from one address within the burst")
+	assert.Equal(t, "1000", rec.Header().Get("Retry-After"))
+	assert.NotEqual(t, http.StatusTooManyRequests, do("POST", "192.0.2.2:1").Code, "another address")
+	assert.NotEqual(t, http.StatusTooManyRequests, do("GET", "192.0.2.1:1").Code, "the status read is not limited")
+}
+
 func TestCheckTenantName(t *testing.T) {
 	for name, ok := range map[string]bool{
 		"default": true, "Home lab": true, "Équipe santé": true, strings.Repeat("x", 100): true,

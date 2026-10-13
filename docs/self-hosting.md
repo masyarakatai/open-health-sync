@@ -181,7 +181,7 @@ Environment variables only, documented line by line in `.env.example`.
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | none | Turns on OpenTelemetry traces, sent over OTLP to this address. The other standard `OTEL_` variables apply; see [observability](observability.md) |
 | `OHS_RATE_LIMIT_INBOUND` | `30/120` | Notification requests (`/inbound/{provider}`) per client address: `rate/burst` in requests per second, `0` disables. See [rate limits](#rate-limits) |
 | `OHS_RATE_LIMIT_INBOUND_PROVIDER` | `300/600` | Notification requests per provider, whatever the address; `0` disables |
-| `OHS_RATE_LIMIT_OAUTH` | `2/20` | OAuth callback requests per client address; `0` disables |
+| `OHS_RATE_LIMIT_OAUTH` | `2/20` | OAuth callback requests per client address, and `POST /v1/setup` requests in a bucket of their own; `0` disables |
 | `OHS_TRUSTED_PROXIES` | none | Comma-separated CIDRs (or addresses) of your reverse proxies. Only a request from one of them has its client address read from `X-Forwarded-For` |
 | `OHS_<PROVIDER>_CLIENT_ID`, `_CLIENT_SECRET` | none | Keys of a provider; its connector is on when they are set. Every process that runs `collect` or `etl` needs them (see below) |
 
@@ -223,11 +223,13 @@ Put a reverse proxy with TLS in front of port 8080; the bearer secrets travel in
 ### Rate limits
 
 The provider-facing routes take no credential: `POST` and `GET /inbound/{provider}`
-(notifications and the URL check) and `GET /oauth/{provider}/callback`. Each notification may
+(notifications and the URL check) and `GET /oauth/{provider}/callback`. Neither does
+`POST /v1/setup` (the [first-run setup](setup.md)), which checks a token. Each notification may
 verify a signature, write rows and queue pulls, and each callback reads the database, so an
 in-memory token bucket bounds them, per `api` process. A request over a limit is answered 429
 with `Retry-After` (seconds) before any work, and counted in `/metrics` as
-`ohs_rate_limited_total{route_group="inbound"}` or `{route_group="oauth_callback"}`. The
+`ohs_rate_limited_total{route_group="inbound"}`, `{route_group="oauth_callback"}` or
+`{route_group="setup"}`. The
 authenticated API is not limited.
 
 | Bucket | Default | Variable |
@@ -235,6 +237,7 @@ authenticated API is not limited.
 | Notifications, per client address | 30 requests/s, bursts of 120 | `OHS_RATE_LIMIT_INBOUND` |
 | Notifications, per provider (all addresses) | 300 requests/s, bursts of 600 | `OHS_RATE_LIMIT_INBOUND_PROVIDER` |
 | OAuth callbacks, per client address | 2 requests/s, bursts of 20 | `OHS_RATE_LIMIT_OAUTH` |
+| First-run setup (`POST /v1/setup`), per client address | same as OAuth callbacks, its own bucket | `OHS_RATE_LIMIT_OAUTH` |
 
 The values are `rate/burst` (`30/120`; the rate may be a decimal, `0.5/10`), and `0` turns a
 bucket off. The defaults sit well above what a provider sends, batched notifications and a

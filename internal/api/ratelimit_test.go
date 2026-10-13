@@ -251,6 +251,7 @@ func TestRouterRateLimits(t *testing.T) {
 	assert.Contains(t, out, "# TYPE ohs_rate_limited_total counter\n")
 	assert.Contains(t, out, `ohs_rate_limited_total{route_group="inbound"} 1`)
 	assert.Contains(t, out, `ohs_rate_limited_total{route_group="oauth_callback"} 1`)
+	assert.Contains(t, out, `ohs_rate_limited_total{route_group="setup"} 0`)
 	assert.Contains(t, out, `ohs_http_requests_total{route="POST /inbound/{provider}",code="429"} 1`)
 }
 

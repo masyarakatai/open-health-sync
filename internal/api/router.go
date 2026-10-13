@@ -86,7 +86,8 @@ type Deps struct {
 	SetupToken string
 	// RateLimitInbound bounds POST and GET /inbound/{provider} per client
 	// address and RateLimitInboundProvider per provider, RateLimitOAuth the
-	// OAuth callback per client address. The zero value is no limit.
+	// OAuth callback and POST /v1/setup per client address, each route its
+	// own bucket. The zero value is no limit.
 	RateLimitInbound, RateLimitInboundProvider, RateLimitOAuth RateLimit
 	// TrustedProxies (OHS_TRUSTED_PROXIES) are the reverse proxies whose
 	// X-Forwarded-For names the client address of a rate limited request.

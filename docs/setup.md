@@ -46,7 +46,7 @@ curl -s -X POST $OHS/v1/setup -H 'Content-Type: application/json' \
 | Route | Answer |
 |---|---|
 | `GET /v1/setup` | `{"needed": true}` while the instance has no tenant, else `false`. No credential |
-| `POST /v1/setup` | 201 with `tenant_id` and `api_key` (`Cache-Control: no-store`); 401 for a wrong token; 409 once any tenant exists; 400 for a bad body or tenant name; 413 above 4 KiB |
+| `POST /v1/setup` | 201 with `tenant_id` and `api_key` (`Cache-Control: no-store`); 401 for a wrong token; 429 with `Retry-After` past the [rate limit](self-hosting.md#rate-limits) (`OHS_RATE_LIMIT_OAUTH`, per client address); 409 once any tenant exists; 400 for a bad body or tenant name; 413 above 4 KiB |
 
 The tenant name is trimmed, at most 100 bytes and without control characters. The full shapes are
 in [`api/openapi.yaml`](../api/openapi.yaml).

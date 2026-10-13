@@ -86,9 +86,9 @@ checklist see [hardening.md](hardening.md); to report a problem see
   is set.
 - **Slow or large bodies.** Inbound bodies are capped at 1 MiB and must arrive within 30 seconds
   (`internal/collect/inbound.go`).
-- **Request floods.** The notification and callback routes take no credential, so each sits
-  behind an in-memory token bucket per client address, plus one per provider for
-  notifications. Over a limit the answer is 429 with `Retry-After` before any signature check,
+- **Request floods.** The notification and callback routes take no credential, and the
+  first-run setup takes only its token, so each sits behind an in-memory token bucket per
+  client address, plus one per provider for notifications. Over a limit the answer is 429 with `Retry-After` before any signature check,
   database read or queued pull, counted in `ohs_rate_limited_total`. `X-Forwarded-For` is read
   only from the proxies listed in `OHS_TRUSTED_PROXIES` (`internal/api/ratelimit.go`, see
   [self-hosting.md](self-hosting.md#rate-limits)).
@@ -180,8 +180,9 @@ checklist see [hardening.md](hardening.md); to report a problem see
   tokens and webhook secrets do not open: users must reconnect and webhook secrets must be
   rotated. A leaked key exposes the tokens of a stolen database until they are re-sealed.
 - **Rate limits are per instance and in memory.** Each replica counts on its own and a restart
-  empties the buckets. Only the provider-facing routes are limited: authenticated API routes
-  are not, and floods larger than one instance can absorb belong at the proxy.
+  empties the buckets. Only the provider-facing routes and the first-run setup are limited:
+  authenticated API routes are not, and floods larger than one instance can absorb belong at
+  the proxy.
 - **OAuth state is not bound to a browser session.** Whoever completes a consent link connects
   the account they sign in with to the user it was minted for. Tenants must hand an authorize
   URL only to its user.

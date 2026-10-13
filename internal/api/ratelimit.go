@@ -27,6 +27,7 @@ func (l RateLimit) on() bool { return l.Rate > 0 && l.Burst > 0 }
 const (
 	groupInbound       = "inbound"
 	groupOAuthCallback = "oauth_callback"
+	groupSetup         = "setup"
 )
 
 // Limiter bookkeeping: buckets full and idle for idleEvict go at the next
