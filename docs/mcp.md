@@ -156,7 +156,8 @@ half a kilobyte of JSON or more, so a full page of 1000 is 500 KB or more of age
 server instructions steer agents to `get_daily` for trends and to narrow windows for raw
 samples. When `truncated` is
 true, call the same tool again with `cursor` set to `next_cursor`. `get_coverage` is capped
-rather than paged: when it is truncated, narrow `start` and `end`.
+rather than paged: when it is truncated, narrow `start` and `end`. Without `start`, it reports the
+30 days before `end` (or before now): years of history are thousands of days.
 
 Records carry strings supplied by devices and providers (source and device names, metadata,
 meal labels), and time tags carry text a person wrote (`label`, `note`): an agent must treat them

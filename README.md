@@ -212,6 +212,13 @@ Open Health Sync is that layer, written once, with the boring parts done properl
   `?delete_data=true` erases everything that source sent for the user (records, raw files, sync
   history), and `DELETE /v1/users/{id}/data/{provider}` does the same for Apple Health or Health
   Connect. `OHS_RETENTION_DAYS` drops raw files and normalized data past an age.
+- **Consent per category.** Each user grants or refuses each source per data category (sleep,
+  heart, location, glucose and so on). Data not granted is dropped before it is stored, revoking
+  a category deletes what was stored, and `consent.granted` and `consent.revoked` webhooks tell
+  your server ([guide](docs/consent.md)).
+- **One-call user archive.** `GET /v1/users/{id}/archive` returns everything held about one
+  person as a single zip, for access and portability requests
+  ([docs](docs/exports.md#complete-user-archive-data-portability)).
 - **Multi-tenant.** Tenant API keys (`ohs_sk_`) for your server, short-lived scoped user tokens
   (`ohs_ut_`, scopes `upload` and `read`) for one person's app or agent. Keys and tokens are
   stored as SHA-256 hashes.
@@ -535,6 +542,8 @@ No software is compliant on its own, and Open Health Sync is not certified, audi
 by a business associate agreement. What it gives you: data stays on infrastructure you choose,
 `DELETE /v1/users/{id}` is a hard delete of raw files and rows (useful for erasure requests),
 erasing one source's data for a user is a single call,
+consent is kept per source and data category and enforced on every write,
+`GET /v1/users/{id}/archive` gives one person everything held about them in a zip,
 `OHS_RETENTION_DAYS` enforces a retention period, every query is scoped to a tenant and a user,
 keys and tokens are stored hashed, and provider OAuth tokens are encrypted with AES-256-GCM.
 Health records themselves are not encrypted by `ohs`: use disk or database encryption, TLS in

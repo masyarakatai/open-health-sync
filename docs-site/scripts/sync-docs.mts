@@ -237,6 +237,20 @@ const sources: Record<string, Target[]> = {
       description: "Per user, per source and per data category: what is stored, revocation and its purge.",
     },
   ],
+  "docs/server-sdks.md": [
+    {
+      page: "(guides)/guides/server-sdks",
+      title: "Server SDKs",
+      description: "TypeScript and Python clients for your backend, generated from the OpenAPI document.",
+    },
+  ],
+  "docs/api-collections.md": [
+    {
+      page: "(guides)/guides/api-collections",
+      title: "API collections",
+      description: "Try the API from Postman, Bruno or Insomnia with the generated collection.",
+    },
+  ],
 };
 
 // The SDK overview, then one page per SDK guide under docs/sdks.
@@ -339,6 +353,8 @@ const icons: Record<string, string> = {
   "(guides)/guides/connect-page": "MousePointerClick",
   "(guides)/guides/sync-health": "HeartHandshake",
   "(guides)/guides/demo": "FlaskConical",
+  "(guides)/guides/server-sdks": "Package",
+  "(guides)/guides/api-collections": "FolderTree",
 };
 
 // Anchors of a source file that live on a page written for the site (.mdx).
