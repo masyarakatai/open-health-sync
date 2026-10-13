@@ -263,6 +263,9 @@ release may change the API, the configuration or the database schema.
 
 ### Fixed
 
+- The merged view tells apart the apps behind Apple Health for sleep and workouts. A night the
+  watch and the phone (or a sleep app) both recorded was returned twice; the watch's session now
+  covers the others. On a real export of six years, 1,310 of 14,662 sessions were such doubles.
 - `OHS_<SLUG>_<FIELD>` keys of a provider slug that contains an underscore (`intervals_icu`) are
   now read under the whole slug.
 
