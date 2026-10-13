@@ -33,6 +33,8 @@ release may change the API, the configuration or the database schema.
 
 ### Added
 
+- A reproducible ingestion benchmark against Open Wearables: `bench/openwearables/` and
+  [the method and results](docs/benchmarks/open-wearables.md).
 - Client SDKs 0.1.0 under [sdks/](sdks), AGPL-3.0-only like the server, not on package registries yet:
   Kotlin (Android and JVM), Swift (iOS, macOS, Linux; with a HealthKit sync that uploads what
   changed since the last run), React Native (TypeScript, also Node and browsers) and Flutter
