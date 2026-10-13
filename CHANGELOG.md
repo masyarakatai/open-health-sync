@@ -263,6 +263,8 @@ release may change the API, the configuration or the database schema.
 
 ### Fixed
 
+- MCP `get_coverage` without `start` reports the last 30 days. On years of Apple Health history
+  it answered with over a megabyte of JSON, more than an agent can read.
 - `OHS_<SLUG>_<FIELD>` keys of a provider slug that contains an underscore (`intervals_icu`) are
   now read under the whole slug.
 
