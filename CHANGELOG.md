@@ -307,6 +307,9 @@ sources (`view=all` keeps every source's rows). Migrations `0008` to `0034` appl
   use cases.
 - `mcp-registry.yml` publishes `server.json` to the official MCP registry with GitHub OIDC, when a
   release is published or by hand.
+- A fuzz test of the Apple Health upload parser (`FuzzParseUpload`), run for 30 seconds in CI.
+  Besides crashes, it checks that no parse error quotes the upload body and that no mapped sample
+  is NaN or infinite. Thanks to @yashthakur2008, the first outside contributor (#87).
 
 ### Fixed
 
