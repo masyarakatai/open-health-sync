@@ -172,7 +172,7 @@ func (c column) value(rec reflect.Value) any {
 type Writer[T any] struct {
 	cols []column
 	csv  *csv.Writer
-	pq   *parquet.Writer
+	pq   *parquet.GenericWriter[any]
 	row  reflect.Type
 	rows int
 }
@@ -202,7 +202,7 @@ func NewWriter[T any](w io.Writer, f Format) (*Writer[T], error) {
 	case Parquet:
 		out.row = parquetRow(cols)
 		schema := parquet.SchemaOf(reflect.New(out.row).Interface())
-		out.pq = parquet.NewWriter(w, schema, parquet.Compression(&parquet.Snappy))
+		out.pq = parquet.NewGenericWriter[any](w, schema, parquet.Compression(&parquet.Snappy))
 	default:
 		return nil, fmt.Errorf("export: unknown format %q", f)
 	}
@@ -265,7 +265,7 @@ func (w *Writer[T]) Write(recs []T) error {
 			}
 			f.Set(rv)
 		}
-		if err := w.pq.Write(row.Interface()); err != nil {
+		if _, err := w.pq.Write([]any{row.Interface()}); err != nil {
 			return err
 		}
 		if w.rows++; w.rows%rowGroupRows == 0 {

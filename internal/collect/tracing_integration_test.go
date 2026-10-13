@@ -62,7 +62,7 @@ func TestPullJobSpans(t *testing.T) {
 	attrs := func(s sdktrace.ReadOnlySpan) map[string]string {
 		out := map[string]string{}
 		for _, kv := range s.Attributes() {
-			out[string(kv.Key)] = kv.Value.Emit()
+			out[string(kv.Key)] = kv.Value.String()
 		}
 		return out
 	}
@@ -91,8 +91,8 @@ func TestPullJobSpans(t *testing.T) {
 		queries++
 		assert.True(t, jobIDs[s.Parent().SpanID()], "%s outside a job span", s.Name())
 		for _, kv := range s.Attributes() {
-			assert.NotContains(t, kv.Value.Emit(), "pu-1")
-			assert.NotContains(t, kv.Value.Emit(), "secret")
+			assert.NotContains(t, kv.Value.String(), "pu-1")
+			assert.NotContains(t, kv.Value.String(), "secret")
 		}
 	}
 	assert.Positive(t, queries)
