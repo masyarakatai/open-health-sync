@@ -43,6 +43,8 @@ release may change the API, the configuration or the database schema.
 - A provider deletion notice (Oura, WHOOP, Strava) now updates the connection's
   `last_event_at`, so `push_healthy` no longer reads false for a connection whose only recent
   notifications were deletions.
+- MCP `get_coverage` without `start` reports the last 30 days. On years of Apple Health history
+  it answered with over a megabyte of JSON, more than an agent can read.
 
 ## [0.1.0] - 2026-10-13
 
