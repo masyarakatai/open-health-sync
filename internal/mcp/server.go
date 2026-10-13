@@ -3,7 +3,8 @@
 // Package mcp is the read-only Model Context Protocol server: Streamable HTTP
 // at /mcp, on the API listener, behind the API's bearer authentication. Its
 // tools mirror the REST read endpoints and call the same query layer
-// (internal/api/read), so tenant isolation is enforced in one place.
+// (internal/api/read), so tenant isolation is enforced in one place. Its
+// prompts are the prompt library of internal/prompts.
 package mcp
 
 import (
@@ -78,11 +79,15 @@ const instructions = `Open Health Sync: read-only access to health data (quantit
 	`For trends over days or weeks start with get_daily (one row per day); raw samples ` +
 	`can number thousands a day, so call get_samples with a narrow start and end. ` +
 	`get_coverage shows which days and metrics hold data at all; get_tags lists the ` +
-	`periods the user marked (an illness, a trip) that can explain unusual data.`
+	`periods the user marked (an illness, a trip) that can explain unusual data. ` +
+	`Compare a user with their own history, not population norms; when a figure is missing say so, ` +
+	`never fill it in. The data is for wellness: do not diagnose; suggest a clinician when something ` +
+	`keeps looking off. The server also lists prompts: ready-made questions about training, sleep and recovery.`
 
 func newServer(d Deps, p auth.Principal, cache *sdk.SchemaCache) *sdk.Server {
 	s := sdk.NewServer(&sdk.Implementation{Name: "open-health-sync", Title: "Open Health Sync", Version: Version},
 		&sdk.ServerOptions{Instructions: instructions, SchemaCache: cache})
 	addTools(s, &tools{d: d, p: p})
+	addPrompts(s)
 	return s
 }

@@ -1,7 +1,7 @@
 <a href="#quickstart">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/hero-dark.png">
-  <img src="docs/assets/readme/hero-light.png" width="100%" alt="Open Health Sync: thirteen sources flow into one Go binary (background sync, raw store, normalize, Postgres). Apple Health and Withings are in v0.0.2; Oura, WHOOP, Fitbit, Polar, Strava, Suunto, Ultrahuman, intervals.icu, Dexcom, OMRON and Health Connect ship in the next release. Outputs: REST API and read-only MCP in v0.0.2; FHIR R4, Open mHealth, CSV/Parquet exports and outgoing webhooks in the next release. Garmin, Coros and Samsung Health via Health Connect are planned. The JSON shown is a real heart rate sample read back from the API.">
+  <img src="docs/assets/readme/hero-light.png" width="100%" alt="Open Health Sync: thirteen sources flow into one Go binary (background sync, raw store, normalize, Postgres). All thirteen are in v0.1.0: Apple Health, Withings, Health Connect, Oura, WHOOP, Fitbit, Polar, Strava, Suunto, Ultrahuman, Dexcom, OMRON and intervals.icu. Outputs, all in v0.1.0: REST API, read-only MCP, FHIR R4, Open mHealth, CSV/Parquet exports and outgoing webhooks. Garmin, Coros and Samsung Health via Health Connect are planned. The JSON shown is a real heart rate sample read back from the API.">
 </picture>
 </a>
 
@@ -11,13 +11,13 @@
 
 ### One open API for wearable and health data. On your own server.
 
-Apple Health and Withings in today; Oura, WHOOP, Fitbit, Health Connect, Dexcom, OMRON and five more in the next release.<br>
-One clean model out, over REST and a read-only MCP server for AI agents, with FHIR R4 in the next release.<br>
+Apple Health, Withings, Oura, WHOOP, Fitbit, Health Connect, Dexcom, OMRON and five more.<br>
+One clean model out, over REST, FHIR R4 and a read-only MCP server for AI agents.<br>
 Free, one Go binary plus Postgres, runs on a Raspberry Pi.
 
 [![CI](https://github.com/soma-intelligence/open-health-sync/actions/workflows/ci.yml/badge.svg)](https://github.com/soma-intelligence/open-health-sync/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/soma-intelligence/open-health-sync?color=0e9f8e)](https://github.com/soma-intelligence/open-health-sync/releases)
-[![Image](https://img.shields.io/badge/ghcr.io-0.0.2-0e9f8e)](https://github.com/soma-intelligence/open-health-sync/releases)
+[![Image](https://img.shields.io/badge/ghcr.io-0.1.0-0e9f8e)](https://github.com/soma-intelligence/open-health-sync/releases)
 ![amd64 and arm64](https://img.shields.io/badge/arch-amd64%20%7C%20arm64-555)
 [![Go version](https://img.shields.io/github/go-mod/go-version/soma-intelligence/open-health-sync?color=555)](go.mod)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-555)](LICENSE)
@@ -25,29 +25,29 @@ Free, one Go binary plus Postgres, runs on a Raspberry Pi.
 <p>
 <a href="docs/connectors/apple-health.md"><img alt="Apple Health: available" src="https://img.shields.io/badge/Apple_Health-available-0e9f8e?style=flat-square"></a>
 <a href="docs/connectors/withings.md"><img alt="Withings: available" src="https://img.shields.io/badge/Withings-available-0e9f8e?style=flat-square"></a>
-<a href="docs/connectors/oura.md"><img alt="Oura: next release" src="https://img.shields.io/badge/Oura-next_release-3b82c4?style=flat-square"></a>
-<a href="docs/connectors/whoop.md"><img alt="WHOOP: next release" src="https://img.shields.io/badge/WHOOP-next_release-3b82c4?style=flat-square"></a>
-<a href="docs/connectors/strava.md"><img alt="Strava: next release" src="https://img.shields.io/badge/Strava-next_release-3b82c4?style=flat-square"></a>
-<a href="docs/connectors/polar.md"><img alt="Polar: next release" src="https://img.shields.io/badge/Polar-next_release-3b82c4?style=flat-square"></a>
-<a href="docs/connectors/fitbit.md"><img alt="Fitbit: next release" src="https://img.shields.io/badge/Fitbit-next_release-3b82c4?style=flat-square"></a>
-<a href="docs/connectors/suunto.md"><img alt="Suunto: next release" src="https://img.shields.io/badge/Suunto-next_release-3b82c4?style=flat-square"></a>
-<a href="docs/connectors/ultrahuman.md"><img alt="Ultrahuman: next release" src="https://img.shields.io/badge/Ultrahuman-next_release-3b82c4?style=flat-square"></a>
-<a href="docs/connectors/intervals-icu.md"><img alt="intervals.icu: next release" src="https://img.shields.io/badge/intervals.icu-next_release-3b82c4?style=flat-square"></a>
-<a href="docs/connectors/health-connect.md"><img alt="Health Connect: next release" src="https://img.shields.io/badge/Health_Connect-next_release-3b82c4?style=flat-square"></a>
-<a href="docs/connectors/dexcom.md"><img alt="Dexcom: next release" src="https://img.shields.io/badge/Dexcom-next_release-3b82c4?style=flat-square"></a>
-<a href="docs/connectors/omron.md"><img alt="OMRON: next release" src="https://img.shields.io/badge/OMRON-next_release-3b82c4?style=flat-square"></a>
+<a href="docs/connectors/oura.md"><img alt="Oura: available" src="https://img.shields.io/badge/Oura-available-0e9f8e?style=flat-square"></a>
+<a href="docs/connectors/whoop.md"><img alt="WHOOP: available" src="https://img.shields.io/badge/WHOOP-available-0e9f8e?style=flat-square"></a>
+<a href="docs/connectors/strava.md"><img alt="Strava: available" src="https://img.shields.io/badge/Strava-available-0e9f8e?style=flat-square"></a>
+<a href="docs/connectors/polar.md"><img alt="Polar: available" src="https://img.shields.io/badge/Polar-available-0e9f8e?style=flat-square"></a>
+<a href="docs/connectors/fitbit.md"><img alt="Fitbit: available" src="https://img.shields.io/badge/Fitbit-available-0e9f8e?style=flat-square"></a>
+<a href="docs/connectors/suunto.md"><img alt="Suunto: available" src="https://img.shields.io/badge/Suunto-available-0e9f8e?style=flat-square"></a>
+<a href="docs/connectors/ultrahuman.md"><img alt="Ultrahuman: available" src="https://img.shields.io/badge/Ultrahuman-available-0e9f8e?style=flat-square"></a>
+<a href="docs/connectors/intervals-icu.md"><img alt="intervals.icu: available" src="https://img.shields.io/badge/intervals.icu-available-0e9f8e?style=flat-square"></a>
+<a href="docs/connectors/health-connect.md"><img alt="Health Connect: available" src="https://img.shields.io/badge/Health_Connect-available-0e9f8e?style=flat-square"></a>
+<a href="docs/connectors/dexcom.md"><img alt="Dexcom: available" src="https://img.shields.io/badge/Dexcom-available-0e9f8e?style=flat-square"></a>
+<a href="docs/connectors/omron.md"><img alt="OMRON: available" src="https://img.shields.io/badge/OMRON-available-0e9f8e?style=flat-square"></a>
 <a href="docs/connectors/README.md"><img alt="Garmin: planned" src="https://img.shields.io/badge/Garmin-planned-8a8f98?style=flat-square"></a>
 </p>
 
 ```bash
-docker pull ghcr.io/soma-intelligence/open-health-sync:0.0.2
+docker pull ghcr.io/soma-intelligence/open-health-sync:0.1.0
 ```
 
 [**Quickstart**](#quickstart) &nbsp;&middot;&nbsp; [Roadmap](#roadmap-at-a-glance) &nbsp;&middot;&nbsp; [Use cases](#what-you-can-build) &nbsp;&middot;&nbsp; [Why](#why) &nbsp;&middot;&nbsp; [Features](#features) &nbsp;&middot;&nbsp; [How it works](#how-it-works) &nbsp;&middot;&nbsp; [MCP](#connect-an-ai-agent-mcp) &nbsp;&middot;&nbsp; [FAQ](#faq)
 
 <sub>If it saves you one more parser, a <a href="https://github.com/soma-intelligence/open-health-sync/stargazers">⭐ star</a> helps other developers find it. Questions and ideas: <a href="https://github.com/soma-intelligence/open-health-sync/discussions">Discussions</a>.</sub>
 
-<sub><b>v0.0.2, early preview.</b> APIs, configuration and schema may change in any 0.x release.</sub>
+<sub><b>v0.1.0, early preview.</b> APIs, configuration and schema may change in any 0.x release.</sub>
 
 </div>
 
@@ -63,8 +63,7 @@ clinical software.
 
 **🔌 Thirteen sources, one model**<br>
 Every provider maps into the same records, with one unit per quantity (UCUM, LOINC). Heart rate
-is `bpm`, whatever the source called it. Two sources are in v0.0.2, eleven more on `main` for the
-next release.
+is `bpm`, whatever the source called it. All thirteen ship in v0.1.0.
 
 </td>
 <td width="33%" valign="top">
@@ -93,8 +92,7 @@ can only read.
 <td valign="top">
 
 **🏥 Standards out**<br>
-An OpenAPI 3.1 REST API, plus FHIR R4 Observations checked against the official HL7 validator
-(on `main`, next release).
+An OpenAPI 3.1 REST API, plus FHIR R4 Observations checked against the official HL7 validator.
 
 </td>
 <td valign="top">
@@ -109,36 +107,42 @@ Provider deletions are honored too.
 
 ## Roadmap at a glance
 
-✅ in v0.0.2 &nbsp;·&nbsp; 🔜 on `main`, ships in the next release &nbsp;·&nbsp; 🛠 planned
+✅ in v0.1.0 &nbsp;·&nbsp; 🛠 planned
 
 | | Outputs and integrations | | Sources |
 |:---:|---|:---:|---|
 | ✅ | REST API (OpenAPI 3.1), read-only MCP server | ✅ | Apple Health, Withings |
-| 🔜 | FHIR R4 (Observations, checked with the HL7 validator) | 🔜 | Oura, WHOOP, Polar, Strava |
-| 🔜 | Open mHealth output ([docs](docs/open-mhealth.md)) | 🔜 | Fitbit, Suunto, Ultrahuman, intervals.icu |
-| 🔜 | CSV and Parquet exports ([docs](docs/exports.md)) | 🔜 | Dexcom (CGM), OMRON |
-| 🔜 | Outgoing webhooks ([docs](docs/webhooks.md)) | 🔜 | Health Connect (Android app upload) |
-| 🔜 | Background sync and `/freshness` | 🔜 | Health app export import |
-| 🔜 | Read-only admin console at `/console` ([docs](docs/console.md)) | | |
-| 🔜 | Backup and restore scripts, tested in CI ([docs](docs/backup-and-restore.md)) | | |
-| 🔜 | Hosted connect page: your app name and logo, one button per source ([docs](docs/connect-page.md)) | | |
-| 🔜 | Erase one source's data for a user on disconnect, or for Apple Health and Health Connect | | |
-| 🛠 | Swift, Kotlin, React Native and Flutter SDKs | 🛠 | Garmin, Coros |
-| 🔜 | Personal mode (`ohs admin personal setup`) and [eight small Python recipes](docs/recipes/README.md) on your own data | 🛠 | Health records (EHR) through SMART on FHIR, after the SDKs |
+| ✅ | FHIR R4 (Observations, checked with the HL7 validator) | ✅ | Oura, WHOOP, Polar, Strava |
+| ✅ | Open mHealth output ([docs](docs/open-mhealth.md)) | ✅ | Fitbit, Suunto, Ultrahuman, intervals.icu |
+| ✅ | CSV and Parquet exports ([docs](docs/exports.md)) | ✅ | Dexcom (CGM), OMRON |
+| ✅ | Outgoing webhooks ([docs](docs/webhooks.md)) | ✅ | Health Connect (Android app upload) |
+| ✅ | Background sync and `/freshness` | ✅ | Health app export import |
+| ✅ | Prometheus metrics and OpenTelemetry traces, off by default ([docs](docs/observability.md)) | | |
+| ✅ | A merged view across sources, with priorities per user and metric ([docs](docs/api.md#several-sources-of-one-metric-the-merged-view)) | | |
+| ✅ | Read-only admin console at `/console` ([docs](docs/console.md)) | | |
+| ✅ | Consent per user, source and category, with a revocation webhook ([docs](docs/consent.md)) | | |
+| ✅ | Complete per-user archive for data portability ([docs](docs/exports.md#complete-user-archive-data-portability)) | | |
+| ✅ | Append-only audit log of every authenticated request, read with `GET /v1/audit` ([docs](docs/audit-log.md)) | | |
+| ✅ | Backup and restore scripts, tested in CI ([docs](docs/backup-and-restore.md)) | | |
+| ✅ | Kubernetes through a Helm chart ([docs](docs/helm.md)) | | |
+| ✅ | Deploy templates for Render, Fly.io and Railway ([docs](docs/deploy-platforms.md)) | | |
+| ✅ | Hosted connect page: your app name and logo, one button per source ([docs](docs/connect-page.md)) | | |
+| ✅ | Erase one source's data for a user on disconnect, or for Apple Health and Health Connect | | |
+| ✅ | Personal mode (`ohs admin personal setup`) and [eight small Python recipes](docs/recipes/README.md) on your own data | 🛠 | Health records (EHR) through SMART on FHIR |
+| ✅ | [Kotlin, Swift, React Native and Flutter SDKs](docs/sdks/README.md) and example apps | 🛠 | Garmin, Coros |
 
-A line moves up only when its pull request is merged, or its release is published. The 0.0.2
-image does not have the 🔜 lines yet. Details per source:
+A line moves up only when its release is published. Details per source:
 [docs/connectors](docs/connectors/README.md).
 
 ## What you can build
 
 - **A health app backend.** Your iOS app uploads HealthKit data, your users connect their
-  Oura, WHOOP or Withings accounts (through a hosted connect page with your logo, next release), and your app reads one API instead of thirteen (most of
-  them arrive in the next release).
+  Oura, WHOOP or Withings accounts (through a hosted connect page with your logo), and your app
+  reads one API instead of thirteen.
 - **An AI agent over your own data.** Run it at home, connect your devices, and give your desktop
   agent a read-only view of your sleep, workouts and heart rate through MCP.
 - **A study that collects from participants' wearables.** Raw payloads kept for audit, hard
-  deletes for withdrawals, FHIR R4 out for the analysis side (next release).
+  deletes for withdrawals, FHIR R4 out for the analysis side.
 - **A personal data archive.** Load years of history from the Health app export in one command,
   and keep it on a machine you own.
 - **Small tools on your own data.** `ohs admin personal setup` gives you one instance for
@@ -177,7 +181,7 @@ Open Health Sync is that layer, written once, with the boring parts done properl
 | A crash mid-run | rerun the script and hope | Postgres queue, retries with backoff, parked after 5 attempts |
 | Provider OAuth tokens | a plain column or a `.env` | sealed with AES-256-GCM under `OHS_ENCRYPTION_KEY` |
 | Delete a user | grep across tables and buckets | `DELETE /v1/users/{id}`, then poll `GET /v1/deletions/{job_id}` |
-| Erase one provider's data | the same grep, filtered by hand | `DELETE /v1/users/{id}/connections/{provider}?delete_data=true`, or `DELETE /v1/users/{id}/data/{provider}` for a device (on `main`, next release) |
+| Erase one provider's data | the same grep, filtered by hand | `DELETE /v1/users/{id}/connections/{provider}?delete_data=true`, or `DELETE /v1/users/{id}/data/{provider}` for a device |
 | Let an AI agent read it | build an integration | read-only MCP server, `ohs mcp` for desktop agents |
 
 ## Features
@@ -204,10 +208,17 @@ Open Health Sync is that layer, written once, with the boring parts done properl
   plus jobs still pending, jobs parked after their retries, and lines that were not stored.
 - **Real erasure.** `DELETE /v1/users/{id}` removes the user's raw files and every row, then the
   user. Not a soft flag. When a provider reports that a record was deleted (Oura, WHOOP,
-  Strava), it is deleted here too. On `main` for the next release, disconnecting a source with
+  Strava), it is deleted here too. Disconnecting a source with
   `?delete_data=true` erases everything that source sent for the user (records, raw files, sync
   history), and `DELETE /v1/users/{id}/data/{provider}` does the same for Apple Health or Health
   Connect. `OHS_RETENTION_DAYS` drops raw files and normalized data past an age.
+- **Consent per category.** Each user grants or refuses each source per data category (sleep,
+  heart, location, glucose and so on). Data not granted is dropped before it is stored, revoking
+  a category deletes what was stored, and `consent.granted` and `consent.revoked` webhooks tell
+  your server ([guide](docs/consent.md)).
+- **One-call user archive.** `GET /v1/users/{id}/archive` returns everything held about one
+  person as a single zip, for access and portability requests
+  ([docs](docs/exports.md#complete-user-archive-data-portability)).
 - **Multi-tenant.** Tenant API keys (`ohs_sk_`) for your server, short-lived scoped user tokens
   (`ohs_ut_`, scopes `upload` and `read`) for one person's app or agent. Keys and tokens are
   stored as SHA-256 hashes.
@@ -230,7 +241,7 @@ Open Health Sync is that layer, written once, with the boring parts done properl
 
 ### Sources and outputs
 
-Apple Health and Withings are in v0.0.2; eleven more are on `main` for the next release. Every other one is planned: on the roadmap, not built yet.
+Thirteen sources are in v0.1.0. Every other one is planned: on the roadmap, not built yet.
 Integration paths, vendor programs and tracking issues for each:
 [docs/connectors](docs/connectors/README.md).
 
@@ -238,18 +249,18 @@ Integration paths, vendor programs and tracking issues for each:
 |---|---|---|
 | Apple Health | ✅ Available | your iOS app uploads HealthKit data with the [Swift SDK](docs/sdks/swift.md#healthkit-sync) or its own code ([contract](docs/connectors/apple-health.md)); `ohs import apple-health` loads a Health app export |
 | Withings | ✅ Available | OAuth, scheduled pulls, push notifications ([guide](docs/connectors/withings.md)) |
-| Oura | 🔜 On `main`, next release | OAuth, scheduled pulls, webhooks ([guide](docs/connectors/oura.md)) |
-| Whoop | 🔜 On `main`, next release | OAuth, scheduled pulls, webhooks ([guide](docs/connectors/whoop.md)) |
-| Strava | 🔜 On `main`, next release | OAuth, scheduled pulls, webhook events ([guide](docs/connectors/strava.md)) |
-| Polar | 🔜 On `main`, next release | OAuth, scheduled pulls, webhooks ([guide](docs/connectors/polar.md)) |
+| Oura | ✅ Available | OAuth, scheduled pulls, webhooks ([guide](docs/connectors/oura.md)) |
+| Whoop | ✅ Available | OAuth, scheduled pulls, webhooks ([guide](docs/connectors/whoop.md)) |
+| Strava | ✅ Available | OAuth, scheduled pulls, webhook events ([guide](docs/connectors/strava.md)) |
+| Polar | ✅ Available | OAuth, scheduled pulls, webhooks ([guide](docs/connectors/polar.md)) |
 | Garmin | 🛠 Planned ([#9](https://github.com/soma-intelligence/open-health-sync/issues/9)) | partner program; Garmin has paused new applications ([research notes](docs/connectors/garmin.md)) |
-| Fitbit | 🔜 On `main`, next release | Google Health API: OAuth, scheduled pulls, signed webhooks ([guide](docs/connectors/fitbit.md)). Google is not onboarding new projects yet |
-| Suunto | 🔜 On `main`, next release | partner program: OAuth, scheduled pulls, signed notifications ([guide](docs/connectors/suunto.md)) |
-| Ultrahuman | 🔜 On `main`, next release | Partnership API: OAuth, daily pulls; ring data and M1 glucose ([guide](docs/connectors/ultrahuman.md)) |
-| intervals.icu | 🔜 On `main`, next release | OAuth, scheduled pulls, webhooks; activities from Garmin, Wahoo, Zwift, Coros and more, plus daily wellness ([guide](docs/connectors/intervals-icu.md)) |
-| Health Connect | 🔜 On `main`, next release | your Android app uploads Health Connect records ([contract](docs/connectors/health-connect.md)) |
-| Dexcom | 🔜 On `main`, next release | CGM glucose: OAuth, scheduled pulls ([guide](docs/connectors/dexcom.md)) |
-| OMRON | 🔜 On `main`, next release | blood pressure and weight: partner API, OAuth, scheduled pulls ([guide](docs/connectors/omron.md)) |
+| Fitbit | ✅ Available | Google Health API: OAuth, scheduled pulls, signed webhooks ([guide](docs/connectors/fitbit.md)). Google is not onboarding new projects yet |
+| Suunto | ✅ Available | partner program: OAuth, scheduled pulls, signed notifications ([guide](docs/connectors/suunto.md)) |
+| Ultrahuman | ✅ Available | Partnership API: OAuth, daily pulls; ring data and M1 glucose ([guide](docs/connectors/ultrahuman.md)) |
+| intervals.icu | ✅ Available | OAuth, scheduled pulls, webhooks; activities from Garmin, Wahoo, Zwift, Coros and more, plus daily wellness ([guide](docs/connectors/intervals-icu.md)) |
+| Health Connect | ✅ Available | your Android app uploads Health Connect records ([contract](docs/connectors/health-connect.md)) |
+| Dexcom | ✅ Available | CGM glucose: OAuth, scheduled pulls ([guide](docs/connectors/dexcom.md)) |
+| OMRON | ✅ Available | blood pressure and weight: partner API, OAuth, scheduled pulls ([guide](docs/connectors/omron.md)) |
 | FreeStyle Libre | No public API | through Health Connect or Apple Health ([notes](docs/connectors/freestyle-libre.md)) |
 | Coros | 🛠 Planned | cloud API, OAuth |
 | Samsung Health, Zepp / Amazfit | 🛠 Planned, via Health Connect | their apps write to Health Connect on Android |
@@ -264,17 +275,17 @@ Want one sooner? Connectors are self-contained: read
 |---|---|
 | REST JSON, described by [api/openapi.yaml](api/openapi.yaml) | ✅ Available |
 | MCP server, read only ([docs/mcp.md](docs/mcp.md)) | ✅ Available |
-| FHIR R4, checked with the official HL7 validator ([docs/fhir.md](docs/fhir.md)) | 🔜 On `main`, next release (Observations: samples, blood pressure, sleep, workouts, daily summaries) |
-| RR intervals and HRV (RMSSD, SDNN, pNN50, mean RR and heart rate) per heartbeat series, over REST and MCP ([docs/hrv.md](docs/hrv.md)) | 🔜 On `main`, next release |
-| Menstrual cycles derived from recorded flow, over REST and MCP; no predictions ([docs/menstrual-cycles.md](docs/menstrual-cycles.md)) | 🔜 On `main`, next release |
-| Time tags (illness, injury, travel, jet lag, vaccination, medication, alcohol) that give context to the data, over REST, webhooks and MCP ([docs/time-tags.md](docs/time-tags.md)) | 🔜 On `main`, next release |
+| FHIR R4, checked with the official HL7 validator ([docs/fhir.md](docs/fhir.md)) | ✅ Available (Observations, Patient, Device, Provenance, Patient `$everything`) |
+| RR intervals and HRV (RMSSD, SDNN, pNN50, mean RR and heart rate) per heartbeat series, over REST and MCP ([docs/hrv.md](docs/hrv.md)) | ✅ Available |
+| Menstrual cycles derived from recorded flow, over REST and MCP; no predictions ([docs/menstrual-cycles.md](docs/menstrual-cycles.md)) | ✅ Available |
+| Time tags (illness, injury, travel, jet lag, vaccination, medication, alcohol) that give context to the data, over REST, webhooks and MCP ([docs/time-tags.md](docs/time-tags.md)) | ✅ Available |
 | Read routes for ECG recordings, which are stored today | 🛠 Planned |
-| FHIR R4 Patient and Device resources, bulk export | 🛠 Planned |
-| Open mHealth ([docs/open-mhealth.md](docs/open-mhealth.md)) | 🔜 On `main`, next release |
-| CSV and Parquet exports ([docs/exports.md](docs/exports.md)) | 🔜 On `main`, next release |
-| Outgoing webhooks, signed per Standard Webhooks ([docs/webhooks.md](docs/webhooks.md)) | 🔜 On `main`, next release (data written or deleted, user erased, connection needs reauthorization) |
-| Client SDKs: Kotlin, Swift (with HealthKit sync), React Native, Flutter, and example apps for iOS, Android and React Native ([docs/sdks](docs/sdks/README.md)) | 🔜 On `main`, next release (install from this repository; not on package registries) |
-| Health records (EHR): lab results, conditions, medications and allergies read through SMART on FHIR, served as FHIR R4 | 🛠 Planned, after the SDKs |
+| FHIR R4 bulk export (`$export`) | 🛠 Planned |
+| Open mHealth ([docs/open-mhealth.md](docs/open-mhealth.md)) | ✅ Available |
+| CSV and Parquet exports ([docs/exports.md](docs/exports.md)) | ✅ Available |
+| Outgoing webhooks, signed per Standard Webhooks ([docs/webhooks.md](docs/webhooks.md)) | ✅ Available (data written or deleted, user erased, connection needs reauthorization) |
+| Client SDKs: Kotlin, Swift (with HealthKit sync), React Native, Flutter, and example apps for iOS, Android and React Native ([docs/sdks](docs/sdks/README.md)) | ✅ Available (install from this repository; not on package registries) |
+| Health records (EHR): lab results, conditions, medications and allergies read through SMART on FHIR, served as FHIR R4 | 🛠 Planned |
 
 ## Quickstart
 
@@ -301,6 +312,14 @@ export KEY=ohs_sk_...    # the key printed above
 The API listens on `127.0.0.1` only, so these steps run on the same machine. A phone app,
 provider webhooks or another computer need it exposed: put a reverse proxy with TLS in front, or
 set `OHS_HTTP_BIND=0.0.0.0` in `.env` for plain http on your network.
+
+No device or provider keys yet? `ohs seed --demo` fills the instance with 90 days of synthetic
+data from six overlapping sources and prints a demo API key and calls to try
+([docs/demo.md](docs/demo.md)):
+
+```sh
+docker compose --env-file .env -f deploy/docker-compose.yml exec ohs /ohs seed --demo
+```
 
 Port 8080 taken? Set `OHS_HTTP_PORT` and a matching `OHS_PUBLIC_URL` in `.env` (see
 [self-hosting](docs/self-hosting.md#port-and-a-second-install)).
@@ -346,7 +365,7 @@ ohs version
 
 On macOS, clear the quarantine flag first: `xattr -d com.apple.quarantine ohs_*_darwin_*/ohs`.
 
-**Load your existing history** (🔜 next release: `ohs import` is on `main`, not in v0.0.2).
+**Load your existing history.**
 On the iPhone, Health app, your picture, *Export All Health Data* gives `export.zip`. Load it
 with the user's token (`--dry-run` first counts what it would send):
 
@@ -461,15 +480,15 @@ and units):
 
 - **QuantitySample**: one scalar measurement, such as heart rate, steps or SpO2.
 - **CategorySample**: a categorical event, such as a stand hour or a menstrual flow entry.
-  Menstrual cycles are derived from the flow entries at read time by `/menstrual-cycles` on
-  `main`, next release ([docs/menstrual-cycles.md](docs/menstrual-cycles.md)).
+  Menstrual cycles are derived from the flow entries at read time by `/menstrual-cycles`
+  ([docs/menstrual-cycles.md](docs/menstrual-cycles.md)).
 - **SleepSession** and **SleepPhase**: a night with its duration breakdown, then each stage.
 - **Workout** and **RoutePoint**: a session with its metrics, then its GPS track.
 - **NutritionLog**: a food or drink entry with its nutrients.
 - **ECGRecording** and **ECGVoltageSample**: the recording's metadata, then the voltage trace.
   Stored, not served yet: the read route is planned.
 - **HeartbeatSample**: one beat-to-beat (RR) interval. Served with HRV derived per series by
-  `/rr-intervals` and `/hrv` on `main`, next release ([docs/hrv.md](docs/hrv.md)).
+  `/rr-intervals` and `/hrv` ([docs/hrv.md](docs/hrv.md)).
 - **DailySummary**: totals per local day, from the provider or rolled up from samples.
 - **Observation**: a generic coded fact for the long tail. No connector writes it yet.
 
@@ -482,7 +501,7 @@ and units):
   memory limits). See [Raspberry Pi 5](docs/self-hosting.md#raspberry-pi-5-4-gb).
 - **S3 raw store.** Add `deploy/docker-compose.s3.yml`, or point `OHS_RAW_STORE` at any S3
   compatible bucket. See [S3](docs/self-hosting.md#s3-compatible-raw-store).
-- **Backup and restore** (🔜 next release). `scripts/backup.sh` writes one archive with the
+- **Backup and restore.** `scripts/backup.sh` writes one archive with the
   database, the raw store and the schema version; `scripts/restore.sh` puts it back. CI destroys
   and restores a stack on every pull request. See [backup and restore](docs/backup-and-restore.md).
 - **Release binaries.** Linux and macOS, amd64 and arm64, with `checksums.txt`, on the
@@ -522,7 +541,9 @@ bucket. With compose, those are the `pgdata` and `raw` volumes. Back them up tog
 No software is compliant on its own, and Open Health Sync is not certified, audited or covered
 by a business associate agreement. What it gives you: data stays on infrastructure you choose,
 `DELETE /v1/users/{id}` is a hard delete of raw files and rows (useful for erasure requests),
-erasing one source's data for a user is a single call (next release),
+erasing one source's data for a user is a single call,
+consent is kept per source and data category and enforced on every write,
+`GET /v1/users/{id}/archive` gives one person everything held about them in a zip,
 `OHS_RETENTION_DAYS` enforces a retention period, every query is scoped to a tenant and a user,
 keys and tokens are stored hashed, and provider OAuth tokens are encrypted with AES-256-GCM.
 Health records themselves are not encrypted by `ohs`: use disk or database encryption, TLS in
@@ -589,22 +610,21 @@ software.
 
 ## Status and roadmap
 
-v0.0.2 is the latest release. The Oura, WHOOP, Strava, Polar, Fitbit, Suunto, Ultrahuman, intervals.icu, Dexcom, OMRON and
-Health Connect connectors, FHIR R4 and Open mHealth output, CSV and Parquet exports, outgoing webhooks,
-Health app export import, background sync, sample compression, RR intervals and HRV, menstrual cycles, time tags, per-source erasure, backup and restore, the hosted connect page, the admin console, personal mode and the recipes are on `main` and ship in the next release. What
-changed: [CHANGELOG.md](CHANGELOG.md). Install notes and the full list of limitations: [release notes](docs/release-notes/v0.0.2.md).
+v0.1.0 is the latest release. It adds the Oura, WHOOP, Strava, Polar, Fitbit, Suunto, Ultrahuman, intervals.icu,
+Dexcom, OMRON and Health Connect connectors, FHIR R4 and Open mHealth output, CSV and Parquet exports, outgoing
+webhooks, Health app export import, background sync, sample compression, RR intervals and HRV, menstrual cycles, time tags, per-source erasure, a merged view across sources, backup and restore,
+the hosted connect page, sync history and connection health, personal mode with its recipes, an audit log, consent per source and
+category, a complete user archive, a read-only admin console and a Helm chart for Kubernetes. What changed: [CHANGELOG.md](CHANGELOG.md). Install and upgrade notes and the full list
+of limitations: [release notes](docs/release-notes/v0.1.0.md).
 
 Known limitations:
 
 - After a hard kill, a job that was in flight is picked up again only after its 10 minute
   visibility timeout.
 - One database and one raw store per instance; no multi-region replication.
-- FHIR R4 serves Observations only (samples, blood pressure, sleep, workouts, daily summaries).
+- FHIR R4 has no bulk export (`$export`) yet.
 - The client SDKs are 0.1.0 and not on package registries yet; install them from this
   repository. Reading Health Connect from the Kotlin SDK is planned.
-- In v0.0.2, `/metrics` is unauthenticated: block it at your proxy or set `OHS_METRICS=false`.
-  On `main` (next release) it is closed by default and opens with a token or a private listener
-  ([metrics](docs/self-hosting.md#metrics)).
 
 Next: more connectors, standard outputs (more FHIR R4 resources), then
 Health Connect reading in the Kotlin SDK, then health records (EHR) through SMART on FHIR. Requests are welcome as GitHub issues, including the connector request form.

@@ -146,6 +146,13 @@ const sources: Record<string, Target[]> = {
       description: "Deploy without a server of your own: templates with TimescaleDB and a persistent raw store.",
     },
   ],
+  "docs/key-rotation.md": [
+    {
+      page: "(guides)/self-hosting/key-rotation",
+      title: "Rotating the encryption key",
+      description: "Replace OHS_ENCRYPTION_KEY online, re-seal the stored secrets, and what to do after a leak.",
+    },
+  ],
   "docs/fhir.md": [
     {
       page: "(guides)/guides/fhir",
@@ -228,6 +235,20 @@ const sources: Record<string, Target[]> = {
       page: "(guides)/guides/consent",
       title: "Consent",
       description: "Per user, per source and per data category: what is stored, revocation and its purge.",
+    },
+  ],
+  "docs/server-sdks.md": [
+    {
+      page: "(guides)/guides/server-sdks",
+      title: "Server SDKs",
+      description: "TypeScript and Python clients for your backend, generated from the OpenAPI document.",
+    },
+  ],
+  "docs/api-collections.md": [
+    {
+      page: "(guides)/guides/api-collections",
+      title: "API collections",
+      description: "Try the API from Postman, Bruno or Insomnia with the generated collection.",
     },
   ],
 };
@@ -331,6 +352,8 @@ const icons: Record<string, string> = {
   "(guides)/guides/connect-page": "MousePointerClick",
   "(guides)/guides/sync-health": "HeartHandshake",
   "(guides)/guides/demo": "FlaskConical",
+  "(guides)/guides/server-sdks": "Package",
+  "(guides)/guides/api-collections": "FolderTree",
 };
 
 // Anchors of a source file that live on a page written for the site (.mdx).

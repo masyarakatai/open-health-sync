@@ -32,7 +32,7 @@ func validSegments(p string, prefix bool) bool {
 		if s == "." {
 			return false
 		}
-		if s == "" && !(prefix && i == len(segs)-1) {
+		if s == "" && (!prefix || i != len(segs)-1) {
 			return false
 		}
 	}

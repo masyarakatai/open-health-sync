@@ -225,14 +225,12 @@ func Generate(dir string, parts, lines int) error {
 				"quantityType": typ, "unit": unit, "value": value,
 				"startDate": start, "endDate": start,
 			}); err != nil {
-				f.Close()
-				return err
+				return errors.Join(err, f.Close())
 			}
 			t = t.Add(time.Second)
 		}
 		if err := bw.Flush(); err != nil {
-			f.Close()
-			return err
+			return errors.Join(err, f.Close())
 		}
 		if err := f.Close(); err != nil {
 			return err

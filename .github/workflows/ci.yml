@@ -23,8 +23,46 @@ jobs:
           node-version: "22"
       - name: Console script helpers (node --test, no dependency)
         run: make test-js
+      - name: Fuzz the Apple Health upload parser
+        run: go test ./connectors/applehealth/ -run '^$' -fuzz FuzzParseUpload -fuzztime=30s
       - name: Integration and API contract (Docker available on the runner)
         run: make integration
+
+  sdks-server:
+    # The server-side SDKs generated from api/openapi.yaml. That they match the
+    # document is checked by go test (internal/sdkgen); this runs their own tests.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: TypeScript SDK, install the type checker
+        working-directory: sdks/server/typescript
+        run: npm ci
+      - name: TypeScript SDK, type check
+        working-directory: sdks/server/typescript
+        run: npm run check
+      - name: TypeScript SDK, tests
+        working-directory: sdks/server/typescript
+        run: npm test
+      - name: Python SDK, tests
+        working-directory: sdks/server/python
+        run: python -m unittest discover -s tests -v
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+      - name: golangci-lint (.golangci.yml, integration build tag included)
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.14.0
 
   e2e:
     runs-on: ubuntu-latest

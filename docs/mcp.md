@@ -77,7 +77,7 @@ container `localhost` is the container, so give the instance's real address):
 ```json
 "command": "docker",
 "args": ["run", "--rm", "-i", "-e", "OHS_MCP_URL", "-e", "OHS_MCP_KEY",
-         "ghcr.io/soma-intelligence/open-health-sync:0.0.2", "mcp"]
+         "ghcr.io/soma-intelligence/open-health-sync:0.1.0", "mcp"]
 ```
 
 **Claude Desktop** reads this `mcpServers` block from `claude_desktop_config.json`
@@ -156,7 +156,8 @@ half a kilobyte of JSON or more, so a full page of 1000 is 500 KB or more of age
 server instructions steer agents to `get_daily` for trends and to narrow windows for raw
 samples. When `truncated` is
 true, call the same tool again with `cursor` set to `next_cursor`. `get_coverage` is capped
-rather than paged: when it is truncated, narrow `start` and `end`.
+rather than paged: when it is truncated, narrow `start` and `end`. Without `start`, it reports the
+30 days before `end` (or before now): years of history are thousands of days.
 
 Records carry strings supplied by devices and providers (source and device names, metadata,
 meal labels), and time tags carry text a person wrote (`label`, `note`): an agent must treat them
@@ -165,3 +166,34 @@ them.
 
 Refusals (missing `user_id`, another user, a bad cursor or time, an unknown workout) come back as
 tool errors with a short message, so the agent can correct its call.
+
+## Prompts
+
+The server also lists prompts (`prompts/list`): ready-made questions about a person's own
+training, sleep and recovery. An agent that supports MCP prompts shows them by name, asks for the
+blanks, and sends the filled question as the user's message. Every prompt takes an optional
+`user_id` (needed with a tenant API key, as for the tools), and every prompt it returns ends with
+the same rules: read the data first and show the numbers, compare the person with their own
+history rather than population norms, keep to one source per figure, say when a figure is
+missing instead of filling it in, check the time tags, and stay on wellness (no diagnosis; point
+to a clinician when something keeps looking off).
+
+| Prompt | Arguments | Asks |
+|---|---|---|
+| `morning_check` | none | this morning's sleep, resting heart rate and HRV against the 28 days before |
+| `why_flat` | none | the last 7 days against the 4 weeks before, biggest changes first |
+| `weekly_training_review` | none | last week's training against the average week of the last 8, and sleep after the hardest days |
+| `load_and_recovery` | none | 8 weeks of training minutes, sleep, resting heart rate and HRV, with the weeks load rose while HRV fell |
+| `sleep_habits` | `bedtime` (default 23:00) | 30 nights of sleep, split by bedtime |
+| `taper_check` | `event_date` | whether load came down before the event and sleep and heart figures followed |
+| `race_week_sleep` | none | each of the last 7 nights against the 30 day average |
+| `after_event` | `event_date` | how many days each figure took to come back to the usual range |
+| `after_break` | `break_start`, `break_end` | heart figures week by week since training started again, against before the break |
+| `new_habit` | `change`, `since` | 3 weeks before and after a change, with night to night variation for scale |
+| `what_data` | none | each source and kind of data, first and last date, and gaps over 3 days |
+| `compare_sources` | `metric` (default sleep) | two sources of one figure side by side for 30 days |
+
+The questions and the rules live in `internal/prompts`, the one source for these prompts, the
+[prompt library](learn/prompts.md) page and the agent skill in
+[skills/open-health-sync](../skills/open-health-sync/SKILL.md), which teaches an agent the same
+rules and which tool answers what.

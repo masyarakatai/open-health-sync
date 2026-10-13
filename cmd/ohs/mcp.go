@@ -307,7 +307,7 @@ func proxyMCP(ctx context.Context, endpoint *url.URL, secret string, local sdk.T
 			if err != nil {
 				// The instance did not answer: a tool error the agent can report.
 				out := &sdk.CallToolResult{}
-				out.SetError(fmt.Errorf("Open Health Sync did not answer: %w", err))
+				out.SetError(fmt.Errorf("Open Health Sync did not answer: %w", err)) //nolint:staticcheck // ST1005: starts with the product name, a proper noun
 				return out, nil
 			}
 			return res, nil

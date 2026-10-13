@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# golangci-lint v2: `make lint` locally, the lint job in CI.
+version: "2"
+
+run:
+  # The integration suites are linted too.
+  build-tags: [integration]
+
+linters:
+  # errcheck, govet, ineffassign, staticcheck, unused.
+  default: standard
+  settings:
+    errcheck:
+      exclude-functions:
+        # Report and metrics output to an io.Writer (an http.ResponseWriter,
+        # a bytes.Buffer, stdout, a test writer): a failed write has nowhere
+        # better to go.
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+        # Closing a response body or a raw store reader once read.
+        - (io.Closer).Close
+  exclusions:
+    rules:
+      # Deferred cleanup on read paths: `defer f.Close()`, `defer
+      # conn.Close(ctx)`, `defer os.Remove(tmp)`. Write paths close
+      # explicitly and check the error.
+      - linters: [errcheck]
+        source: '^\s*defer (os\.Remove|[\w.]+\.Close)\('
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

@@ -45,7 +45,7 @@ func Open(name string) (*Export, error) {
 			}
 		}
 		if e.xml == nil {
-			zr.Close()
+			_ = zr.Close() // read-only archive: ErrNoExportXML is the error that matters
 			return nil, ErrNoExportXML
 		}
 		for _, f := range zr.File {

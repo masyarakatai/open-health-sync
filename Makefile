@@ -3,7 +3,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
 LDFLAGS := -X main.version=$(VERSION) -X main.commit=$(COMMIT)
 
-.PHONY: setup build image test test-js integration contract e2e backup-test reliability upgrade-test guard fhir-validate release-check record
+.PHONY: setup build image test test-js lint integration contract e2e backup-test reliability upgrade-test guard fhir-validate release-check record sdk sdk-test
 
 setup:
 	git config core.hooksPath .githooks
@@ -24,6 +24,12 @@ test:
 # The admin console's pure JavaScript helpers (Node 22+, no npm install).
 test-js:
 	node --test internal/console/app.test.mjs
+
+# golangci-lint v2 with .golangci.yml (the integration suites included). CI
+# runs the same version: go install
+# github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
+lint:
+	golangci-lint run ./...
 
 integration:
 	go test -tags integration ./...
@@ -69,6 +75,17 @@ upgrade-test:
 record:
 	OHS_RECORD_PROVIDER=$(PROVIDER) go test -tags record -run TestRecord -count=1 -v -timeout 30m ./test/recorded/
 
+# The server-side SDKs (sdks/server), the Postman collection (api/collections)
+# and the webhook test vectors, generated from api/openapi.yaml. A unit test
+# fails when the committed files are not what this writes.
+sdk:
+	go run ./internal/sdkgen/cmd/sdkgen
+
+# The SDKs' own tests, as CI runs them. Needs Node.js 22 and Python 3.9+.
+sdk-test:
+	cd sdks/server/typescript && npm ci && npm run check && npm test
+	cd sdks/server/python && python3 -m unittest discover -s tests
+
 guard:
 	scripts/guard_test.sh
 	scripts/guard.sh
@@ -80,7 +97,7 @@ fhir-validate:
 	scripts/fhir-validate.sh
 
 # Checks to run before tagging a release, with the tag to come:
-#   make release-check RELEASE_TAG=v0.0.2
+#   make release-check RELEASE_TAG=v0.1.0
 # The tag's release notes and the compose default version, build, vet, unit
 # tests, the forbidden-terms guard (set OHS_TERMS_FILE or
 # OHS_FORBIDDEN_TERMS), a secret scan when gitleaks is installed, and the

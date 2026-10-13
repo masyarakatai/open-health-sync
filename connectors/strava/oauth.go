@@ -181,9 +181,7 @@ func (c *Connector) requestToken(ctx context.Context, form url.Values) (connecto
 	case tr.ExpiresIn > 0:
 		t.Expiry = c.now().Add(time.Duration(tr.ExpiresIn) * time.Second).UTC()
 	}
-	for _, s := range strings.FieldsFunc(tr.Scope, func(r rune) bool { return r == ',' || r == ' ' }) {
-		t.Scopes = append(t.Scopes, s)
-	}
+	t.Scopes = append(t.Scopes, strings.FieldsFunc(tr.Scope, func(r rune) bool { return r == ',' || r == ' ' })...)
 	return t, nil
 }
 
