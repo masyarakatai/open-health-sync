@@ -2,6 +2,7 @@ name: no-claude-attribution
 
 on:
   pull_request:
+    types: [opened, edited, synchronize, reopened]
 
 permissions:
   contents: read
@@ -37,3 +38,20 @@ jobs:
             exit 1
           fi
           echo "No Claude attribution found."
+
+      - name: Reject Claude in the branch name and the PR description
+        env:
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          fail=0
+          if echo "$BRANCH" | grep -qi 'claude'; then
+            echo "::error::The branch name contains \"claude\": push the commits to a neutral name (feat/..., fix/..., docs/...)."
+            fail=1
+          fi
+          if printf '%s' "$BODY" | grep -qiE 'generated (with|by) \[?claude|claude\.ai/code|claude-projects-attribution|🤖'; then
+            echo "::error::The PR description carries an AI footer, a claude.ai link or a robot emoji. Remove it and save the description."
+            fail=1
+          fi
+          [ "$fail" -eq 0 ] && echo "Branch name and description are clean."
+          exit "$fail"
