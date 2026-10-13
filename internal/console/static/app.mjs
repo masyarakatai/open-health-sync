@@ -261,6 +261,7 @@ function main() {
   const form = document.getElementById("signin-form");
   const keyInput = document.getElementById("key");
   const signinError = document.getElementById("signin-error");
+  const setupLink = document.getElementById("setup-link");
   let renderSeq = 0;
   // Cursor stack of the users view: page n starts at cursors[n].
   let userCursors = [null];
@@ -272,6 +273,18 @@ function main() {
     view.replaceChildren();
     signinError.textContent = message || "";
     keyInput.focus();
+    checkSetup();
+  }
+
+  // checkSetup shows the first-run link while the instance has no tenant.
+  // A 404 (OHS_SETUP_TOKEN not set) or any failure leaves it hidden.
+  async function checkSetup() {
+    try {
+      const body = await get("/v1/setup", { auth: false });
+      setupLink.hidden = !(body && body.needed === true);
+    } catch {
+      setupLink.hidden = true;
+    }
   }
 
   function signOut() {

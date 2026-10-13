@@ -21,9 +21,10 @@ image:
 test:
 	go test ./...
 
-# The admin console's pure JavaScript helpers (Node 22+, no npm install).
+# The admin console's and the setup page's pure JavaScript helpers (Node 22+, no
+# npm install).
 test-js:
-	node --test internal/console/app.test.mjs
+	node --test internal/console/app.test.mjs internal/console/setup.test.mjs
 
 integration:
 	go test -tags integration ./...

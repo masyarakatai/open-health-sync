@@ -160,6 +160,7 @@ Environment variables only, documented line by line in `.env.example`.
 | `OHS_LISTEN` | `:8080` | Listen address |
 | `OHS_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error`; logs are JSON on stderr |
 | `OHS_CONSOLE` | `false` | `true` serves the read-only [admin console](console.md) on `/console`. It asks for a tenant API key and reads the API with it; off, the route is not mounted (404) |
+| `OHS_SETUP_TOKEN` | none | 16 characters or more (`openssl rand -hex 32`). Turns on the browser [first-run setup](setup.md): with `OHS_CONSOLE=true`, `/console/setup` creates the first tenant and shows its API key once, for whoever types this token, while the instance has no tenant. Unset, `/v1/setup` is not mounted |
 | `OHS_METRICS` | `true` | Serve Prometheus metrics on `/metrics` (see [Metrics](self-hosting.md#metrics)) |
 | `OHS_METRICS_TOKEN` | none | Bearer token a scrape of `/metrics` presents, 16 characters or more (`openssl rand -hex 32`). Without it the API listener refuses every scrape |
 | `OHS_METRICS_LISTEN` | none | Serve `/metrics` on this address instead of the API listener, for example `127.0.0.1:9464`; the token is then asked for only when set |

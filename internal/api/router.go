@@ -80,6 +80,9 @@ type Deps struct {
 	// Version is the instance version the user archive's manifest states.
 	// Empty leaves it out.
 	Version string
+	// SetupToken (OHS_SETUP_TOKEN) mounts the first-run setup, GET and POST
+	// /v1/setup. Empty leaves the routes out.
+	SetupToken string
 }
 
 type server struct {
@@ -116,6 +119,7 @@ func NewRouter(d Deps) http.Handler {
 	s.mountCollect(mux)
 	s.mountMCP(mux)
 	s.mountConsent(mux)
+	s.mountSetup(mux)
 	if d.Console {
 		console.Mount(mux)
 	}

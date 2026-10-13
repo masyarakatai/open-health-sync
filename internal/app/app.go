@@ -254,6 +254,8 @@ func runWith(ctx context.Context, cfg config.Config, logOut io.Writer, opts opti
 			// Zero (a Config not built by Load) means the api default.
 			IngestLimit: cfg.IngestConcurrency,
 			Version:     Version,
+			// Non-empty mounts the first-run setup routes (/v1/setup).
+			SetupToken: cfg.SetupToken,
 		}
 		if cfg.Roles["etl"] {
 			deps.ETLMetrics = etlMetrics

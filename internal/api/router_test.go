@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -85,7 +86,7 @@ func TestConsoleMountedWithFlag(t *testing.T) {
 	assert.Equal(t, "no-referrer", rec.Header().Get("Referrer-Policy"))
 	assert.NotEmpty(t, rec.Header().Get("X-Request-Id"), "console requests go through the instrumented router")
 
-	for _, p := range []string{"/console/", "/console/app.mjs", "/console/console.css"} {
+	for _, p := range []string{"/console/", "/console/app.mjs", "/console/console.css", "/console/setup", "/console/setup.mjs"} {
 		rec = httptest.NewRecorder()
 		h.ServeHTTP(rec, httptest.NewRequest("GET", p, nil))
 		assert.Equal(t, http.StatusOK, rec.Code, p)
@@ -128,4 +129,53 @@ func TestConnectPageRoutesMounted(t *testing.T) {
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest("POST", "/v1/users/00000000-0000-0000-0000-000000000001/connect-sessions", nil))
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestSetupOffByDefault(t *testing.T) {
+	h := offlineRouter(t)
+	for _, m := range []string{"GET", "POST"} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(m, "/v1/setup", strings.NewReader(`{"setup_token":"x"}`)))
+		assert.Equal(t, http.StatusNotFound, rec.Code, m)
+	}
+}
+
+// The refusals answered before any query: a wrong token, a bad or oversized
+// body. None of them echoes the token.
+func TestSetupRefusals(t *testing.T) {
+	pool, err := pgxpool.New(context.Background(), "postgres://nobody@127.0.0.1:1/none?connect_timeout=1")
+	require.NoError(t, err)
+	t.Cleanup(pool.Close)
+	const token = "the-right-setup-token"
+	h := NewRouter(Deps{Pool: pool, Store: tenant.New(pool), SetupToken: token})
+	post := func(body string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest("POST", "/v1/setup", strings.NewReader(body)))
+		assert.Equal(t, "no-store", rec.Header().Get("Cache-Control"))
+		assert.Equal(t, "application/problem+json", rec.Header().Get("Content-Type"))
+		assert.NotContains(t, rec.Body.String(), token)
+		return rec
+	}
+	for _, body := range []string{`{"setup_token":"the-wrong-setup-token"}`, `{"setup_token":""}`, `{}`, `{"setup_token":"the-right-setup-toke"}`} {
+		assert.Equal(t, http.StatusUnauthorized, post(body).Code, body)
+	}
+	assert.Equal(t, http.StatusBadRequest, post(`not json`).Code)
+	assert.Equal(t, http.StatusBadRequest, post(``).Code, "a body is required")
+	assert.Equal(t, http.StatusBadRequest, post(`{"setup_token":"`+token+`","extra":1}`).Code)
+	assert.Equal(t, http.StatusRequestEntityTooLarge,
+		post(`{"setup_token":"`+token+`","tenant_name":"`+strings.Repeat("x", 5000)+`"}`).Code)
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest("PUT", "/v1/setup", nil))
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+	assert.Equal(t, "GET, HEAD, POST", rec.Header().Get("Allow"))
+}
+
+func TestCheckTenantName(t *testing.T) {
+	for name, ok := range map[string]bool{
+		"default": true, "Home lab": true, "Équipe santé": true, strings.Repeat("x", 100): true,
+		strings.Repeat("x", 101): false, "a\nb": false, "tab\there": false, "\x00": false, "\xff": false,
+	} {
+		assert.Equal(t, ok, checkTenantName(name) == "", "%q", name)
+	}
 }

@@ -42,6 +42,9 @@ var (
 	ErrIdempotencyKeyInvalid = errors.New("tenant: invalid idempotency key")
 	// ErrTTLInvalid means a positive token lifetime shorter than one second.
 	ErrTTLInvalid = errors.New("tenant: ttl too short")
+	// ErrSetupDone means the instance already has a tenant, so the first-run
+	// setup is closed (API: 409).
+	ErrSetupDone = errors.New("tenant: setup already done")
 )
 
 // Token lifetimes.
@@ -137,7 +140,75 @@ func (s *Store) EnsureTenant(ctx context.Context, name string) (Tenant, string, 
 	return t, full, nil
 }
 
+// tenantCreationLock is the advisory lock key that serializes every tenant
+// creation with CreateFirstTenant, across every instance sharing the
+// database: the first-run check never misses a tenant being created by
+// another path (`ohs admin`, the bootstrap tenant).
+const tenantCreationLock = "ohs_core.tenant-creation"
+
+// CreateFirstTenant creates a tenant with its first API key only while the
+// instance has no tenant at all, and ErrSetupDone otherwise. Concurrent
+// callers are serialized by an advisory lock, so exactly one of them creates
+// it. When ev is not nil it is recorded in the audit log in the same
+// transaction, for the new tenant and with the key's prefix in its detail:
+// a failed audit write leaves no tenant behind. The plaintext key is
+// returned once and never stored.
+func (s *Store) CreateFirstTenant(ctx context.Context, name string, ev *audit.Event) (Tenant, string, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return Tenant{}, "", fmt.Errorf("tenant: begin: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+	if err := lockTenantCreation(ctx, tx); err != nil {
+		return Tenant{}, "", err
+	}
+	var exists bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM ohs_core.tenants)`).Scan(&exists); err != nil {
+		return Tenant{}, "", fmt.Errorf("tenant: count tenants: %w", err)
+	}
+	if exists {
+		return Tenant{}, "", ErrSetupDone
+	}
+	t, full, err := insertTenant(ctx, tx, name)
+	if err != nil {
+		return Tenant{}, "", err
+	}
+	if ev != nil {
+		e := *ev
+		e.Tenant = t.ID
+		e.Detail = map[string]any{"key_prefix": full[:keyPrefixLen] + "..."}
+		if err := audit.Record(ctx, tx, e); err != nil {
+			return Tenant{}, "", err
+		}
+	}
+	if err := commit(ctx, tx); err != nil {
+		return Tenant{}, "", err
+	}
+	return t, full, nil
+}
+
+// HasTenants reports whether the instance has at least one tenant.
+func (s *Store) HasTenants(ctx context.Context) (bool, error) {
+	var exists bool
+	if err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM ohs_core.tenants)`).Scan(&exists); err != nil {
+		return false, fmt.Errorf("tenant: count tenants: %w", err)
+	}
+	return exists, nil
+}
+
+// lockTenantCreation takes the transaction's tenant creation lock. Advisory
+// locks stack within a session, so taking it twice in one transaction is fine.
+func lockTenantCreation(ctx context.Context, tx pgx.Tx) error {
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, tenantCreationLock); err != nil {
+		return fmt.Errorf("tenant: lock tenant creation: %w", err)
+	}
+	return nil
+}
+
 func insertTenant(ctx context.Context, tx pgx.Tx, name string) (Tenant, string, error) {
+	if err := lockTenantCreation(ctx, tx); err != nil {
+		return Tenant{}, "", err
+	}
 	full, hash, err := auth.NewSecret(auth.PrefixSecretKey)
 	if err != nil {
 		return Tenant{}, "", err

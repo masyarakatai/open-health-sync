@@ -11,6 +11,7 @@ articles 30 and 32 and comparable health data rules expect one).
 |---|---|
 | Every API request authenticated with a tenant key or a user token | One event, whatever the outcome (a 404 on another tenant's user is recorded too) |
 | `ohs admin tenant create`, `key create`, `key revoke` | `tenant.create`, `key.create`, `key.revoke`, actor `admin` |
+| The [first-run setup](setup.md) (`POST /v1/setup`) | `tenant.create`, actor `system` with id `setup`, the key prefix in `detail` |
 | The deletion worker | `user.erased` when a user's data is gone, with the job id, actor `system` |
 
 A request without a valid credential (401) is not an audit event: `/metrics` counts those by

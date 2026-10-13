@@ -2236,6 +2236,65 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
 
+  /v1/setup:
+    get:
+      tags: [ops]
+      operationId: getSetup
+      summary: Whether the first-run setup is open (only when OHS_SETUP_TOKEN is set)
+      description: |
+        Public, no credential. `needed` is true while `OHS_SETUP_TOKEN` is set and the
+        instance has no tenant. With no `OHS_SETUP_TOKEN` the route is not mounted (404).
+        See docs/setup.md.
+      security: []
+      responses:
+        "200":
+          description: "The setup state. Sent with `Cache-Control: no-store`."
+          headers:
+            Cache-Control: { schema: { type: string, const: no-store } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SetupStatus" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [ops]
+      operationId: runSetup
+      summary: Create the first tenant and its API key with the setup token
+      description: |
+        The first run without a terminal: the body carries `OHS_SETUP_TOKEN` (compared in
+        constant time) instead of a bearer credential. It works once: while the instance
+        has no tenant, it creates one with its first API key and returns the key, shown only
+        this once. Any tenant existing, however it was created, closes it for good (409).
+        The body is at most 4 KiB. The creation is recorded in the new tenant's audit log
+        (`tenant.create`, actor `system` / `setup`). With no `OHS_SETUP_TOKEN` the route is
+        not mounted (404). See docs/setup.md.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SetupRequest" }
+      responses:
+        "201":
+          description: "The tenant and its first API key. Sent with `Cache-Control: no-store`."
+          headers:
+            Cache-Control: { schema: { type: string, const: no-store } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SetupResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401":
+          description: The setup token is missing or is not `OHS_SETUP_TOKEN`.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: The instance already has a tenant; the setup is closed.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "413": { $ref: "#/components/responses/TooLarge" }
+
   /healthz:
     get:
       tags: [ops]
@@ -2470,6 +2529,33 @@ components:
           schema: { type: string }
 
   schemas:
+    SetupStatus:
+      type: object
+      required: [needed]
+      properties:
+        needed:
+          type: boolean
+          description: True while the instance has no tenant and POST /v1/setup can create one.
+    SetupRequest:
+      type: object
+      required: [setup_token]
+      additionalProperties: false
+      properties:
+        setup_token:
+          type: string
+          description: The instance's `OHS_SETUP_TOKEN`.
+        tenant_name:
+          type: string
+          maxLength: 100
+          description: Name of the tenant; surrounding spaces are trimmed. Empty or absent means `default`. No control character.
+    SetupResult:
+      type: object
+      required: [tenant_id, api_key]
+      properties:
+        tenant_id: { type: string, format: uuid }
+        api_key:
+          type: string
+          description: The tenant API key (`ohs_sk_...`), shown only this once.
     Problem:
       type: object
       description: RFC 9457 problem details.

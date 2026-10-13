@@ -71,6 +71,9 @@ h2 { font-size: 1.1em; margin: 1.4em 0 0.5em; }
 
 #signin { max-width: 480px; }
 #signin form { display: flex; flex-direction: column; gap: 8px; }
+#setup { max-width: 560px; }
+#setup form { display: flex; flex-direction: column; gap: 8px; }
+.key-line code { display: block; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); user-select: all; }
 input, button {
   font: inherit;
   padding: 6px 10px;

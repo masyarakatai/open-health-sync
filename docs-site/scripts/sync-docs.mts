@@ -118,6 +118,13 @@ const sources: Record<string, Target[]> = {
       description: "A read-only page for operators: users, connections, freshness and webhook deliveries.",
     },
   ],
+  "docs/setup.md": [
+    {
+      page: "(guides)/self-hosting/setup",
+      title: "First-run setup",
+      description: "Create the first tenant and its API key from a browser, with a one-shot setup token.",
+    },
+  ],
   "docs/backup-and-restore.md": [
     {
       page: "(guides)/self-hosting/backup",
@@ -297,6 +304,7 @@ const icons: Record<string, string> = {
   "(guides)/self-hosting/rotating-secrets": "RotateCw",
   "(guides)/self-hosting/operating-notes": "NotebookPen",
   "(guides)/self-hosting/console": "LayoutDashboard",
+  "(guides)/self-hosting/setup": "KeyRound",
   "(guides)/self-hosting/observability": "Telescope",
   "(guides)/guides/fhir": "HeartPulse",
   "(guides)/sdks/index": "Package",

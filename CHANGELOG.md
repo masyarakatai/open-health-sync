@@ -33,6 +33,14 @@ release may change the API, the configuration or the database schema.
 
 ### Added
 
+- First-run setup in the browser, for installs with no terminal (Umbrel, CasaOS and other app
+  stores). With `OHS_SETUP_TOKEN` (16 characters or more) and `OHS_CONSOLE=true`, the page
+  `/console/setup` creates the first tenant and shows its API key once, for whoever types the
+  token. `GET /v1/setup` tells whether the instance still needs it, and `POST /v1/setup` does it:
+  one shot, atomic under concurrent calls, closed for good (409) once any tenant exists, token
+  compared in constant time and never logged, creation recorded in the audit log. The console's
+  sign-in screen links to the page while it is needed; the console itself stays read only.
+  Unset, the routes are not mounted. See [docs/setup.md](docs/setup.md).
 - Client SDKs 0.1.0 under [sdks/](sdks), AGPL-3.0-only like the server, not on package registries yet:
   Kotlin (Android and JVM), Swift (iOS, macOS, Linux; with a HealthKit sync that uploads what
   changed since the last run), React Native (TypeScript, also Node and browsers) and Flutter
