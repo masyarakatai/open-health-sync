@@ -82,7 +82,7 @@ fails at processing.
 - **Source**: `provider` is `health_connect`; `source_slug` names the app that wrote the record
   (`metadata.dataOrigin`). Known apps get their usual slug (`com.dexcom.*` is `dexcom`,
   `com.freestylelibre*` is `freestyle_libre`, `com.ouraring.*` is `oura`, Mi Fitness, Mi Health
-  and Zepp Life are [`xiaomi`](xiaomi.md), ...); any other app
+  and Zepp Life are [`xiaomi`](xiaomi.md), Zepp (Amazfit) is `zepp`, RingConn is `ringconn`, ...); any other app
   gets its package name as a slug. Source priorities can rank them like any other source.
 - **Edits**: Health Connect records can be edited in place. A sample is identified by its record
   id and start, not its value, so a re-sent record replaces the stored value, and a record whose

@@ -23,7 +23,8 @@ release may change the API, the configuration or the database schema.
   Xiaomi sends from its account privacy center (heart rate, resting heart rate, SpO2, steps,
   distance, active energy, weight, body fat, VO2 max, sleep with stages, workouts) through the new
   `POST /v1/ingest/xiaomi` upload route, provider `xiaomi`. Records that Mi Fitness, Mi Health and
-  Zepp Life write to Health Connect now get the source slug `xiaomi`. No private Xiaomi API is
+  Zepp Life write to Health Connect now get the source slug `xiaomi`; those of the Zepp app
+  (Amazfit) get `zepp`, and those of the RingConn app `ringconn`. No private Xiaomi API is
   used. See [docs/connectors/xiaomi.md](docs/connectors/xiaomi.md).
 - MCP prompts: the prompt library is now served by the MCP server (`prompts/list`,
   `prompts/get`). Twelve ready-made questions about a person's own training, sleep and recovery
