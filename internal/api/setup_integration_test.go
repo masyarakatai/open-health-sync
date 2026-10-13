@@ -69,6 +69,9 @@ func TestSetupFirstRun(t *testing.T) {
 	assert.Equal(t, "application/problem+json", rec.Header().Get("Content-Type"))
 	rec = setupCall(h, "POST", `{}`, "")
 	assert.Equal(t, http.StatusUnauthorized, rec.Code, "no token")
+	for _, body := range []string{`{"setup_token":""}`, `{"setup_token":"` + testSetupToken[:len(testSetupToken)-1] + `"}`} {
+		assert.Equal(t, http.StatusUnauthorized, setupCall(h, "POST", body, "").Code, body)
+	}
 	rec = setupCall(h, "POST", `{"setup_token":"`+testSetupToken+`","tenant_name":"a\u0007b"}`, "")
 	assert.Equal(t, http.StatusBadRequest, rec.Code, "control character in the name")
 	rec = setupCall(h, "POST", `{"setup_token":"`+testSetupToken+`","tenant_name":"`+strings.Repeat("x", 101)+`"}`, "")
@@ -130,6 +133,11 @@ func TestSetupClosedWhenATenantExists(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, setupNeeded(t, h))
 	assert.Equal(t, http.StatusConflict, setupCall(h, "POST", `{"setup_token":"`+testSetupToken+`"}`, "").Code)
+
+	// A fresh process (a restart) answers 409 to its very first call, a
+	// wrong token included, so the closed route never checks the token.
+	h2 := api.NewRouter(api.Deps{Pool: st.Pool(), Store: st, SetupToken: testSetupToken})
+	assert.Equal(t, http.StatusConflict, setupCall(h2, "POST", `{"setup_token":"nope"}`, "").Code)
 }
 
 func TestSetupConcurrentCalls(t *testing.T) {

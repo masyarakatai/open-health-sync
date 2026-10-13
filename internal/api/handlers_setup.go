@@ -94,8 +94,14 @@ func (h *setupHandler) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// A setup already done is answered before the token is looked at, so
-	// the route is no token oracle once it is closed.
-	if h.done.Load() {
+	// the route is no token oracle once it is closed, also on the first
+	// call after a restart.
+	needed, err := h.needed(r)
+	if err != nil {
+		internalError(w, r, "api: setup status", err)
+		return
+	}
+	if !needed {
 		setupDone(w)
 		return
 	}

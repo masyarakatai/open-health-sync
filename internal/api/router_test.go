@@ -140,8 +140,10 @@ func TestSetupOffByDefault(t *testing.T) {
 	}
 }
 
-// The refusals answered before any query: a wrong token, a bad or oversized
-// body. None of them echoes the token.
+// The refusals answered before any query: a bad or oversized body. With the
+// database unreachable the setup state is unknown, so a well-formed call
+// fails closed (500) without the token being checked. None of them echoes
+// the token.
 func TestSetupRefusals(t *testing.T) {
 	pool, err := pgxpool.New(context.Background(), "postgres://nobody@127.0.0.1:1/none?connect_timeout=1")
 	require.NoError(t, err)
@@ -157,7 +159,7 @@ func TestSetupRefusals(t *testing.T) {
 		return rec
 	}
 	for _, body := range []string{`{"setup_token":"the-wrong-setup-token"}`, `{"setup_token":""}`, `{}`, `{"setup_token":"the-right-setup-toke"}`} {
-		assert.Equal(t, http.StatusUnauthorized, post(body).Code, body)
+		assert.Equal(t, http.StatusInternalServerError, post(body).Code, body)
 	}
 	assert.Equal(t, http.StatusBadRequest, post(`not json`).Code)
 	assert.Equal(t, http.StatusBadRequest, post(``).Code, "a body is required")
