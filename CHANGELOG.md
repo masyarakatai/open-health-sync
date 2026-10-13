@@ -33,6 +33,14 @@ release may change the API, the configuration or the database schema.
 
 ### Added
 
+- MCP prompts: the prompt library is now served by the MCP server (`prompts/list`,
+  `prompts/get`). Twelve ready-made questions about a person's own training, sleep and recovery
+  (morning check, taper check, after a break, a new habit, two devices side by side...), each
+  with its blanks as arguments and an optional `user_id`, and each ending with the same rules:
+  read the data first and show the numbers, compare with the person's own history, one source
+  per figure, say when a figure is missing instead of filling it in, wellness only. The same
+  library generates [docs/learn/prompts.md](docs/learn/prompts.md) and a new agent skill,
+  [skills/open-health-sync](skills/open-health-sync/SKILL.md). See [docs/mcp.md](docs/mcp.md#prompts).
 - Client SDKs 0.1.0 under [sdks/](sdks), AGPL-3.0-only like the server, not on package registries yet:
   Kotlin (Android and JVM), Swift (iOS, macOS, Linux; with a HealthKit sync that uploads what
   changed since the last run), React Native (TypeScript, also Node and browsers) and Flutter
