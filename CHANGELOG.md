@@ -17,6 +17,14 @@ release may change the API, the configuration or the database schema.
   per figure, say when a figure is missing instead of filling it in, wellness only. The same
   library generates [docs/learn/prompts.md](docs/learn/prompts.md) and a new agent skill,
   [skills/open-health-sync](skills/open-health-sync/SKILL.md). See [docs/mcp.md](docs/mcp.md#prompts).
+- Rate limits on the provider-facing routes (`POST` and `GET /inbound/{provider}`,
+  `GET /oauth/{provider}/callback`): an in-memory token bucket per client address, plus one per
+  provider for notifications, answers 429 with `Retry-After` before any work. Defaults 30/s
+  (bursts of 120) per address and 300/s per provider for notifications, 2/s (bursts of 20) per
+  address for callbacks; `OHS_RATE_LIMIT_INBOUND`, `OHS_RATE_LIMIT_INBOUND_PROVIDER` and
+  `OHS_RATE_LIMIT_OAUTH` change them (`0` disables). `OHS_TRUSTED_PROXIES` lists the reverse
+  proxies whose `X-Forwarded-For` is read. Refusals are counted in `ohs_rate_limited_total`.
+  See [docs/self-hosting.md](docs/self-hosting.md#rate-limits).
 
 ### Fixed
 
