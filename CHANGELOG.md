@@ -17,6 +17,14 @@ release may change the API, the configuration or the database schema.
   `OHS_RATE_LIMIT_OAUTH` change them (`0` disables). `OHS_TRUSTED_PROXIES` lists the reverse
   proxies whose `X-Forwarded-For` is read. Refusals are counted in `ohs_rate_limited_total`.
   See [docs/self-hosting.md](docs/self-hosting.md#rate-limits).
+- Encryption key rotation: `OHS_PREVIOUS_ENCRYPTION_KEYS` lists, comma separated, the keys
+  `OHS_ENCRYPTION_KEY` replaced; they still open what they sealed and never seal. Sealed values
+  (OAuth tokens, webhook signing secrets) now start with a format version and the id of their
+  key; values written before open as they are. `ohs admin rekey` re-seals every stored secret
+  under the active key, in batches of short row-locked transactions, safe while the instance
+  runs, and prints how many it rewrote, found current or could not open (left as they are).
+  `ohs doctor` counts the secrets still under a previous or unknown key and says when the
+  previous keys can go. See [docs/key-rotation.md](docs/key-rotation.md).
 
 ### Fixed
 
