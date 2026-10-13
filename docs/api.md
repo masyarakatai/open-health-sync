@@ -334,10 +334,13 @@ rules (local days, gaps inside a period, the read limit) are in
 ### Knowing when an upload is processed
 
 Processing is asynchronous. `GET /v1/users/{id}/coverage` returns record counts per provider and
-local day, `pending_jobs` (work not finished yet) and `parked_jobs` (work that exhausted its
-retries and needs an operator). After an upload, poll until `pending_jobs` is 0. A server that
-would rather not poll can subscribe to the `data.written` [webhook](webhooks.md). Coverage is not
-paged: at most 10000 days, the earliest, with `truncated: true` when more matched.
+local day, `pending_jobs` (work not finished yet: ETL jobs, and provider pulls queued or
+running) and `parked_jobs` (ETL work that exhausted its retries and needs an operator). After an
+upload, or after a user connects a provider (the backfill), poll until `pending_jobs` is 0. A
+pull that keeps failing stays pending while it retries: `GET /v1/users/{id}/freshness` gives
+its `last_error`. A server that would rather not poll can subscribe to the `data.written`
+[webhook](webhooks.md). Coverage is not paged: at most 10000 days, the earliest, with
+`truncated: true` when more matched.
 
 A finished job can still have dropped some lines: a value out of range, a missing `startDate`,
 a unit that does not convert. `rejected_records` counts the user's lines in that state (all
@@ -453,10 +456,16 @@ grant are not stored, and a revoked category's stored records are deleted. Detai
 | `GET /connect`, `GET /connect/{provider}`, `POST /connect/{provider}` | The [hosted connection page](connect-page.md), for the user's browser |
 | `GET /oauth/{provider}/callback` | OAuth redirect target you register with the provider |
 | `POST /inbound/{provider}` | Provider push notifications, verified with the provider's own scheme |
+| `GET /inbound/{provider}` | Notification URL check and subscription challenge |
 | `GET /healthz` | Liveness |
 | `GET /readyz` | Readiness: database ping and raw store check, 503 when either fails |
 | `GET /metrics` | Prometheus text format; absent when `OHS_METRICS=false` |
 | `GET /console` | Read-only admin console (HTML), only when `OHS_CONSOLE=true`; see [console.md](console.md) |
+
+The OAuth callback and the notification routes take no credential and are rate limited per
+client address (and the notification routes per provider): over a limit they answer 429 with a
+problem body and `Retry-After` in seconds, before any work. Limits and the reverse proxy
+setting are in [self-hosting.md](self-hosting.md#rate-limits).
 
 `/metrics` is global to the instance (not per tenant). It asks for the `OHS_METRICS_TOKEN` bearer
 token, refuses every scrape when no token is set, and can move to a private address with

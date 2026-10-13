@@ -18,6 +18,7 @@ import (
 
 	"github.com/soma-intelligence/open-health-sync/internal/auth"
 	"github.com/soma-intelligence/open-health-sync/internal/mcp"
+	"github.com/soma-intelligence/open-health-sync/internal/prompts"
 )
 
 // fakeAuth serves NewHandler behind the same wrapper the router uses, with
@@ -230,4 +231,42 @@ func TestCrossOriginRefused(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, post("Origin", "https://evil.example"))
 	assert.Equal(t, http.StatusOK, post())
 	assert.Equal(t, http.StatusOK, post("Sec-Fetch-Site", "same-origin"))
+}
+
+// The prompt library is listed with its blanks as arguments, and a prompt
+// comes back filled, followed by the rules every answer holds to.
+func TestPrompts(t *testing.T) {
+	f := newFake(t)
+	cs := Connect(t, f.srv.URL, f.key)
+	res, err := cs.ListPrompts(context.Background(), nil)
+	require.NoError(t, err)
+	require.Len(t, res.Prompts, len(prompts.Library))
+	byName := map[string]*sdk.Prompt{}
+	for _, p := range res.Prompts {
+		byName[p.Name] = p
+		assert.NotEmpty(t, p.Description, p.Name)
+	}
+	taper := byName["taper_check"]
+	require.NotNil(t, taper)
+	var args []string
+	for _, a := range taper.Arguments {
+		args = append(args, a.Name)
+		assert.Equal(t, a.Name == "event_date", a.Required, a.Name)
+	}
+	assert.Equal(t, []string{"event_date", "user_id"}, args)
+
+	got, err := cs.GetPrompt(context.Background(), &sdk.GetPromptParams{Name: "taper_check",
+		Arguments: map[string]string{"event_date": "2026-11-01", "user_id": f.user.String()}})
+	require.NoError(t, err)
+	require.Len(t, got.Messages, 1)
+	assert.Equal(t, sdk.Role("user"), got.Messages[0].Role)
+	txt, ok := got.Messages[0].Content.(*sdk.TextContent)
+	require.True(t, ok)
+	assert.True(t, strings.HasPrefix(txt.Text, "My event is on 2026-11-01. Compare the last 14 days"), txt.Text)
+	assert.Contains(t, txt.Text, "Read the data of user_id "+f.user.String()+".")
+	assert.Contains(t, txt.Text, "do not diagnose")
+
+	_, err = cs.GetPrompt(context.Background(), &sdk.GetPromptParams{Name: "taper_check"})
+	assert.ErrorContains(t, err, "event_date")
+	assert.Contains(t, cs.InitializeResult().Instructions, "do not diagnose")
 }

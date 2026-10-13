@@ -965,7 +965,7 @@ paths:
           in: query
           required: true
           description: Canonical quantity type, for example heart_rate or step_count. A name outside the quantity type catalog is a 400 (unless this user has samples of it).
-          schema: { type: string }
+          schema: { type: string, examples: [heart_rate] }
         - $ref: "#/components/parameters/Start"
         - $ref: "#/components/parameters/End"
         - $ref: "#/components/parameters/View"
@@ -1136,7 +1136,7 @@ paths:
         - name: type
           in: query
           description: Canonical activity type (running, cycling...); all when absent.
-          schema: { type: string }
+          schema: { type: string, examples: [running] }
         - $ref: "#/components/parameters/Start"
         - $ref: "#/components/parameters/End"
         - $ref: "#/components/parameters/View"
@@ -1391,9 +1391,10 @@ paths:
       operationId: getCoverage
       summary: What has landed, per provider and day, and what is still processing
       description: |
-        Record counts per provider per local day, and `pending_jobs`, the user's ETL jobs not
-        finished yet. After an upload, poll until `pending_jobs` is 0 to know every part has
-        been processed; then `rejected_records` above 0 means some lines were not stored.
+        Record counts per provider per local day, and `pending_jobs`, the user's work not
+        finished yet: ETL jobs and provider pulls. After an upload or a provider connection,
+        poll until `pending_jobs` is 0 to know every part and every queued pull has been
+        processed; then `rejected_records` above 0 means some lines were not stored.
         Not paged: at most 10000 days are returned, the earliest, and
         `truncated` is true when more matched (narrow `start` and `end`). `start` and `end`
         compare as dates.
@@ -1956,7 +1957,7 @@ paths:
           in: header
           required: true
           description: HealthKit type identifier of every line of the part.
-          schema: { type: string }
+          schema: { type: string, examples: [HKQuantityTypeIdentifierHeartRate] }
         - name: X-OHS-Day
           in: header
           required: true
@@ -2029,7 +2030,7 @@ paths:
           in: header
           required: true
           description: Health Connect record type of the lines of the part (for example BloodGlucose).
-          schema: { type: string }
+          schema: { type: string, examples: [BloodGlucose] }
         - name: X-OHS-Day
           in: header
           required: true
@@ -2171,6 +2172,7 @@ paths:
               schema: { type: string }
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
+        "429": { $ref: "#/components/responses/RateLimited" }
 
   /inbound/{provider}:
     parameters:
@@ -2193,6 +2195,7 @@ paths:
               schema: { type: object }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
     post:
       tags: [provider-facing]
       operationId: inbound
@@ -2216,6 +2219,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
         "413": { $ref: "#/components/responses/TooLarge" }
+        "429": { $ref: "#/components/responses/RateLimited" }
         "500":
           description: The notification could not be stored; the provider should retry.
           content:
@@ -2433,7 +2437,7 @@ components:
       in: path
       required: true
       description: Connector slug, see GET /v1/providers.
-      schema: { type: string }
+      schema: { type: string, examples: [withings] }
     ConnectSessionToken:
       name: session
       in: query
@@ -2532,6 +2536,18 @@ components:
       content:
         text/html:
           schema: { type: string }
+    RateLimited:
+      description: |
+        Over the rate limit of this provider-facing route (per client address, and per provider
+        for notifications); nothing was done. Limits are set per instance, see the
+        self-hosting guide.
+      headers:
+        Retry-After:
+          schema: { type: integer, minimum: 1 }
+          description: Seconds to wait before retrying.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
 
   schemas:
     Problem:
@@ -3250,7 +3266,10 @@ components:
       properties:
         pending_jobs:
           type: integer
-          description: ETL jobs of the user not finished yet (pending or running).
+          description: |
+            Work of the user not finished yet: ETL jobs and provider pulls (backfill,
+            scheduled or notified), pending or running. A pull that keeps failing stays
+            pending while it retries; `GET /v1/users/{id}/freshness` says why.
         parked_jobs:
           type: integer
           description: ETL jobs that exhausted their retries (an operator must look).
@@ -3767,6 +3786,9 @@ components:
           format: date-time
           description: When the record was ingested (the later of a panel's two samples).
         valueQuantity: { $ref: "#/components/schemas/FHIRQuantity" }
+        valueCodeableConcept:
+          allOf: [{ $ref: "#/components/schemas/FHIRCodeableConcept" }]
+          description: Instead of valueQuantity for a classification (ecg_afib_classification).
         dataAbsentReason: { $ref: "#/components/schemas/FHIRCodeableConcept" }
         device: { $ref: "#/components/schemas/FHIRReference" }
         component:

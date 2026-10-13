@@ -5,9 +5,11 @@
 package collect_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -65,6 +67,20 @@ func TestInboundRecordsLastEvent(t *testing.T) {
 	require.NoError(t, e.pool.QueryRow(context.Background(),
 		`SELECT last_event_at FROM ohs_sync.connections WHERE user_id = $1`, e.userA).Scan(&got))
 	assert.Equal(t, at, got.UTC())
+
+	// A deletion notice is stored, not pulled, and is as much a sign that
+	// the push channel works.
+	later := at.Add(time.Hour)
+	e.setNow(later)
+	body := []byte(`{"userid":"pu-1","deleted":"rec-1"}`)
+	req := httptest.NewRequest(http.MethodPost, "/inbound/"+fakeSlug, bytes.NewReader(body))
+	req.Header.Set("X-Fake-Signature", sign(body))
+	rec := httptest.NewRecorder()
+	e.mux.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	require.NoError(t, e.pool.QueryRow(context.Background(),
+		`SELECT last_event_at FROM ohs_sync.connections WHERE user_id = $1`, e.userA).Scan(&got))
+	assert.Equal(t, later, got.UTC())
 }
 
 func TestPullOutcomeUpdatesFreshness(t *testing.T) {

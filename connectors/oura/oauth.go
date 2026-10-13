@@ -104,6 +104,37 @@ func (c *Connector) Refresh(ctx context.Context, t connector.Tokens) (connector.
 	return nt, nil
 }
 
+// Revoke ends the grant at Oura (GET /oauth/revoke?access_token=..., as the
+// authentication docs give it). Disconnecting and deleting a user call it best
+// effort; without an access token there is nothing to revoke.
+func (c *Connector) Revoke(ctx context.Context, t connector.Tokens) error {
+	if t.Access == "" {
+		return nil
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		c.apiBase+"/oauth/revoke?"+url.Values{"access_token": {t.Access}}.Encode(), nil)
+	if err != nil {
+		return err
+	}
+	resp, err := c.httpc.Do(req)
+	if err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		// The URL holds the token: never wrap an error that may quote it.
+		return errors.New("oura: revoke request failed")
+	}
+	_, _ = readBody(resp.Body, 1<<20)
+	resp.Body.Close()
+	switch {
+	case resp.StatusCode == http.StatusTooManyRequests:
+		return connector.RateLimited(resp.Header, c.now())
+	case resp.StatusCode >= 400:
+		return fmt.Errorf("oura: revoke HTTP %d", resp.StatusCode)
+	}
+	return nil
+}
+
 // requestToken posts to the token endpoint with the client credentials in the
 // form, as Oura documents it.
 func (c *Connector) requestToken(ctx context.Context, form url.Values) (connector.Tokens, error) {

@@ -88,7 +88,12 @@ func goldenCases() map[string]read.CodedSample {
 	nan := sample(6006, "hrv_sdnn", math.NaN(), "ms", "80404-7", "ms")
 	nan.EndDate = nil
 
+	// Withings' AFib classification of an ECG: a class, not an amount.
+	afib := sample(7007, "ecg_afib_classification", 0, "classification", "", "")
+	afib.Provider, afib.Source = "withings", ptr("withings")
+
 	return map[string]read.CodedSample{
+		"observation-ecg-afib-classification":   afib,
 		"observation-vital-heart-rate":          sample(1001, "heart_rate", 61, "bpm", "8867-4", "/min"),
 		"observation-vital-oxygen-saturation":   sample(1002, "oxygen_saturation", 97, "percent", "59408-5", "%"),
 		"observation-vital-blood-pressure-sys":  sample(1003, "blood_pressure_systolic", 118, "mmHg", "8480-6", "mm[Hg]"),

@@ -112,9 +112,10 @@ func runWith(ctx context.Context, cfg config.Config, logOut io.Writer, opts opti
 	if err != nil {
 		return err
 	}
-	box, err := crypto.NewBox(cfg.EncryptionKey)
+	// Seals with OHS_ENCRYPTION_KEY, still opens what the previous keys sealed.
+	box, err := crypto.NewKeyring(cfg.EncryptionKey, cfg.PreviousEncryptionKeys...)
 	if err != nil {
-		return fmt.Errorf("OHS_ENCRYPTION_KEY: %w", err)
+		return fmt.Errorf("OHS_ENCRYPTION_KEY, OHS_PREVIOUS_ENCRYPTION_KEYS: %w", err)
 	}
 
 	// The raw store first: it is local and cheap to check, and an unwritable
@@ -254,6 +255,11 @@ func runWith(ctx context.Context, cfg config.Config, logOut io.Writer, opts opti
 			// Zero (a Config not built by Load) means the api default.
 			IngestLimit: cfg.IngestConcurrency,
 			Version:     Version,
+			// Zero (a Config not built by Load) means no rate limit.
+			RateLimitInbound:         api.RateLimit(cfg.RateLimitInbound),
+			RateLimitInboundProvider: api.RateLimit(cfg.RateLimitInboundProvider),
+			RateLimitOAuth:           api.RateLimit(cfg.RateLimitOAuth),
+			TrustedProxies:           cfg.TrustedProxies,
 		}
 		if cfg.Roles["etl"] {
 			deps.ETLMetrics = etlMetrics

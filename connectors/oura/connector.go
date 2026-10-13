@@ -101,6 +101,7 @@ type Connector struct {
 
 var (
 	_ connector.OAuthConnector     = (*Connector)(nil)
+	_ connector.Revoker            = (*Connector)(nil)
 	_ connector.PushConnector      = (*Connector)(nil)
 	_ connector.ChallengeResponder = (*Connector)(nil)
 	_ connector.KeyedConnector     = (*Connector)(nil)

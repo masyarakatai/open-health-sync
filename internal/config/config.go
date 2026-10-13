@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
+	"net/netip"
 	"net/url"
 	"strconv"
 	"strings"
@@ -21,9 +23,12 @@ type ProviderKeys map[string]string
 // Config is the full process configuration.
 type Config struct {
 	DatabaseURL, PublicURL, RawStore, Listen, LogLevel, BootstrapTenant string
-	EncryptionKey                                                       []byte          // decoded, len 32
-	Roles                                                               map[string]bool // "api", "collect", "etl"
-	Metrics                                                             bool
+	EncryptionKey                                                       []byte // decoded, len 32
+	// PreviousEncryptionKeys still open values sealed before a rotation but
+	// never seal (OHS_PREVIOUS_ENCRYPTION_KEYS, decoded, each len 32).
+	PreviousEncryptionKeys [][]byte
+	Roles                  map[string]bool // "api", "collect", "etl"
+	Metrics                bool
 	// Console serves the read-only admin console at /console (OHS_CONSOLE,
 	// default false).
 	Console bool
@@ -57,7 +62,16 @@ type Config struct {
 	// consent for (OHS_CONSENT_REQUIRED, default false: such a source
 	// stores everything).
 	ConsentRequired bool
-	Providers       map[string]ProviderKeys // key = lower-case slug
+	// RateLimitInbound bounds the notification routes per client address,
+	// RateLimitInboundProvider per provider whatever the address, and
+	// RateLimitOAuth the OAuth callback per client address
+	// (OHS_RATE_LIMIT_INBOUND, OHS_RATE_LIMIT_INBOUND_PROVIDER,
+	// OHS_RATE_LIMIT_OAUTH). The zero value disables a limit.
+	RateLimitInbound, RateLimitInboundProvider, RateLimitOAuth RateLimit
+	// TrustedProxies are the reverse proxies whose X-Forwarded-For names the
+	// client address (OHS_TRUSTED_PROXIES, default none).
+	TrustedProxies []netip.Prefix
+	Providers      map[string]ProviderKeys // key = lower-case slug
 }
 
 // OTLP protocols, as OTEL_EXPORTER_OTLP_PROTOCOL names them.
@@ -98,6 +112,13 @@ func TracingFromEnv(env func(string) (string, bool)) (enabled bool, protocol str
 	return false, "", fmt.Errorf("%w: %s=%q is not supported: use http/protobuf (port 4318) or grpc (port 4317)", ErrTracing, name, proto)
 }
 
+// RateLimit is a token bucket: Rate requests per second sustained, Burst at
+// once.
+type RateLimit struct {
+	Rate  float64
+	Burst int
+}
+
 // MinMetricsToken is the shortest OHS_METRICS_TOKEN accepted.
 const MinMetricsToken = 16
 
@@ -108,42 +129,61 @@ const DefaultAuditRetentionDays = 365
 // DefaultIngestConcurrency is OHS_INGEST_CONCURRENCY when unset.
 const DefaultIngestConcurrency = 8
 
+// The rate limits when unset. Providers batch notifications and a user's
+// backfill comes in bursts, so the inbound limits stay well above what one
+// provider sends; a person completes an OAuth flow a few times at most.
+var (
+	DefaultRateLimitInbound         = RateLimit{Rate: 30, Burst: 120}
+	DefaultRateLimitInboundProvider = RateLimit{Rate: 300, Burst: 600}
+	DefaultRateLimitOAuth           = RateLimit{Rate: 2, Burst: 20}
+)
+
 // reserved are the OHS_ variables (without prefix) that are never provider settings.
 var reserved = map[string]bool{
-	"DATABASE_URL":           true,
-	"ENCRYPTION_KEY":         true,
-	"PUBLIC_URL":             true,
-	"RAW_STORE":              true,
-	"ROLES":                  true,
-	"BOOTSTRAP_TENANT":       true,
-	"LISTEN":                 true,
-	"LOG_LEVEL":              true,
-	"METRICS":                true,
-	"CONSOLE":                true,
-	"METRICS_TOKEN":          true,
-	"METRICS_LISTEN":         true,
-	"RETENTION_DAYS":         true,
-	"AUDIT_RETENTION_DAYS":   true,
-	"INGEST_CONCURRENCY":     true,
-	"PULLS_PER_PROVIDER":     true,
-	"BACKFILLS_PER_PROVIDER": true,
-	"WEBHOOK_ALLOW_PRIVATE":  true,
-	"CONSENT_REQUIRED":       true,
-	"MCP_URL":                true, // client side settings of `ohs mcp`
-	"MCP_KEY":                true,
-	"HTTP_PORT":              true, // read by docker compose only (host port)
-	"HTTP_BIND":              true, // read by docker compose only (host address)
-	"VERSION":                true, // read by docker compose only (image tag)
+	"DATABASE_URL":                true,
+	"ENCRYPTION_KEY":              true,
+	"PREVIOUS_ENCRYPTION_KEYS":    true,
+	"PUBLIC_URL":                  true,
+	"RAW_STORE":                   true,
+	"ROLES":                       true,
+	"BOOTSTRAP_TENANT":            true,
+	"LISTEN":                      true,
+	"LOG_LEVEL":                   true,
+	"METRICS":                     true,
+	"CONSOLE":                     true,
+	"METRICS_TOKEN":               true,
+	"METRICS_LISTEN":              true,
+	"RETENTION_DAYS":              true,
+	"AUDIT_RETENTION_DAYS":        true,
+	"INGEST_CONCURRENCY":          true,
+	"PULLS_PER_PROVIDER":          true,
+	"BACKFILLS_PER_PROVIDER":      true,
+	"WEBHOOK_ALLOW_PRIVATE":       true,
+	"RATE_LIMIT_INBOUND":          true,
+	"RATE_LIMIT_INBOUND_PROVIDER": true,
+	"RATE_LIMIT_OAUTH":            true,
+	"TRUSTED_PROXIES":             true,
+	"CONSENT_REQUIRED":            true,
+	"MCP_URL":                     true, // client side settings of `ohs mcp`
+	"MCP_KEY":                     true,
+	"HTTP_PORT":                   true, // read by docker compose only (host port)
+	"HTTP_BIND":                   true, // read by docker compose only (host address)
+	"VERSION":                     true, // read by docker compose only (image tag)
 }
 
 // ErrEncryptionKey is wrapped by every Load error about OHS_ENCRYPTION_KEY
 // (missing, not base64, wrong length).
 var ErrEncryptionKey = errors.New("OHS_ENCRYPTION_KEY")
 
-// keyHint ends every OHS_ENCRYPTION_KEY error. Changing the key of an
-// instance that already stores OAuth tokens makes them unreadable.
-const keyHint = ": generate one with `openssl rand -base64 32` (or run `ohs doctor`), " +
-	"and keep the same key for the life of the instance"
+// ErrPreviousEncryptionKeys is wrapped by every Load error about
+// OHS_PREVIOUS_ENCRYPTION_KEYS.
+var ErrPreviousEncryptionKeys = errors.New("OHS_PREVIOUS_ENCRYPTION_KEYS")
+
+// keyHint ends every OHS_ENCRYPTION_KEY error. Replacing the key of an
+// instance that already stores OAuth tokens makes them unreadable, unless the
+// old key moves to OHS_PREVIOUS_ENCRYPTION_KEYS.
+const keyHint = ": generate one with `openssl rand -base64 32` (or run `ohs doctor`); " +
+	"to change the key of a running instance, follow docs/key-rotation.md"
 
 // ErrPublicURL and ErrLogLevel are wrapped by the Load errors about
 // OHS_PUBLIC_URL and OHS_LOG_LEVEL, settings only serve reads.
@@ -202,6 +242,9 @@ func Load(env func(string) (string, bool), environ []string) (Config, error) {
 		return Config{}, fmt.Errorf("%w must decode to 32 bytes, got %d%s", ErrEncryptionKey, len(key), keyHint)
 	}
 	c.EncryptionKey = key
+	if c.PreviousEncryptionKeys, err = previousKeys(get("OHS_PREVIOUS_ENCRYPTION_KEYS", ""), key); err != nil {
+		return Config{}, err
+	}
 
 	if err := CheckPublicURL(c.PublicURL); err != nil {
 		return Config{}, err
@@ -309,6 +352,37 @@ func Load(env func(string) (string, bool), environ []string) (Config, error) {
 		c.ConsentRequired = b
 	}
 
+	for _, l := range []struct {
+		name string
+		dst  *RateLimit
+		def  RateLimit
+	}{
+		{"OHS_RATE_LIMIT_INBOUND", &c.RateLimitInbound, DefaultRateLimitInbound},
+		{"OHS_RATE_LIMIT_INBOUND_PROVIDER", &c.RateLimitInboundProvider, DefaultRateLimitInboundProvider},
+		{"OHS_RATE_LIMIT_OAUTH", &c.RateLimitOAuth, DefaultRateLimitOAuth},
+	} {
+		*l.dst = l.def
+		if v := get(l.name, ""); v != "" {
+			rl, err := parseRateLimit(v)
+			if err != nil {
+				return Config{}, fmt.Errorf("%s: %w", l.name, err)
+			}
+			*l.dst = rl
+		}
+	}
+
+	for _, s := range strings.Split(get("OHS_TRUSTED_PROXIES", ""), ",") {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		p, err := parseProxy(s)
+		if err != nil {
+			return Config{}, fmt.Errorf("OHS_TRUSTED_PROXIES: %q is not an IP address or CIDR (for example 10.0.0.0/8)", s)
+		}
+		c.TrustedProxies = append(c.TrustedProxies, p)
+	}
+
 	for _, kv := range environ {
 		k, v, ok := strings.Cut(kv, "=")
 		if !ok || !strings.HasPrefix(k, "OHS_") {
@@ -328,6 +402,76 @@ func Load(env func(string) (string, bool), environ []string) (Config, error) {
 		c.Providers[slug][field] = v
 	}
 	return c, nil
+}
+
+// parseRateLimit reads "rate/burst" (requests per second, a positive
+// number, and requests at once, a positive integer), or "0" for no limit.
+func parseRateLimit(v string) (RateLimit, error) {
+	if v == "0" {
+		return RateLimit{}, nil
+	}
+	bad := fmt.Errorf("%q is not rate/burst (for example 30/120) or 0 to disable", v)
+	rs, bs, ok := strings.Cut(v, "/")
+	if !ok {
+		return RateLimit{}, bad
+	}
+	rate, err := strconv.ParseFloat(strings.TrimSpace(rs), 64)
+	if err != nil || math.IsNaN(rate) || math.IsInf(rate, 0) || rate <= 0 {
+		return RateLimit{}, bad
+	}
+	burst, err := strconv.Atoi(strings.TrimSpace(bs))
+	if err != nil || burst < 1 {
+		return RateLimit{}, bad
+	}
+	return RateLimit{Rate: rate, Burst: burst}, nil
+}
+
+// parseProxy reads a CIDR, or one address as a single-address prefix.
+func parseProxy(s string) (netip.Prefix, error) {
+	if a, err := netip.ParseAddr(s); err == nil {
+		a = a.Unmap()
+		return netip.PrefixFrom(a, a.BitLen()), nil
+	}
+	p, err := netip.ParsePrefix(s)
+	if err != nil {
+		return netip.Prefix{}, err
+	}
+	if p.Addr().Is4In6() && p.Bits() >= 96 {
+		p = netip.PrefixFrom(p.Addr().Unmap(), p.Bits()-96)
+	}
+	return p.Masked(), nil
+}
+
+// previousKeys decodes OHS_PREVIOUS_ENCRYPTION_KEYS: comma separated base64
+// keys of 32 bytes, none equal to the active key or to another. Errors name
+// the entry by position, never by value.
+func previousKeys(raw string, active []byte) ([][]byte, error) {
+	var keys [][]byte
+	n := 0
+	for _, s := range strings.Split(raw, ",") {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		n++
+		k, err := base64.StdEncoding.DecodeString(s)
+		if err != nil {
+			return nil, fmt.Errorf("%w: entry %d is not valid base64 (comma separated keys from `openssl rand -base64 32`)", ErrPreviousEncryptionKeys, n)
+		}
+		if len(k) != 32 {
+			return nil, fmt.Errorf("%w: entry %d must decode to 32 bytes, got %d", ErrPreviousEncryptionKeys, n, len(k))
+		}
+		if string(k) == string(active) {
+			return nil, fmt.Errorf("%w: entry %d is OHS_ENCRYPTION_KEY itself; list only the keys it replaced", ErrPreviousEncryptionKeys, n)
+		}
+		for i, o := range keys {
+			if string(o) == string(k) {
+				return nil, fmt.Errorf("%w: entries %d and %d are the same key", ErrPreviousEncryptionKeys, i+1, n)
+			}
+		}
+		keys = append(keys, k)
+	}
+	return keys, nil
 }
 
 // multiWordSlugs are the provider slugs that hold an underscore

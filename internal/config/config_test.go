@@ -342,3 +342,111 @@ func TestLoadMetricsToken(t *testing.T) {
 		t.Fatalf("same address as OHS_LISTEN: %v", err)
 	}
 }
+
+func TestLoadRateLimits(t *testing.T) {
+	c, err := load(t, base())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.RateLimitInbound != DefaultRateLimitInbound || c.RateLimitInboundProvider != DefaultRateLimitInboundProvider ||
+		c.RateLimitOAuth != DefaultRateLimitOAuth || len(c.TrustedProxies) != 0 {
+		t.Fatalf("defaults: %+v %+v %+v %v", c.RateLimitInbound, c.RateLimitInboundProvider, c.RateLimitOAuth, c.TrustedProxies)
+	}
+	m := base()
+	m["OHS_RATE_LIMIT_INBOUND"] = "10/50"
+	m["OHS_RATE_LIMIT_INBOUND_PROVIDER"] = "0"
+	m["OHS_RATE_LIMIT_OAUTH"] = "0.5/5"
+	m["OHS_TRUSTED_PROXIES"] = " 10.0.0.0/8, 192.0.2.7 ,fd00::/8"
+	c, err = load(t, m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.RateLimitInbound != (RateLimit{Rate: 10, Burst: 50}) || c.RateLimitInboundProvider != (RateLimit{}) ||
+		c.RateLimitOAuth != (RateLimit{Rate: 0.5, Burst: 5}) {
+		t.Fatalf("set: %+v %+v %+v", c.RateLimitInbound, c.RateLimitInboundProvider, c.RateLimitOAuth)
+	}
+	want := []string{"10.0.0.0/8", "192.0.2.7/32", "fd00::/8"}
+	if len(c.TrustedProxies) != len(want) {
+		t.Fatalf("proxies: %v", c.TrustedProxies)
+	}
+	for i, p := range c.TrustedProxies {
+		if p.String() != want[i] {
+			t.Fatalf("proxies: %v", c.TrustedProxies)
+		}
+	}
+	if len(c.Providers) != 0 {
+		t.Fatalf("rate limit settings leaked as providers: %v", c.Providers)
+	}
+	for name, bad := range map[string][]string{
+		"OHS_RATE_LIMIT_INBOUND":          {"30", "30/", "/5", "-1/5", "30/0", "30/1.5", "abc/5", "NaN/5", "Inf/5", "30/5/1"},
+		"OHS_RATE_LIMIT_INBOUND_PROVIDER": {"x"},
+		"OHS_RATE_LIMIT_OAUTH":            {"2/-1"},
+		"OHS_TRUSTED_PROXIES":             {"10.0.0.0/33", "proxy.local", "10.0.0.0/8,,x"},
+	} {
+		for _, v := range bad {
+			m := base()
+			m[name] = v
+			if _, err := load(t, m); err == nil || !strings.Contains(err.Error(), name) {
+				t.Fatalf("%s=%q: %v", name, v, err)
+			}
+		}
+	}
+}
+
+func TestLoadPreviousKeys(t *testing.T) {
+	other := base64.StdEncoding.EncodeToString([]byte("abcdef0123456789abcdef0123456789"))
+	third := base64.StdEncoding.EncodeToString([]byte("ABCDEF0123456789ABCDEF0123456789"))
+	m := base()
+	c, err := load(t, m)
+	if err != nil || len(c.PreviousEncryptionKeys) != 0 {
+		t.Fatalf("unset: %v %d", err, len(c.PreviousEncryptionKeys))
+	}
+	m["OHS_PREVIOUS_ENCRYPTION_KEYS"] = " " + other + " , " + third + ","
+	c, err = load(t, m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(c.PreviousEncryptionKeys) != 2 || string(c.PreviousEncryptionKeys[0]) != "abcdef0123456789abcdef0123456789" {
+		t.Fatalf("previous keys: %d", len(c.PreviousEncryptionKeys))
+	}
+	if len(c.Providers) != 0 {
+		t.Fatalf("OHS_PREVIOUS_ENCRYPTION_KEYS read as a provider: %v", c.Providers)
+	}
+}
+
+func TestLoadRejectsBadPreviousKeys(t *testing.T) {
+	other := base64.StdEncoding.EncodeToString([]byte("abcdef0123456789abcdef0123456789"))
+	for _, v := range []string{
+		"!!notbase64!!",
+		other + "," + base64.StdEncoding.EncodeToString([]byte("short")),
+		goodKey,             // the active key again
+		other + "," + other, // twice
+	} {
+		m := base()
+		m["OHS_PREVIOUS_ENCRYPTION_KEYS"] = v
+		_, err := load(t, m)
+		if !errors.Is(err, ErrPreviousEncryptionKeys) {
+			t.Fatalf("%q: %v", v, err)
+		}
+		// An error names the entry, never its value.
+		if strings.Contains(err.Error(), other) || strings.Contains(err.Error(), goodKey) {
+			t.Fatalf("the error echoes a key: %v", err)
+		}
+	}
+	m := base()
+	m["OHS_PREVIOUS_ENCRYPTION_KEYS"] = other + ",xx"
+	_, err := load(t, m)
+	if err == nil || !strings.Contains(err.Error(), "entry 2") {
+		t.Fatalf("the error names the entry: %v", err)
+	}
+}
+
+// The key hint points at rotation, not at keeping the key forever.
+func TestKeyHintPointsAtRotation(t *testing.T) {
+	m := base()
+	m["OHS_ENCRYPTION_KEY"] = "!!"
+	_, err := load(t, m)
+	if err == nil || !strings.Contains(err.Error(), "docs/key-rotation.md") {
+		t.Fatalf("got %v", err)
+	}
+}

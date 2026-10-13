@@ -158,11 +158,13 @@ func redacted(endpoint string) string {
 	return u.Redacted()
 }
 
-// progressPrinter prints the running totals at most every two seconds.
+// progressPrinter prints the running totals every two seconds at most, the
+// first time two seconds in: an import that ends sooner prints only its
+// summary, not a count that the summary then contradicts.
 func progressPrinter(out io.Writer, dryRun bool) func(export.Summary) {
 	var (
 		mu   sync.Mutex
-		last time.Time
+		last = time.Now()
 	)
 	return func(s export.Summary) {
 		mu.Lock()
@@ -175,7 +177,7 @@ func progressPrinter(out io.Writer, dryRun bool) func(export.Summary) {
 			fmt.Fprintf(out, "  %d records read, %d parts\n", s.Records, s.Parts)
 			return
 		}
-		fmt.Fprintf(out, "  %d records read, %d parts uploaded (%d already stored)\n", s.Records, s.Uploaded, s.Duplicates)
+		fmt.Fprintf(out, "  %d records read, %d parts sent so far (%d already stored)\n", s.Records, s.Uploaded, s.Duplicates)
 	}
 }
 
@@ -192,7 +194,9 @@ func printSummary(out io.Writer, s export.Summary, dryRun bool) {
 	row("route points", s.RoutePoints)
 	row("parts", s.Parts)
 	if !dryRun {
-		row("uploaded", s.Uploaded)
+		// Each part sent is either new to the server or one a previous run
+		// already stored, so the two rows add up to parts.
+		row("stored now", s.Uploaded-s.Duplicates)
 		row("already stored", s.Duplicates)
 	}
 	row("before --since", s.BeforeSince)

@@ -133,7 +133,7 @@ func TestPGXTracesOnlyInsideASpanAndNeverArguments(t *testing.T) {
 	assert.Empty(t, upd.Status().Description)
 	attrs := map[string]string{}
 	for _, kv := range upd.Attributes() {
-		attrs[string(kv.Key)] = kv.Value.Emit()
+		attrs[string(kv.Key)] = kv.Value.String()
 	}
 	assert.Equal(t, map[string]string{
 		"db.system.name": "postgresql", "db.operation.name": "UPDATE", "db.response.status_code": "23505",
@@ -143,8 +143,8 @@ func TestPGXTracesOnlyInsideASpanAndNeverArguments(t *testing.T) {
 	assert.Equal(t, "BATCH", ended[2].Name())
 	for _, s := range ended {
 		for _, kv := range s.Attributes() {
-			assert.NotContains(t, kv.Value.Emit(), secret)
-			assert.NotContains(t, kv.Value.Emit(), "$1", "no statement text")
+			assert.NotContains(t, kv.Value.String(), secret)
+			assert.NotContains(t, kv.Value.String(), "$1", "no statement text")
 		}
 		assert.Empty(t, s.Events())
 	}

@@ -1,0 +1,41 @@
+{
+  "resourceType": "Observation",
+  "id": "qs-7007",
+  "meta": {
+    "source": "https://github.com/soma-intelligence/open-health-sync/fhir/provider/withings",
+    "tag": [
+      {
+        "system": "https://github.com/soma-intelligence/open-health-sync/fhir/CodeSystem/source",
+        "code": "withings"
+      }
+    ]
+  },
+  "status": "final",
+  "code": {
+    "coding": [
+      {
+        "system": "https://github.com/soma-intelligence/open-health-sync/fhir/CodeSystem/quantity-type",
+        "code": "ecg_afib_classification"
+      }
+    ],
+    "text": "ecg afib classification"
+  },
+  "subject": {
+    "reference": "Patient/3f0c2f8e-8b8a-4c55-9f5e-2b0f3a1d9c11"
+  },
+  "effectiveDateTime": "2026-03-01T08:00:00Z",
+  "issued": "2026-03-01T09:15:30.25Z",
+  "valueCodeableConcept": {
+    "coding": [
+      {
+        "system": "https://github.com/soma-intelligence/open-health-sync/fhir/CodeSystem/ecg-afib-classification",
+        "code": "negative"
+      }
+    ],
+    "text": "negative"
+  },
+  "device": {
+    "reference": "Device/dev-005b757475ff837b",
+    "display": "apple_watch"
+  }
+}

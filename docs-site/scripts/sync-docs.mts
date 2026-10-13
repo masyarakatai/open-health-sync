@@ -146,6 +146,27 @@ const sources: Record<string, Target[]> = {
       description: "Deploy without a server of your own: templates with TimescaleDB and a persistent raw store.",
     },
   ],
+  "docs/key-rotation.md": [
+    {
+      page: "(guides)/self-hosting/key-rotation",
+      title: "Rotating the encryption key",
+      description: "Replace OHS_ENCRYPTION_KEY online, re-seal the stored secrets, and what to do after a leak.",
+    },
+  ],
+  "docs/security-model.md": [
+    {
+      page: "(guides)/concepts/security-model",
+      title: "Security model",
+      description: "What is protected, the trust boundaries, the mitigations in place and the residual risks.",
+    },
+  ],
+  "docs/hardening.md": [
+    {
+      page: "(guides)/self-hosting/hardening",
+      title: "Hardening checklist",
+      description: "TLS, secrets, storage encryption, backups, container settings and image signatures.",
+    },
+  ],
   "docs/fhir.md": [
     {
       page: "(guides)/guides/fhir",
@@ -230,6 +251,20 @@ const sources: Record<string, Target[]> = {
       description: "Per user, per source and per data category: what is stored, revocation and its purge.",
     },
   ],
+  "docs/server-sdks.md": [
+    {
+      page: "(guides)/guides/server-sdks",
+      title: "Server SDKs",
+      description: "TypeScript and Python clients for your backend, generated from the OpenAPI document.",
+    },
+  ],
+  "docs/api-collections.md": [
+    {
+      page: "(guides)/guides/api-collections",
+      title: "API collections",
+      description: "Try the API from Postman, Bruno or Insomnia with the generated collection.",
+    },
+  ],
 };
 
 // The SDK overview, then one page per SDK guide under docs/sdks.
@@ -284,6 +319,7 @@ const icons: Record<string, string> = {
   "api-reference/data-model": "Shapes",
   "(guides)/concepts/architecture": "Network",
   "(guides)/concepts/background-sync": "RefreshCw",
+  "(guides)/concepts/security-model": "Shield",
   "(guides)/connectors/writing-a-connector": "Code",
   "(guides)/connectors/sources": "List",
   "(guides)/connectors/recording": "Disc",
@@ -298,6 +334,7 @@ const icons: Record<string, string> = {
   "(guides)/self-hosting/operating-notes": "NotebookPen",
   "(guides)/self-hosting/console": "LayoutDashboard",
   "(guides)/self-hosting/observability": "Telescope",
+  "(guides)/self-hosting/hardening": "Lock",
   "(guides)/guides/fhir": "HeartPulse",
   "(guides)/sdks/index": "Package",
   "(guides)/sdks/kotlin": "Smartphone",
@@ -331,6 +368,8 @@ const icons: Record<string, string> = {
   "(guides)/guides/connect-page": "MousePointerClick",
   "(guides)/guides/sync-health": "HeartHandshake",
   "(guides)/guides/demo": "FlaskConical",
+  "(guides)/guides/server-sdks": "Package",
+  "(guides)/guides/api-collections": "FolderTree",
 };
 
 // Anchors of a source file that live on a page written for the site (.mdx).

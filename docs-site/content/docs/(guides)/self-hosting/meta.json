@@ -9,6 +9,7 @@
     "platforms",
     "binaries",
     "production",
+    "hardening",
     "configuration",
     "doctor",
     "console",
@@ -17,6 +18,7 @@
     "backup",
     "rotating-secrets",
     "observability",
+    "key-rotation",
     "operating-notes"
   ]
 }

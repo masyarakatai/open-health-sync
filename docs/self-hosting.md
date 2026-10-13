@@ -32,7 +32,8 @@ from the shell or `--env-file`, so keep `--env-file .env` on every `docker compo
 The containers read `.env` themselves either way.
 
 `OHS_ENCRYPTION_KEY` must hold 32 random bytes in base64; the `sed` line above fills it. Keep
-it: it encrypts the OAuth tokens stored in the database. If it is empty, `ohs` exits at start
+it: it encrypts the OAuth tokens stored in the database. To change it later, follow
+[rotating the encryption key](key-rotation.md). If it is empty, `ohs` exits at start
 and its container restarts in a loop, never healthy. `ohs doctor` then prints a freshly
 generated key: paste it into `.env` and run the same `up -d` command again, so the container is
 recreated with the new environment.
@@ -71,12 +72,15 @@ last build is what each runs after its next restart.
 ## ohs doctor
 
 `ohs doctor` prints one `ok` or `fail` line per check and exits non-zero on any
-failure: configuration, database, raw store, public URL, and the required keys of
-every enabled connector. For each enabled OAuth connector it prints the callback
+failure: configuration, database, raw store, public URL, the required keys of
+every enabled connector, and the keys that seal the stored secrets. For each enabled OAuth connector it prints the callback
 URL to register with the provider: `<OHS_PUBLIC_URL>/oauth/<slug>/callback`.
 A connector that needs keys and has none set gets a `skip` line,
 `skip  connector withings: disabled (no keys)`; one with only some of its keys is a
-`fail`. `--quick` checks the database and raw store only. The full run also writes and deletes
+`fail`. The stored OAuth tokens and webhook secrets are counted by the key that seals them: a
+`warn` line (which does not fail the run) names how many still use a previous key or open with
+no configured key, and says when `OHS_PREVIOUS_ENCRYPTION_KEYS` is no longer needed (see
+[rotating the encryption key](key-rotation.md)). `--quick` checks the database and raw store only. The full run also writes and deletes
 a probe object in the raw store; a host folder bind mounted at `/var/lib/ohs/raw` must be
 writable by the container user (`chown -R 65532:65532 <folder>`). `ohs serve` runs the same
 write check at start and stops if it fails.
@@ -89,6 +93,8 @@ There is no `latest` tag while the version is 0.x: pin a version. The compose fi
 uses `${OHS_VERSION:-0.1.0}`; set `OHS_VERSION` to move to another release.
 Release binaries for Linux and macOS (amd64, arm64) and their `checksums.txt` are
 attached to each [GitHub release](https://github.com/soma-intelligence/open-health-sync/releases).
+Releases after 0.0.2 sign the image digest and `checksums.txt` with Sigstore cosign (keyless);
+[hardening.md](hardening.md#updates-and-image-signatures) has the verification commands.
 
 The image is distroless (static, nonroot). Go cross-compiles, so no emulation is
 involved: `make image` runs `docker buildx build --platform linux/amd64,linux/arm64`.
@@ -152,7 +158,8 @@ Environment variables only, documented line by line in `.env.example`.
 | Variable | Default | Meaning |
 |---|---|---|
 | `OHS_DATABASE_URL` | set by compose | Postgres connection URL; size its pool with `pool_max_conns` (see below) |
-| `OHS_ENCRYPTION_KEY` | none, required | 32 random bytes, base64. Seals stored OAuth tokens. `openssl rand -base64 32` makes one, or `ohs doctor` prints one |
+| `OHS_ENCRYPTION_KEY` | none, required | 32 random bytes, base64. Seals stored OAuth tokens and webhook secrets. `openssl rand -base64 32` makes one, or `ohs doctor` prints one |
+| `OHS_PREVIOUS_ENCRYPTION_KEYS` | none | Comma separated keys `OHS_ENCRYPTION_KEY` replaced: they still open what they sealed, never seal. Set only while [rotating the key](key-rotation.md) |
 | `OHS_PUBLIC_URL` | `http://localhost:8080` | Public base URL, used for OAuth callbacks and notification URLs. Use your https address |
 | `OHS_RAW_STORE` | `file:///var/lib/ohs/raw` | `file:///path` or `s3://bucket?endpoint=&region=&path_style=true` |
 | `OHS_ROLES` | `api,collect,etl` | Roles this process runs |
@@ -171,6 +178,10 @@ Environment variables only, documented line by line in `.env.example`.
 | `OHS_INGEST_CONCURRENCY` | `8` | Device uploads one `api` process handles at once; more answer 503 with `Retry-After`. The Pi overlay sets 2 |
 | `OHS_WEBHOOK_ALLOW_PRIVATE` | `false` | `true` lets [webhook](webhooks.md) endpoints use plain http and private, loopback or link-local addresses (a receiver on the same host or network). Leave it off when tenants are not trusted |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | none | Turns on OpenTelemetry traces, sent over OTLP to this address. The other standard `OTEL_` variables apply; see [observability](observability.md) |
+| `OHS_RATE_LIMIT_INBOUND` | `30/120` | Notification requests (`/inbound/{provider}`) per client address: `rate/burst` in requests per second, `0` disables. See [rate limits](#rate-limits) |
+| `OHS_RATE_LIMIT_INBOUND_PROVIDER` | `300/600` | Notification requests per provider, whatever the address; `0` disables |
+| `OHS_RATE_LIMIT_OAUTH` | `2/20` | OAuth callback requests per client address; `0` disables |
+| `OHS_TRUSTED_PROXIES` | none | Comma-separated CIDRs (or addresses) of your reverse proxies. Only a request from one of them has its client address read from `X-Forwarded-For` |
 | `OHS_<PROVIDER>_CLIENT_ID`, `_CLIENT_SECRET` | none | Keys of a provider; its connector is on when they are set. Every process that runs `collect` or `etl` needs them (see below) |
 
 ### Database pool size
@@ -205,6 +216,48 @@ that runs either role. A process without them cannot call that provider: it logs
 a deletion it carries out still deletes the data but leaves the grant valid at the provider.
 
 Put a reverse proxy with TLS in front of port 8080; the bearer secrets travel in headers.
+[hardening.md](hardening.md) is the full production checklist, and
+[security-model.md](security-model.md) the threat model behind it.
+
+### Rate limits
+
+The provider-facing routes take no credential: `POST` and `GET /inbound/{provider}`
+(notifications and the URL check) and `GET /oauth/{provider}/callback`. Each notification may
+verify a signature, write rows and queue pulls, and each callback reads the database, so an
+in-memory token bucket bounds them, per `api` process. A request over a limit is answered 429
+with `Retry-After` (seconds) before any work, and counted in `/metrics` as
+`ohs_rate_limited_total{route_group="inbound"}` or `{route_group="oauth_callback"}`. The
+authenticated API is not limited.
+
+| Bucket | Default | Variable |
+|---|---|---|
+| Notifications, per client address | 30 requests/s, bursts of 120 | `OHS_RATE_LIMIT_INBOUND` |
+| Notifications, per provider (all addresses) | 300 requests/s, bursts of 600 | `OHS_RATE_LIMIT_INBOUND_PROVIDER` |
+| OAuth callbacks, per client address | 2 requests/s, bursts of 20 | `OHS_RATE_LIMIT_OAUTH` |
+
+The values are `rate/burst` (`30/120`; the rate may be a decimal, `0.5/10`), and `0` turns a
+bucket off. The defaults sit well above what a provider sends, batched notifications and a
+large backfill included; providers retry a 429. The per provider bucket keeps a flood from
+many spoofed addresses from queueing unlimited work. An IPv6 client is counted by its /64.
+Buckets idle for 10 minutes are dropped, and at most 100,000 addresses are tracked per route
+group: beyond that, new addresses share one bucket until idle ones are dropped.
+
+The client address is the TCP peer. Behind a reverse proxy every request comes from the proxy,
+so list the proxy in `OHS_TRUSTED_PROXIES`: for a request from one of those addresses, the
+client is the rightmost `X-Forwarded-For` entry that is not itself a trusted proxy. The header
+is ignored from any other peer, so a client cannot pick its own address. With the bundled
+compose file and a proxy on the host in front of the published port 8080, requests reach the
+container from the Docker bridge gateway. Make sure the proxy appends the address it received
+the request from to `X-Forwarded-For` (most do by default), then trust the bridge networks:
+
+```
+# .env
+OHS_TRUSTED_PROXIES=172.16.0.0/12
+```
+
+Name only addresses your proxies use: a trusted range that also holds clients lets them forge
+the header. Several `api` processes each keep their own buckets, so the limits add up across
+them.
 
 ## Upgrading
 
@@ -279,10 +332,13 @@ archive, a cron example, the S3 raw store, restore steps and how to verify a bac
 
   A user token minted with the old key keeps working until it expires. `key revoke` with a
   whole user token (`ohs_ut_...`) revokes that token.
-- **`OHS_ENCRYPTION_KEY`.** 0.x has one key and no re-encryption. A new key leaves the stored
-  OAuth tokens unreadable: pulls for those connections fail until each user connects the
-  provider again. Uploads and stored data are not affected. Change it only when the old key is
-  compromised.
+- **`OHS_ENCRYPTION_KEY`.** Rotate it online: put the new key in `OHS_ENCRYPTION_KEY` and the
+  old one in `OHS_PREVIOUS_ENCRYPTION_KEYS`, restart every process, run `ohs admin rekey`, then
+  remove the old key once `ohs doctor` says nothing uses it. The whole procedure, and what
+  happens when a step is skipped, is in [rotating the encryption key](key-rotation.md). Replacing
+  the key without keeping the old one leaves the stored OAuth tokens and webhook secrets
+  unreadable: each user must connect the provider again. Uploads and stored data are not
+  affected.
 - **Provider secrets.** See the Withings note under operating notes below.
 - **`POSTGRES_PASSWORD`** only applies when the database volume is first created. To change it
   later, run `ALTER USER ohs PASSWORD '...'` in `psql`, then update `.env` and recreate both
@@ -384,6 +440,9 @@ traces.
 - **Large uploads.** An instance processes a bounded number of uploads at once
   (`OHS_INGEST_CONCURRENCY`, default 8, 2 on the Pi) and answers 503 with `Retry-After` above it;
   clients retry.
+- **Rate limits on the provider-facing routes.** Notifications and OAuth callbacks over the
+  limits answer 429 with `Retry-After`; see [rate limits](self-hosting.md#rate-limits). Behind a
+  reverse proxy, set `OHS_TRUSTED_PROXIES`, or every request counts against the proxy's address.
 
 ### Metrics
 

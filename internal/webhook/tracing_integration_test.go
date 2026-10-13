@@ -56,9 +56,9 @@ func TestDeliveryAttemptSpans(t *testing.T) {
 		s := spans[i]
 		attrs := map[string]string{}
 		for _, kv := range s.Attributes() {
-			attrs[string(kv.Key)] = kv.Value.Emit()
+			attrs[string(kv.Key)] = kv.Value.String()
 			for _, leak := range []string{"query-secret", rcv.srv.URL, secret, "oura", "u-1"} {
-				assert.NotContains(t, kv.Value.Emit(), leak, "attribute %s", kv.Key)
+				assert.NotContains(t, kv.Value.String(), leak, "attribute %s", kv.Key)
 			}
 		}
 		assert.Equal(t, want.code, attrs["http.response.status_code"])

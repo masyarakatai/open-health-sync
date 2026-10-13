@@ -107,7 +107,7 @@ Provider deletions are honored too.
 
 ## Roadmap at a glance
 
-✅ in v0.1.0 &nbsp;·&nbsp; 🛠 planned
+✅ in v0.1.0 &nbsp;·&nbsp; 🔜 on `main`, ships in the next release &nbsp;·&nbsp; 🛠 planned
 
 | | Outputs and integrations | | Sources |
 |:---:|---|:---:|---|
@@ -128,6 +128,9 @@ Provider deletions are honored too.
 | ✅ | Deploy templates for Render, Fly.io and Railway ([docs](docs/deploy-platforms.md)) | | |
 | ✅ | Hosted connect page: your app name and logo, one button per source ([docs](docs/connect-page.md)) | | |
 | ✅ | Erase one source's data for a user on disconnect, or for Apple Health and Health Connect | | |
+| 🔜 | Twelve MCP prompts on training, sleep and recovery, and an agent skill ([docs](docs/mcp.md#prompts)) | | |
+| 🔜 | Server SDKs for TypeScript and Python, and a Postman collection ([docs](docs/server-sdks.md)) | | |
+| 🔜 | Rate limits on the provider-facing routes ([docs](docs/self-hosting.md#rate-limits)) | | |
 | ✅ | Personal mode (`ohs admin personal setup`) and [eight small Python recipes](docs/recipes/README.md) on your own data | 🛠 | Health records (EHR) through SMART on FHIR |
 | ✅ | [Kotlin, Swift, React Native and Flutter SDKs](docs/sdks/README.md) and example apps | 🛠 | Garmin, Coros |
 
@@ -212,6 +215,13 @@ Open Health Sync is that layer, written once, with the boring parts done properl
   `?delete_data=true` erases everything that source sent for the user (records, raw files, sync
   history), and `DELETE /v1/users/{id}/data/{provider}` does the same for Apple Health or Health
   Connect. `OHS_RETENTION_DAYS` drops raw files and normalized data past an age.
+- **Consent per category.** Each user grants or refuses each source per data category (sleep,
+  heart, location, glucose and so on). Data not granted is dropped before it is stored, revoking
+  a category deletes what was stored, and `consent.granted` and `consent.revoked` webhooks tell
+  your server ([guide](docs/consent.md)).
+- **One-call user archive.** `GET /v1/users/{id}/archive` returns everything held about one
+  person as a single zip, for access and portability requests
+  ([docs](docs/exports.md#complete-user-archive-data-portability)).
 - **Multi-tenant.** Tenant API keys (`ohs_sk_`) for your server, short-lived scoped user tokens
   (`ohs_ut_`, scopes `upload` and `read`) for one person's app or agent. Keys and tokens are
   stored as SHA-256 hashes.
@@ -459,6 +469,11 @@ Then add `ohs mcp` (stdio) to your desktop agent's `mcpServers` (the binary from
 of an instance. `OHS_MCP_URL` must be `https` unless the host is loopback. Agents that speak
 Streamable HTTP can call `/mcp` directly with the bearer token.
 
+On `main` for the next release, the server also lists twelve prompts (`prompts/list`): ready-made
+questions about training, sleep and recovery that read the data first and show the numbers
+([prompts](docs/mcp.md#prompts), [prompt library](docs/learn/prompts.md)). The same guidance
+ships as an agent skill in [`skills/open-health-sync`](skills/open-health-sync/SKILL.md).
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/mcp-dark.png">
   <img src="docs/assets/readme/mcp-light.png" width="100%" alt="An ohs mcp stdio session: tools/list returns 11 read-only tools, and get_daily for 2026-01-10 returns step_count 9720 from apple_health.">
@@ -535,6 +550,8 @@ No software is compliant on its own, and Open Health Sync is not certified, audi
 by a business associate agreement. What it gives you: data stays on infrastructure you choose,
 `DELETE /v1/users/{id}` is a hard delete of raw files and rows (useful for erasure requests),
 erasing one source's data for a user is a single call,
+consent is kept per source and data category and enforced on every write,
+`GET /v1/users/{id}/archive` gives one person everything held about them in a zip,
 `OHS_RETENTION_DAYS` enforces a retention period, every query is scoped to a tenant and a user,
 keys and tokens are stored hashed, and provider OAuth tokens are encrypted with AES-256-GCM.
 Health records themselves are not encrypted by `ohs`: use disk or database encryption, TLS in
@@ -624,12 +641,14 @@ Health Connect reading in the Kotlin SDK, then health records (EHR) through SMAR
 
 - [Self-hosting](docs/self-hosting.md): configuration, images, Raspberry Pi, S3, operating notes.
 - [API guide](docs/api.md) and the [OpenAPI file](api/openapi.yaml), the source of truth.
-- [MCP server](docs/mcp.md): tools, credentials, desktop and remote agents.
+- [MCP server](docs/mcp.md): tools, prompts, credentials, desktop and remote agents.
 - [FHIR R4 output](docs/fhir.md): the user's records as Observations, the mapping and its limits.
 - [Outgoing webhooks](docs/webhooks.md): events, signatures, retries and the endpoint routes.
 - [Data model](docs/data-model.md): every canonical type and quantity name, with units.
 - [Client SDKs](docs/sdks/README.md): [Kotlin](docs/sdks/kotlin.md), [Swift](docs/sdks/swift.md),
   [React Native](docs/sdks/react-native.md), [Flutter](docs/sdks/flutter.md).
+- [Server SDKs](docs/server-sdks.md): TypeScript and Python clients for your backend, and a
+  [Postman collection](docs/api-collections.md) (next release).
 - [Example apps](examples/README.md): iOS (HealthKit), Android and React Native, built on the SDKs.
 - [Architecture](docs/architecture.md): roles, pipeline, storage, reliability.
 - Connectors: [supported and planned sources](docs/connectors/README.md),

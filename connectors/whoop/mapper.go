@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 	"sync"
 	"time"
 
@@ -18,6 +19,12 @@ const sourceName = "WHOOP"
 // kcalPerKilojoule converts WHOOP's kilojoules to the kilocalories the
 // canonical records carry (one thermochemical calorie is 4.184 J).
 const kcalPerKilojoule = 1 / 4.184
+
+// kcal converts kilojoules to kilocalories, to a tenth: the conversion
+// would otherwise show a dozen digits WHOOP never measured.
+func kcal(kj float64) *float64 {
+	return ptrFloat(math.Round(kj*kcalPerKilojoule*10) / 10)
+}
 
 // recordHandler maps one raw line to canonical records. A nil result with a
 // nil error means the line carries nothing this connector stores.

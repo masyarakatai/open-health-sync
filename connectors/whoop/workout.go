@@ -59,7 +59,7 @@ func mapWorkout(line []byte, userID string) (*model.MapResult, error) {
 	if sc := w.Score; sc != nil && w.ScoreState == scoreScored {
 		strain = sc.Strain
 		if sc.Kilojoule != nil {
-			out.ActiveEnergyKcal = ptrFloat(*sc.Kilojoule * kcalPerKilojoule)
+			out.ActiveEnergyKcal = kcal(*sc.Kilojoule)
 		}
 		out.DistanceM = sc.DistanceMeter
 		out.AvgHeartRate = sc.AverageHeartRate

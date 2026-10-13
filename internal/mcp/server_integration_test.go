@@ -22,6 +22,7 @@ import (
 	"github.com/soma-intelligence/open-health-sync/internal/api"
 	"github.com/soma-intelligence/open-health-sync/internal/auth"
 	"github.com/soma-intelligence/open-health-sync/internal/db"
+	"github.com/soma-intelligence/open-health-sync/internal/mcp"
 	"github.com/soma-intelligence/open-health-sync/internal/tenant"
 )
 
@@ -285,6 +286,27 @@ func TestEveryTool(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal([]byte(text), &cov))
 	assert.NotNil(t, cov.Records)
+
+	// Without start, the last 30 days only: the seeded day (2026-03-01) is
+	// in the window ending 2026-03-10, not in the one ending 2026-06-01,
+	// and back with an explicit start.
+	days := func(args map[string]any) int {
+		text, isErr := call(t, cs, "get_coverage", args)
+		require.False(t, isErr, text)
+		var c struct {
+			Records []any `json:"records"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(text), &c))
+		return len(c.Records)
+	}
+	e.exec(`INSERT INTO ohs_sync.pull_coverage (tenant_id, user_id, provider, metric, date, records_count)
+		SELECT tenant_id, id, 'apple_health', 'heart_rate', '2026-03-01', 5 FROM ohs_core.end_users WHERE id = $1`, e.userA)
+	restore := mcp.SetNow(func() time.Time { return time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC) })
+	defer restore()
+	assert.Positive(t, days(map[string]any{"user_id": u}))
+	mcp.SetNow(func() time.Time { return time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC) })
+	assert.Zero(t, days(map[string]any{"user_id": u}))
+	assert.Positive(t, days(map[string]any{"user_id": u, "start": "2026-01-01"}))
 
 	r = get(t, cs, "list_connections", map[string]any{"user_id": u})
 	var conns []map[string]any
