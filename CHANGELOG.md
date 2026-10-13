@@ -266,6 +266,10 @@ release may change the API, the configuration or the database schema.
 - The merged view tells apart the apps behind Apple Health for sleep and workouts. A night the
   watch and the phone (or a sleep app) both recorded was returned twice; the watch's session now
   covers the others. On a real export of six years, 1,310 of 14,662 sessions were such doubles.
+- Apple Health walking and running speed are stored. HealthKit spells them in `km/hr` (or
+  `mi/hr`), which had no conversion to `m/s`, so every such sample was parked as a unit error. An
+  instance restarted on this version replays the parked records. The recorded-contract replay now
+  applies the same unit conversion as the ETL, so CI catches the next unit with no conversion.
 - `OHS_<SLUG>_<FIELD>` keys of a provider slug that contains an underscore (`intervals_icu`) are
   now read under the whole slug.
 
