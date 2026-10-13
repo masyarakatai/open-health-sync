@@ -1801,9 +1801,10 @@ export class OpenHealthSync {
    *
    * `GET /v1/users/{id}/coverage`
    *
-   * Record counts per provider per local day, and `pending_jobs`, the user's ETL jobs not
-   * finished yet. After an upload, poll until `pending_jobs` is 0 to know every part has
-   * been processed; then `rejected_records` above 0 means some lines were not stored.
+   * Record counts per provider per local day, and `pending_jobs`, the user's work not
+   * finished yet: ETL jobs and provider pulls. After an upload or a provider connection,
+   * poll until `pending_jobs` is 0 to know every part and every queued pull has been
+   * processed; then `rejected_records` above 0 means some lines were not stored.
    * Not paged: at most 10000 days are returned, the earliest, and
    * `truncated` is true when more matched (narrow `start` and `end`). `start` and `end`
    * compare as dates.

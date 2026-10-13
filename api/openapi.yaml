@@ -1327,9 +1327,10 @@ paths:
       operationId: getCoverage
       summary: What has landed, per provider and day, and what is still processing
       description: |
-        Record counts per provider per local day, and `pending_jobs`, the user's ETL jobs not
-        finished yet. After an upload, poll until `pending_jobs` is 0 to know every part has
-        been processed; then `rejected_records` above 0 means some lines were not stored.
+        Record counts per provider per local day, and `pending_jobs`, the user's work not
+        finished yet: ETL jobs and provider pulls. After an upload or a provider connection,
+        poll until `pending_jobs` is 0 to know every part and every queued pull has been
+        processed; then `rejected_records` above 0 means some lines were not stored.
         Not paged: at most 10000 days are returned, the earliest, and
         `truncated` is true when more matched (narrow `start` and `end`). `start` and `end`
         compare as dates.
@@ -3287,7 +3288,10 @@ components:
       properties:
         pending_jobs:
           type: integer
-          description: ETL jobs of the user not finished yet (pending or running).
+          description: |
+            Work of the user not finished yet: ETL jobs and provider pulls (backfill,
+            scheduled or notified), pending or running. A pull that keeps failing stays
+            pending while it retries; `GET /v1/users/{id}/freshness` says why.
         parked_jobs:
           type: integer
           description: ETL jobs that exhausted their retries (an operator must look).
@@ -3775,6 +3779,9 @@ components:
           format: date-time
           description: When the record was ingested (the later of a panel's two samples).
         valueQuantity: { $ref: "#/components/schemas/FHIRQuantity" }
+        valueCodeableConcept:
+          allOf: [{ $ref: "#/components/schemas/FHIRCodeableConcept" }]
+          description: Instead of valueQuantity for a classification (ecg_afib_classification).
         dataAbsentReason: { $ref: "#/components/schemas/FHIRCodeableConcept" }
         device: { $ref: "#/components/schemas/FHIRReference" }
         component:

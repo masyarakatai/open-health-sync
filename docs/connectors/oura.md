@@ -229,6 +229,9 @@ Notes:
   the refresh token (`invalid_grant`), the connection becomes `needs_reauth` and the user must
   connect again. If it refuses your application (`invalid_client`, a wrong client ID or
   secret), no user is marked: the jobs fail with that error until the keys are fixed.
+- **Revocation.** Disconnecting a user or deleting them revokes the access token at Oura
+  (`GET /oauth/revoke`), so the grant does not outlive the connection. A failed revocation
+  is logged and does not stop the deletion.
 - **Partial failure.** A data type that fails (after its retries) does not stop the others: the
   pull stores what the other types returned, then fails with the errors, and the job is retried
   later. Stored data is deduplicated, so the retry adds only what was missing. A rate limit, a

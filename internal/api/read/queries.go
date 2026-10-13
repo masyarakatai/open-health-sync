@@ -179,11 +179,106 @@ type list struct {
 	parentCol string
 	parentID  int64
 	// where adds conditions over the row (alias r), binding parameters
-	// through arg.
-	where func(arg func(any) string) []string
+	// through arg, for a read of q. Set, it is the merged view's, and an
+	// open-ended read goes through windows (see windowed).
+	where func(arg func(any) string, q normalized) []string
 }
 
 func run[T any](ctx context.Context, db Querier, tenantID, userID uuid.UUID, l list, q normalized,
+	scan func(pgx.Rows) (T, time.Time, int64, error)) (Page[T], error) {
+	if l.where == nil || !q.End.IsZero() || l.date {
+		return runOnce(ctx, db, tenantID, userID, l, q, scan)
+	}
+	since := q.Start
+	if q.paged && q.afterT.After(since) {
+		since = q.afterT
+	}
+	first := func(from time.Time) (time.Time, error) {
+		where, args := "tenant_id = $1 AND user_id = $2", []any{tenantID, userID}
+		if l.typeCol != "" && q.Type != "" {
+			args = append(args, q.Type)
+			where += " AND " + l.typeCol + " = $3"
+		}
+		return firstFrom(ctx, db, []timed{{l.table + " WHERE " + where, l.timeCol}}, args, from)
+	}
+	return windowed(since, first, func(end time.Time) (Page[T], error) {
+		wq := q
+		wq.End = end
+		return runOnce(ctx, db, tenantID, userID, l, wq, scan)
+	})
+}
+
+// mergedWindows are the spans an open-ended read of the merged view tries
+// before reading without an end: a read with an end bounds the lookups of a
+// better ranked record on both sides, so TimescaleDB plans the chunks of
+// the window only instead of every chunk after the page's start (seconds
+// per page on a year of data).
+var mergedWindows = []time.Duration{2 * 24 * time.Hour, 16 * 24 * time.Hour, 128 * 24 * time.Hour}
+
+// windowed reads a page that starts at since and has no end through
+// mergedWindows: read(end) is the page up to end. A window that fills the
+// page gives it (its records are the first ones whatever comes after the
+// window), as does one after which no record starts. first(t) is the start
+// of the earliest record at or after t (zero when none), the start of the
+// first window when since is zero.
+func windowed[T any](since time.Time, first func(time.Time) (time.Time, error), read func(end time.Time) (Page[T], error)) (Page[T], error) {
+	if since.IsZero() {
+		t, err := first(time.Time{})
+		if err != nil || t.IsZero() {
+			if err != nil {
+				return Page[T]{}, err
+			}
+			return read(time.Time{})
+		}
+		since = t
+	}
+	for _, w := range mergedWindows {
+		end := since.Add(w)
+		pg, err := read(end)
+		if err != nil || pg.NextCursor != "" {
+			return pg, err
+		}
+		next, err := first(end)
+		if err != nil {
+			return Page[T]{}, err
+		}
+		if next.IsZero() {
+			return pg, nil
+		}
+	}
+	return read(time.Time{})
+}
+
+// timed is a set of rows ("table WHERE conditions") and the SQL time of a
+// row.
+type timed struct{ rows, time string }
+
+// firstFrom is the earliest time of the rows of sets (args bound as $1...)
+// at or after from, or the zero time.
+func firstFrom(ctx context.Context, db Querier, sets []timed, args []any, from time.Time) (time.Time, error) {
+	parts := make([]string, len(sets))
+	n := len(args)
+	if !from.IsZero() {
+		args = append(args, from)
+	}
+	for i, s := range sets {
+		q := "SELECT " + s.time + " AS t FROM " + s.rows
+		if !from.IsZero() {
+			q += fmt.Sprintf(" AND %s >= $%d::timestamptz", s.time, n+1)
+		}
+		parts[i] = "(" + q + " ORDER BY 1 LIMIT 1)"
+	}
+	var t *time.Time
+	if err := db.QueryRow(ctx, "SELECT min(t) FROM ("+strings.Join(parts, " UNION ALL ")+") f", args...).Scan(&t); err != nil {
+		return time.Time{}, fmt.Errorf("read: first record: %w", err)
+	}
+	if t == nil {
+		return time.Time{}, nil
+	}
+	return *t, nil
+}
+
+func runOnce[T any](ctx context.Context, db Querier, tenantID, userID uuid.UUID, l list, q normalized,
 	scan func(pgx.Rows) (T, time.Time, int64, error)) (Page[T], error) {
 	args := []any{tenantID, userID}
 	arg := func(v any) string {
@@ -204,7 +299,7 @@ func run[T any](ctx context.Context, db Querier, tenantID, userID uuid.UUID, l l
 		where = append(where, l.typeCol+" = "+arg(q.Type))
 	}
 	if l.where != nil {
-		where = append(where, l.where(arg)...)
+		where = append(where, l.where(arg, q)...)
 	}
 	if !q.Start.IsZero() {
 		where = append(where, l.timeCol+" >= "+bound(q.Start))
@@ -222,6 +317,9 @@ func run[T any](ctx context.Context, db Querier, tenantID, userID uuid.UUID, l l
 	sql := "SELECT " + l.cols + " FROM " + l.table + " r WHERE " + strings.Join(where, " AND ") +
 		" ORDER BY " + l.timeCol + ", id LIMIT " + arg(q.Limit+1)
 
+	if l.where != nil {
+		args = append([]any{customPlan}, args...)
+	}
 	rows, err := db.Query(ctx, sql, args...)
 	if err != nil {
 		return Page[T]{}, fmt.Errorf("read: %s: %w", l.table, err)
@@ -262,8 +360,12 @@ func mergeWhere(ctx context.Context, db Querier, tenantID, userID uuid.UUID, q n
 	if metric == "" {
 		metric = q.Type // "" for category samples of every type
 	}
-	l.where = func(arg func(any) string) []string {
-		return []string{"NOT " + f.covered(bindMerge(p, nil, arg), "r", metric)}
+	l.where = func(arg func(any) string, q normalized) []string {
+		since := q.Start
+		if q.paged && q.afterT.After(since) {
+			since = q.afterT
+		}
+		return []string{"NOT " + f.covered(bindMerge(p, nil, arg).window(since, q.End), "r", metric)}
 	}
 	return nil
 }
@@ -729,8 +831,10 @@ type CoverageDay struct {
 
 // Coverage is what the ETL has landed for a user and what it still has to do.
 type Coverage struct {
-	// PendingJobs counts ETL jobs not finished yet (pending or running). Zero
-	// means every accepted upload has been processed.
+	// PendingJobs counts the user's work not finished yet: ETL jobs and
+	// provider pulls (backfill, scheduled or notified) pending or running.
+	// Zero means every accepted upload and every queued pull has been
+	// processed.
 	PendingJobs int64 `json:"pending_jobs"`
 	// ParkedJobs counts ETL jobs that exhausted their attempts.
 	ParkedJobs int64 `json:"parked_jobs"`
@@ -752,8 +856,8 @@ type Coverage struct {
 var MaxCoverageDays = 10000
 
 // UserCoverage reports per provider per local day record counts (from
-// ohs_sync.pull_coverage), the user's unfinished ETL jobs and the lines the
-// ETL rejected.
+// ohs_sync.pull_coverage), the user's unfinished ETL jobs and pulls, and the
+// lines the ETL rejected.
 func UserCoverage(ctx context.Context, db Querier, tenantID, userID uuid.UUID, q CoverageQuery) (Coverage, error) {
 	if !q.Start.IsZero() && !q.End.IsZero() && q.Start.After(q.End) {
 		return Coverage{}, &QueryError{Msg: "start must not be after end"}
@@ -762,8 +866,13 @@ func UserCoverage(ctx context.Context, db Querier, tenantID, userID uuid.UUID, q
 		return Coverage{}, err
 	}
 	c := Coverage{Days: []CoverageDay{}}
+	// A pull lands its data through ETL jobs it queues when it ends, so a
+	// connection's backfill counts as pending until it is pulled. Parked pulls
+	// are not counted: a pull is parked when its connection is disconnected
+	// or needs reauthorization, which freshness reports.
 	if err := db.QueryRow(ctx, `SELECT
-			count(*) FILTER (WHERE status IN ('pending', 'running')),
+			count(*) FILTER (WHERE status IN ('pending', 'running')) + (SELECT count(*) FROM ohs_sync.pull_jobs p
+				WHERE p.tenant_id = $1 AND p.user_id = $2 AND p.status IN ('pending', 'running')),
 			count(*) FILTER (WHERE status = 'parked')
 		FROM ohs_sync.etl_jobs WHERE tenant_id = $1 AND user_id = $2`, tenantID, userID).
 		Scan(&c.PendingJobs, &c.ParkedJobs); err != nil {

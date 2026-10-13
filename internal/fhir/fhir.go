@@ -122,9 +122,11 @@ type Observation struct {
 	EffectivePeriod   *Period           `json:"effectivePeriod,omitempty"`
 	Issued            string            `json:"issued,omitempty"`
 	ValueQuantity     *Quantity         `json:"valueQuantity,omitempty"`
-	DataAbsentReason  *CodeableConcept  `json:"dataAbsentReason,omitempty"`
-	Device            *Reference        `json:"device,omitempty"`
-	Component         []Component       `json:"component,omitempty"`
+	// ValueCodeableConcept is the value of a classification.
+	ValueCodeableConcept *CodeableConcept `json:"valueCodeableConcept,omitempty"`
+	DataAbsentReason     *CodeableConcept `json:"dataAbsentReason,omitempty"`
+	Device               *Reference       `json:"device,omitempty"`
+	Component            []Component      `json:"component,omitempty"`
 }
 
 // ObservationID is the stable id of the Observation made from the quantity
@@ -190,6 +192,12 @@ func FromQuantitySample(user uuid.UUID, s read.CodedSample) Observation {
 		o.EffectiveDateTime = start
 	}
 
+	if c, ok := afibClasses[s.Value]; ok && s.Type == afibClassification {
+		// A classification is a code, not an amount.
+		o.ValueCodeableConcept = &CodeableConcept{Coding: []Coding{{System: AFibClassificationSystem, Code: c}}, Text: c}
+		o.Device = deviceRef(user, read.SampleDevice(s.Sample))
+		return o
+	}
 	switch v := s.Value; {
 	case math.IsNaN(v):
 		o.DataAbsentReason = absent("not-a-number", "Not a Number (NaN)")
@@ -219,6 +227,16 @@ func FromQuantitySample(user uuid.UUID, s read.CodedSample) Observation {
 	o.Device = deviceRef(user, read.SampleDevice(s.Sample))
 	return o
 }
+
+// afibClassification is the quantity type of an ECG's atrial fibrillation
+// classification (Withings), stored as 0 negative, 1 positive, 2
+// inconclusive. Its Observation carries the class as a code.
+const afibClassification = "ecg_afib_classification"
+
+// AFibClassificationSystem is the code system of those classes.
+const AFibClassificationSystem = Namespace + "/CodeSystem/ecg-afib-classification"
+
+var afibClasses = map[float64]string{0: "negative", 1: "positive", 2: "inconclusive"}
 
 // LOINCInterstitialGlucose is glucose measured in interstitial fluid, what a
 // continuous glucose monitor reads (the code the HL7 CGM implementation guide

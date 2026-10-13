@@ -1869,7 +1869,7 @@
           "name": "What has landed, per provider and day, and what is still processing",
           "request": {
             "method": "GET",
-            "description": "What has landed, per provider and day, and what is still processing.\n\n`GET /v1/users/{id}/coverage`\n\nRecord counts per provider per local day, and `pending_jobs`, the user's ETL jobs not\nfinished yet. After an upload, poll until `pending_jobs` is 0 to know every part has\nbeen processed; then `rejected_records` above 0 means some lines were not stored.\nNot paged: at most 10000 days are returned, the earliest, and\n`truncated` is true when more matched (narrow `start` and `end`). `start` and `end`\ncompare as dates.",
+            "description": "What has landed, per provider and day, and what is still processing.\n\n`GET /v1/users/{id}/coverage`\n\nRecord counts per provider per local day, and `pending_jobs`, the user's work not\nfinished yet: ETL jobs and provider pulls. After an upload or a provider connection,\npoll until `pending_jobs` is 0 to know every part and every queued pull has been\nprocessed; then `rejected_records` above 0 means some lines were not stored.\nNot paged: at most 10000 days are returned, the earliest, and\n`truncated` is true when more matched (narrow `start` and `end`). `start` and `end`\ncompare as dates.",
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/v1/users/:id/coverage",

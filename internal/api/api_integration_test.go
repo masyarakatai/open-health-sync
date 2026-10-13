@@ -609,6 +609,13 @@ func TestCoverage(t *testing.T) {
 	e.exec(`INSERT INTO ohs_sync.etl_jobs (tenant_id, user_id, provider, key, status) VALUES
 		($1, $2, 'apple_health', 'k1', 'pending'), ($1, $2, 'apple_health', 'k2', 'running'),
 		($1, $2, 'apple_health', 'k3', 'done'), ($1, $2, 'apple_health', 'k4', 'parked')`, e.tenantA, u)
+	// Provider pulls: a backfill chunk still queued and one running count as
+	// pending; done and parked pulls (a disconnected connection) do not.
+	e.exec(`INSERT INTO ohs_sync.pull_jobs (tenant_id, user_id, provider, from_time, to_time, status) VALUES
+		($1, $2, 'withings', '2026-02-01', '2026-02-08', 'pending'),
+		($1, $2, 'withings', '2026-02-08', '2026-02-15', 'running'),
+		($1, $2, 'withings', '2026-02-15', '2026-02-22', 'done'),
+		($1, $2, 'oura', '2026-02-01', '2026-02-08', 'parked')`, e.tenantA, u)
 	// Lines rejected by the ETL. A line counts once however many rows a
 	// replay left for it; recovered lines and another user's do not count;
 	// a job-level row (no line number) counts only for an object without
@@ -638,7 +645,7 @@ func TestCoverage(t *testing.T) {
 		} `json:"days"`
 	}
 	r.json(t, &c)
-	assert.Equal(t, 2, c.PendingJobs)
+	assert.Equal(t, 4, c.PendingJobs, "2 ETL jobs and 2 pulls")
 	assert.Equal(t, 1, c.ParkedJobs)
 	require.NotNil(t, c.RejectedRecords)
 	assert.Equal(t, 3, *c.RejectedRecords)

@@ -127,34 +127,50 @@ func (f ObservationFilter) Empty() bool {
 // device matches only an unknown one). When duplicates share that key, the
 // lowest id of each type pairs and the others stay single, so a sample is in
 // at most one pair and the pairing does not depend on the page.
-func bpMatch(a, b string) string {
+//
+// The pairing subqueries are correlated, so the planner cannot drop any chunk
+// of quantity_samples from them: for a user with a long history, planning
+// them costs far more than running them. A bound, when the caller has one,
+// repeats a's time bounds on the subquery's alias as constants; since the two
+// samples start at the same time it changes no result, and it lets the
+// planner keep only the chunks in range.
+type bound func(alias string) string
+
+func (bd bound) on(alias string) string {
+	if bd == nil {
+		return ""
+	}
+	return bd(alias)
+}
+
+func bpMatch(a, b string, bd bound) string {
 	return b + ".tenant_id = " + a + ".tenant_id AND " + b + ".user_id = " + a + ".user_id AND " +
 		b + ".provider = " + a + ".provider AND " + b + ".start_date = " + a + ".start_date AND " +
 		b + ".end_date IS NOT DISTINCT FROM " + a + ".end_date AND " +
 		b + ".source_slug IS NOT DISTINCT FROM " + a + ".source_slug AND " +
-		b + ".device_id IS NOT DISTINCT FROM " + a + ".device_id"
+		b + ".device_id IS NOT DISTINCT FROM " + a + ".device_id" + bd.on(b)
 }
 
 // firstOfKey: no sample of a's type and key has a lower id than a.
-func firstOfKey(a string) string {
+func firstOfKey(a string, bd bound) string {
 	return "NOT EXISTS (SELECT 1 FROM ohs_data.quantity_samples x WHERE x.quantity_type = " + a +
-		".quantity_type AND " + bpMatch(a, "x") + " AND x.id < " + a + ".id)"
+		".quantity_type AND " + bpMatch(a, "x", bd) + " AND x.id < " + a + ".id)"
 }
 
 // hasKey: a sample of type typ shares a's key.
-func hasKey(a, typ string) string {
+func hasKey(a, typ string, bd bound) string {
 	return "EXISTS (SELECT 1 FROM ohs_data.quantity_samples y WHERE y.quantity_type = '" + typ + "' AND " +
-		bpMatch(a, "y") + ")"
+		bpMatch(a, "y", bd) + ")"
 }
 
 // paired: a is the systolic sample of a pair.
-func paired(a string) string {
-	return "(" + a + ".quantity_type = '" + Systolic + "' AND " + firstOfKey(a) + " AND " + hasKey(a, Diastolic) + ")"
+func paired(a string, bd bound) string {
+	return "(" + a + ".quantity_type = '" + Systolic + "' AND " + firstOfKey(a, bd) + " AND " + hasKey(a, Diastolic, bd) + ")"
 }
 
 // absorbed: a is the diastolic sample of a pair.
-func absorbed(a string) string {
-	return "(" + a + ".quantity_type = '" + Diastolic + "' AND " + firstOfKey(a) + " AND " + hasKey(a, Systolic) + ")"
+func absorbed(a string, bd bound) string {
+	return "(" + a + ".quantity_type = '" + Diastolic + "' AND " + firstOfKey(a, bd) + " AND " + hasKey(a, Systolic, bd) + ")"
 }
 
 // qualified prefixes every column of a column list with alias.
@@ -169,14 +185,16 @@ func qualified(alias, cols string) string {
 // codedSelect reads CodedSamples (alias q), then the id of the diastolic
 // partner of a paired systolic sample, then whether the row is the diastolic
 // half of a pair.
-var codedSelect = qualified("q", sampleCols) + `,
+func codedSelect(bd bound) string {
+	return qualified("q", sampleCols) + `,
 	(SELECT c.loinc_code FROM ohs_data.quantity_codes c WHERE c.canonical_code = q.quantity_type),
 	(SELECT c.ucum_unit FROM ohs_data.quantity_codes c WHERE c.canonical_code = q.quantity_type),
 	(SELECT c.storage_unit FROM ohs_data.quantity_codes c WHERE c.canonical_code = q.quantity_type),
 	(SELECT d.id FROM ohs_data.quantity_samples d WHERE q.quantity_type = '` + Systolic + `'
-		AND d.quantity_type = '` + Diastolic + `' AND ` + bpMatch("q", "d") + ` AND ` + firstOfKey("q") + `
+		AND d.quantity_type = '` + Diastolic + `' AND ` + bpMatch("q", "d", bd) + ` AND ` + firstOfKey("q", bd) + `
 		ORDER BY d.id LIMIT 1),
-	` + absorbed("q")
+	` + absorbed("q", bd)
+}
 
 // The merged list is ordered by (time, kind, id); its cursor is the last
 // record's three.
@@ -232,7 +250,41 @@ type obsKey struct {
 // sample paired with a diastolic one comes with it as Partner, and the
 // diastolic one is not listed on its own, so a pair is never split across
 // pages.
+//
+// A page of the merged view with no end is read through windows (see
+// windowed).
 func Observations(ctx context.Context, db Querier, tenantID, userID uuid.UUID, q Query, f ObservationFilter) (Page[ObservationRecord], error) {
+	if !q.merged() || !q.End.IsZero() || f.Empty() {
+		return observations(ctx, db, tenantID, userID, q, f)
+	}
+	since := q.Start
+	if q.Cursor != "" {
+		t, _, _, err := decodeObsCursor(q.Cursor)
+		if err != nil {
+			return Page[ObservationRecord]{}, err
+		}
+		if t.After(since) {
+			since = t
+		}
+	}
+	mine := "tenant_id = $1 AND user_id = $2"
+	sets := []timed{
+		{"ohs_data.quantity_samples WHERE " + mine, "start_date"},
+		{"ohs_data.sleep_sessions WHERE " + mine, "bedtime_start"},
+		{"ohs_data.workouts WHERE " + mine, "start_date"},
+		{"ohs_data.daily_summaries WHERE " + mine, "(summary_date::timestamp AT TIME ZONE 'UTC')"},
+	}
+	first := func(from time.Time) (time.Time, error) {
+		return firstFrom(ctx, db, sets, []any{tenantID, userID}, from)
+	}
+	return windowed(since, first, func(end time.Time) (Page[ObservationRecord], error) {
+		wq := q
+		wq.End = end
+		return observations(ctx, db, tenantID, userID, wq, f)
+	})
+}
+
+func observations(ctx context.Context, db Querier, tenantID, userID uuid.UUID, q Query, f ObservationFilter) (Page[ObservationRecord], error) {
 	cursor := q.Cursor
 	q.Cursor = ""
 	n, err := q.normalize(false)
@@ -271,6 +323,11 @@ func Observations(ctx context.Context, db Querier, tenantID, userID uuid.UUID, q
 	var mp *mergeParams
 	if pol != nil {
 		mp = bindMerge(*pol, append(fusion.KnownMetrics(), f.Types...), arg)
+		since := n.Start
+		if after != nil && after.t.After(since) {
+			since = after.t
+		}
+		mp.window(since, n.End)
 	}
 	// mergedOut adds the merged view's condition for a branch.
 	mergedOut := func(where []string, cond func() string) []string {
@@ -299,14 +356,29 @@ func Observations(ctx context.Context, db Querier, tenantID, userID uuid.UUID, q
 			k, timeExpr, alias, from, alias, strings.Join(where, " AND "), limit))
 	}
 	if f.Quantities && (f.Types == nil || len(f.Types) > 0) {
-		where := []string{"NOT " + absorbed("q")}
+		// The pairing subqueries get the page's time bounds too (see bound).
+		var bounds []string
+		if !n.Start.IsZero() {
+			bounds = append(bounds, ".start_date >= "+arg(n.Start)+"::timestamptz")
+		}
+		if !n.End.IsZero() {
+			bounds = append(bounds, ".start_date < "+arg(n.End)+"::timestamptz")
+		}
+		if after != nil {
+			bounds = append(bounds, ".start_date >= "+arg(after.t)+"::timestamptz")
+		}
+		var bd bound
+		if len(bounds) > 0 {
+			bd = func(a string) string { return " AND " + a + strings.Join(bounds, " AND "+a) }
+		}
+		where := []string{"NOT " + absorbed("q", bd)}
 		switch {
 		case f.PanelsOnly:
-			where = append(where, paired("q"))
+			where = append(where, paired("q", bd))
 		case f.Types != nil:
 			cond := "q.quantity_type = ANY(" + arg(f.Types) + "::text[])"
 			if slices.Contains(f.Types, Diastolic) {
-				cond = "(" + cond + " OR " + paired("q") + ")"
+				cond = "(" + cond + " OR " + paired("q", bd) + ")"
 			}
 			where = append(where, cond)
 		}
@@ -328,6 +400,9 @@ func Observations(ctx context.Context, db Querier, tenantID, userID uuid.UUID, q
 			mergedOut(nil, func() string { return dailyOwnsAny(mp, "d") }))
 	}
 	sql := "SELECT kind, ts, id FROM (" + strings.Join(branches, " UNION ALL ") + ") k ORDER BY ts, kind, id LIMIT " + limit
+	if pol != nil {
+		args = append([]any{customPlan}, args...)
+	}
 	rows, err := db.Query(ctx, sql, args...)
 	if err != nil {
 		return Page[ObservationRecord]{}, fmt.Errorf("read: observations: %w", err)
@@ -395,18 +470,56 @@ func ObservationByID(ctx context.Context, db Querier, tenantID, userID uuid.UUID
 	return r, nil
 }
 
-// fetchRecords reads the records of keys (time ignored), by kind, keyed by
-// kind and id. The diastolic half of a pair is left out unless it is asked
-// for as a partner. With a policy, a daily summary's figures that a better
-// ranked row of the day holds read as null.
+// timeSpan bounds the time column of the rows a by-id read looks for, so
+// TimescaleDB reads only the chunks that can hold them instead of every
+// chunk of the user (each one decompressed when it is compressed). The zero
+// value bounds nothing.
+type timeSpan struct{ from, to time.Time }
+
+// add widens s to cover t. A zero t (a key read by id alone) leaves s as is.
+func (s timeSpan) add(t time.Time) timeSpan {
+	if t.IsZero() {
+		return s
+	}
+	if s.from.IsZero() || t.Before(s.from) {
+		s.from = t
+	}
+	if s.to.IsZero() || t.After(s.to) {
+		s.to = t
+	}
+	return s
+}
+
+// where is the condition on col for s, with its arguments numbered after n
+// arguments, or "" when s bounds nothing.
+func (s timeSpan) where(col string, n int, cast string) (string, []any) {
+	if s.from.IsZero() {
+		return "", nil
+	}
+	if cast == "date" {
+		// A day's key is its midnight UTC: pass the day itself, so the
+		// session time zone cannot move it.
+		return fmt.Sprintf(" AND %s BETWEEN $%d::date AND $%d::date", col, n+1, n+2),
+			[]any{s.from.UTC().Format(time.DateOnly), s.to.UTC().Format(time.DateOnly)}
+	}
+	return fmt.Sprintf(" AND %s BETWEEN $%d::%s AND $%d::%s", col, n+1, cast, n+2, cast), []any{s.from, s.to}
+}
+
+// fetchRecords reads the records of keys, by kind, keyed by kind and id. The
+// keys' times, when set, only narrow the chunks read. The diastolic half of
+// a pair is left out unless it is asked for as a partner. With a policy, a
+// daily summary's figures that a better ranked row of the day holds read as
+// null.
 func fetchRecords(ctx context.Context, db Querier, tenantID, userID uuid.UUID, keys []obsKey, pol *fusion.Policy) (map[obsKey]ObservationRecord, error) {
 	ids := map[Kind][]int64{}
+	spans := map[Kind]timeSpan{}
 	for _, k := range keys {
 		ids[k.kind] = append(ids[k.kind], k.id)
+		spans[k.kind] = spans[k.kind].add(k.t)
 	}
 	out := map[obsKey]ObservationRecord{}
 	if len(ids[KindQuantity]) > 0 {
-		samples, partners, err := fetchSamples(ctx, db, tenantID, userID, ids[KindQuantity], false)
+		samples, partners, err := fetchSamples(ctx, db, tenantID, userID, ids[KindQuantity], spans[KindQuantity], false)
 		if err != nil {
 			return nil, err
 		}
@@ -416,7 +529,8 @@ func fetchRecords(ctx context.Context, db Querier, tenantID, userID uuid.UUID, k
 		}
 		halves := map[int64]*CodedSample{}
 		if len(want) > 0 {
-			hs, _, err := fetchSamples(ctx, db, tenantID, userID, want, true)
+			// A diastolic half starts when its systolic sample does.
+			hs, _, err := fetchSamples(ctx, db, tenantID, userID, want, spans[KindQuantity], true)
 			if err != nil {
 				return nil, err
 			}
@@ -435,7 +549,7 @@ func fetchRecords(ctx context.Context, db Querier, tenantID, userID uuid.UUID, k
 		}
 	}
 	if len(ids[KindSleep]) > 0 {
-		err := fetchByIDs(ctx, db, "ohs_data.sleep_sessions", sleepCols, tenantID, userID, ids[KindSleep], func(r pgx.Rows) error {
+		err := fetchByIDs(ctx, db, "ohs_data.sleep_sessions", sleepCols, tenantID, userID, ids[KindSleep], spans[KindSleep], "bedtime_start", "timestamptz", func(r pgx.Rows) error {
 			var s SleepSession
 			if err := r.Scan(s.dest()...); err != nil {
 				return err
@@ -449,7 +563,7 @@ func fetchRecords(ctx context.Context, db Querier, tenantID, userID uuid.UUID, k
 		}
 	}
 	if len(ids[KindWorkout]) > 0 {
-		err := fetchByIDs(ctx, db, "ohs_data.workouts", workoutCols, tenantID, userID, ids[KindWorkout], func(r pgx.Rows) error {
+		err := fetchByIDs(ctx, db, "ohs_data.workouts", workoutCols, tenantID, userID, ids[KindWorkout], spans[KindWorkout], "start_date", "timestamptz", func(r pgx.Rows) error {
 			var w Workout
 			if err := r.Scan(w.dest()...); err != nil {
 				return err
@@ -472,9 +586,10 @@ func fetchRecords(ctx context.Context, db Querier, tenantID, userID uuid.UUID, k
 				args = append(args, v)
 				return "$" + strconv.Itoa(len(args))
 			})
+			mp.window(spans[KindDaily].from, spans[KindDaily].to)
 			cols, extra = dailyMaskedCols(mp, "r"), args[3:]
 		}
-		err := fetchByIDs(ctx, db, "ohs_data.daily_summaries", cols, tenantID, userID, ids[KindDaily], func(r pgx.Rows) error {
+		err := fetchByIDs(ctx, db, "ohs_data.daily_summaries", cols, tenantID, userID, ids[KindDaily], spans[KindDaily], "summary_date", "date", func(r pgx.Rows) error {
 			var d DailySummary
 			var day time.Time
 			if err := r.Scan(d.dest(&day)...); err != nil {
@@ -494,9 +609,15 @@ func fetchRecords(ctx context.Context, db Querier, tenantID, userID uuid.UUID, k
 // fetchSamples reads quantity samples by id with their catalog codes, and
 // the id of the diastolic partner of each paired systolic sample. Unless
 // halves, the diastolic half of a pair is left out.
-func fetchSamples(ctx context.Context, db Querier, tenantID, userID uuid.UUID, ids []int64, halves bool) ([]*CodedSample, map[int64]int64, error) {
-	rows, err := db.Query(ctx, `SELECT `+codedSelect+` FROM ohs_data.quantity_samples q
-		WHERE q.tenant_id = $1 AND q.user_id = $2 AND q.id = ANY($3::bigint[])`, tenantID, userID, ids)
+func fetchSamples(ctx context.Context, db Querier, tenantID, userID uuid.UUID, ids []int64, span timeSpan, halves bool) ([]*CodedSample, map[int64]int64, error) {
+	cond, extra := span.where("q.start_date", 3, "timestamptz")
+	var bd bound
+	if cond != "" {
+		bd = func(a string) string { return " AND " + a + ".start_date BETWEEN $4::timestamptz AND $5::timestamptz" }
+	}
+	rows, err := db.Query(ctx, `SELECT `+codedSelect(bd)+` FROM ohs_data.quantity_samples q
+		WHERE q.tenant_id = $1 AND q.user_id = $2 AND q.id = ANY($3::bigint[])`+cond,
+		append([]any{tenantID, userID, ids}, extra...)...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("read: quantity samples: %w", err)
 	}
@@ -525,10 +646,14 @@ func fetchSamples(ctx context.Context, db Querier, tenantID, userID uuid.UUID, i
 	return out, partners, nil
 }
 
-// fetchByIDs reads rows of table (alias r) by id; extra binds $4 onwards.
-func fetchByIDs(ctx context.Context, db Querier, table, cols string, tenantID, userID uuid.UUID, ids []int64, scan func(pgx.Rows) error, extra ...any) error {
+// fetchByIDs reads rows of table (alias r) by id, within span on timeCol
+// when it bounds anything; extra binds $4 onwards.
+func fetchByIDs(ctx context.Context, db Querier, table, cols string, tenantID, userID uuid.UUID, ids []int64,
+	span timeSpan, timeCol, cast string, scan func(pgx.Rows) error, extra ...any) error {
+	cond, bounds := span.where("r."+timeCol, 3+len(extra), cast)
+	args := append(append([]any{tenantID, userID, ids}, extra...), bounds...)
 	rows, err := db.Query(ctx, `SELECT `+cols+` FROM `+table+` r
-		WHERE r.tenant_id = $1 AND r.user_id = $2 AND r.id = ANY($3::bigint[])`, append([]any{tenantID, userID, ids}, extra...)...)
+		WHERE r.tenant_id = $1 AND r.user_id = $2 AND r.id = ANY($3::bigint[])`+cond, args...)
 	if err != nil {
 		return fmt.Errorf("read: %s: %w", table, err)
 	}

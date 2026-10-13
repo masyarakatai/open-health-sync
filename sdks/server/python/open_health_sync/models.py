@@ -733,7 +733,9 @@ class MenstrualCycle(TypedDict):
 
 
 class Coverage(TypedDict):
-    # ETL jobs of the user not finished yet (pending or running).
+    # Work of the user not finished yet: ETL jobs and provider pulls (backfill,
+    # scheduled or notified), pending or running. A pull that keeps failing stays
+    # pending while it retries; `GET /v1/users/{id}/freshness` says why.
     pending_jobs: int
     # ETL jobs that exhausted their retries (an operator must look).
     parked_jobs: int
@@ -1170,6 +1172,8 @@ class FHIRObservation(_FHIRObservationRequired, total=False):
     # When the record was ingested (the later of a panel's two samples).
     issued: str
     valueQuantity: FHIRQuantity
+    # Instead of valueQuantity for a classification (ecg_afib_classification).
+    valueCodeableConcept: FHIRObservationValueCodeableConcept
     dataAbsentReason: FHIRCodeableConcept
     device: FHIRReference
     # The two values of a blood pressure panel, or a sleep session's, workout's or daily
@@ -1193,6 +1197,13 @@ class FHIRObservationIdentifier(TypedDict, total=False):
 class FHIRObservationEffectivePeriod(TypedDict, total=False):
     start: str
     end: str
+
+
+class FHIRObservationValueCodeableConcept(TypedDict, total=False):
+    """Instead of valueQuantity for a classification (ecg_afib_classification)."""
+
+    coding: List[FHIRCoding]
+    text: str
 
 
 class _FHIRObservationComponentRequired(TypedDict):
@@ -1424,6 +1435,7 @@ __all__ = [
     "FHIRObservationEffectivePeriod",
     "FHIRObservationIdentifier",
     "FHIRObservationMeta",
+    "FHIRObservationValueCodeableConcept",
     "FHIRPatient",
     "FHIRProvenance",
     "FHIRProvenanceAgent",

@@ -39,6 +39,14 @@ func ParseView(v string) (View, error) {
 	return "", &QueryError{Msg: "view must be merged or all"}
 }
 
+// customPlan, passed first among a query's arguments, has Postgres plan
+// the statement for its parameters at every run. A merged read needs it:
+// once a prepared statement turns generic, its window bounds are unknown to
+// the planner, which then scans whole chunks for each lookup of a better
+// ranked record instead of reading an index range (a page of 1,000 recent
+// samples went from 0.2 s to 1.3 s).
+const customPlan = pgx.QueryExecModeExec
+
 // merged reports whether q reads the merged view.
 func (q Query) merged() bool { return q.View != ViewAll }
 
@@ -52,6 +60,70 @@ type mergeParams struct {
 	arg     func(any) string
 	orders  map[string]string
 	lists   map[string]string
+	// since and until, when set, bound the start of the records the
+	// statement ranks: at or after since, before until. The lookups of a
+	// better ranked record then carry constant bounds, so TimescaleDB plans
+	// only the chunks near the page instead of every chunk of the user.
+	since, until time.Time
+	bounds       map[string]string
+}
+
+// window bounds the records of the statement to start in [since, until);
+// a zero time bounds nothing on that side.
+func (mp *mergeParams) window(since, until time.Time) *mergeParams {
+	mp.since, mp.until = since, until
+	return mp
+}
+
+// reach is the largest tolerance and span of metric's rule, or of the rule
+// of any metric of the statement when metric is "".
+func (mp *mergeParams) reach(metric string) time.Duration {
+	if metric != "" {
+		r := fusion.RuleFor(metric)
+		return r.Tolerance + r.MaxSpan
+	}
+	r := fusion.RuleFor("")
+	most := r.Tolerance + r.MaxSpan
+	for _, m := range mp.metrics {
+		r := fusion.RuleFor(m)
+		most = max(most, r.Tolerance+r.MaxSpan)
+	}
+	return most
+}
+
+// near is the condition that col, the start of a record that can match one
+// starting in the window, lies within reach of the window: a match starts at
+// most span + tolerance before the record, and, a record lasting at most
+// span, at most span + tolerance after its start. cast types the bounds.
+func (mp *mergeParams) near(col, metric, cast string) string {
+	var out string
+	reach := mp.reach(metric)
+	if !mp.since.IsZero() {
+		out += " AND " + col + " >= " + mp.at(mp.since.Add(-reach), cast)
+	}
+	if !mp.until.IsZero() {
+		out += " AND " + col + " <= " + mp.at(mp.until.Add(reach), cast)
+	}
+	return out
+}
+
+// at binds t as a constant of type cast, once per value; a date is t's UTC
+// day.
+func (mp *mergeParams) at(t time.Time, cast string) string {
+	var v any = t
+	if cast == "date" {
+		v = t.UTC().Format(time.DateOnly)
+	}
+	k := fmt.Sprint(v) + "::" + cast
+	if ref, ok := mp.bounds[k]; ok {
+		return ref
+	}
+	if mp.bounds == nil {
+		mp.bounds = map[string]string{}
+	}
+	ref := mp.arg(v) + "::" + cast
+	mp.bounds[k] = ref
+	return ref
 }
 
 // order is the SQL text[] of metric's order of sources.
@@ -268,6 +340,7 @@ func (f family) covered(mp *mergeParams, a, metric string) string {
 		b + ".tenant_id = " + a + ".tenant_id AND " + b + ".user_id = " + a + ".user_id AND " + f.same(a, b) +
 		// The two bounds on b's start are the index range.
 		" AND " + bS + " >= " + aS + " - " + span + " - " + tol + " AND " + bS + " <= " + aE + " + " + tol +
+		mp.near(bS, metric, "timestamptz") +
 		" AND " + bE + " >= " + aS + " - " + tol +
 		// With no tolerance, two intervals that only touch (9:00-9:10 and
 		// 9:10-9:20) do not match; two points at one time do.
@@ -313,7 +386,20 @@ func dailyOwned(mp *mergeParams, d, col, metric string) string {
 	return d + "." + col + " IS NOT NULL AND NOT EXISTS (SELECT 1 FROM ohs_data.daily_summaries " + b +
 		" WHERE " + b + ".tenant_id = " + d + ".tenant_id AND " + b + ".user_id = " + d + ".user_id AND " +
 		b + ".summary_date = " + d + ".summary_date AND " + b + "." + col + " IS NOT NULL AND " +
-		dailyRank(mp, b, metric) + " < " + dailyRank(mp, d, metric) + ")"
+		dailyRank(mp, b, metric) + " < " + dailyRank(mp, d, metric) + mp.sameDay(b+".summary_date") + ")"
+}
+
+// sameDay bounds col, the day of a summary of the same day as one in the
+// window, to the window's days.
+func (mp *mergeParams) sameDay(col string) string {
+	var out string
+	if !mp.since.IsZero() {
+		out += " AND " + col + " >= " + mp.at(mp.since, "date")
+	}
+	if !mp.until.IsZero() {
+		out += " AND " + col + " <= " + mp.at(mp.until, "date")
+	}
+	return out
 }
 
 // dailyOwnsAny is true when daily row d holds at least one figure it owns.

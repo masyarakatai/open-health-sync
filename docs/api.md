@@ -308,10 +308,13 @@ rules (local days, gaps inside a period, the read limit) are in
 ### Knowing when an upload is processed
 
 Processing is asynchronous. `GET /v1/users/{id}/coverage` returns record counts per provider and
-local day, `pending_jobs` (work not finished yet) and `parked_jobs` (work that exhausted its
-retries and needs an operator). After an upload, poll until `pending_jobs` is 0. A server that
-would rather not poll can subscribe to the `data.written` [webhook](webhooks.md). Coverage is not
-paged: at most 10000 days, the earliest, with `truncated: true` when more matched.
+local day, `pending_jobs` (work not finished yet: ETL jobs, and provider pulls queued or
+running) and `parked_jobs` (ETL work that exhausted its retries and needs an operator). After an
+upload, or after a user connects a provider (the backfill), poll until `pending_jobs` is 0. A
+pull that keeps failing stays pending while it retries: `GET /v1/users/{id}/freshness` gives
+its `last_error`. A server that would rather not poll can subscribe to the `data.written`
+[webhook](webhooks.md). Coverage is not paged: at most 10000 days, the earliest, with
+`truncated: true` when more matched.
 
 A finished job can still have dropped some lines: a value out of range, a missing `startDate`,
 a unit that does not convert. `rejected_records` counts the user's lines in that state (all

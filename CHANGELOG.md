@@ -17,6 +17,8 @@ release may change the API, the configuration or the database schema.
   compared in constant time and never logged, creation recorded in the audit log. The console's
   sign-in screen links to the page while it is needed; the console itself stays read only.
   Unset, the routes are not mounted. See [docs/setup.md](docs/setup.md).
+- A reproducible ingestion benchmark against Open Wearables: `bench/openwearables/` and
+  [the method and results](docs/benchmarks/open-wearables.md).
 - MCP prompts: the prompt library is now served by the MCP server (`prompts/list`,
   `prompts/get`). Twelve ready-made questions about a person's own training, sleep and recovery
   (morning check, taper check, after a break, a new habit, two devices side by side...), each
@@ -41,9 +43,50 @@ release may change the API, the configuration or the database schema.
   runs, and prints how many it rewrote, found current or could not open (left as they are).
   `ohs doctor` counts the secrets still under a previous or unknown key and says when the
   previous keys can go. See [docs/key-rotation.md](docs/key-rotation.md).
+- Signed releases: the release workflow signs the image by digest and the binaries'
+  `checksums.txt` (bundle `checksums.txt.sigstore.json` on the release) with Sigstore cosign,
+  keyless, using the workflow's GitHub OIDC identity. Verification commands are in
+  [SECURITY.md](SECURITY.md#verifying-releases).
+- Docs: [security model](docs/security-model.md) (assets, trust boundaries, mitigations with
+  their code, residual risks) and a [hardening checklist](docs/hardening.md) for production.
+
+### Changed
+
+- Merged view reads are faster on a long history: a merged page's lookups of a better ranked
+  record are bounded by the page's dates, a page with no end is read through growing windows
+  (2, 16, 128 days), and these statements are planned for their parameters at every run (a
+  generic plan scanned whole chunks for each record). On a user with 400 days of data, a
+  FHIR page of 1,000 over a recent week went from 5.5 s to 0.35 s, a one-day page from
+  0.74 s to 0.06 to 0.15 s, and `/samples` of 1,000 heart rates from 1.2 s to 0.17 to 0.5 s.
+  Pages over compressed history still cost about 2 ms per record.
+- FHIR Observation pages read back their records within the page's time range, and the blood
+  pressure pairing subqueries carry that range too, so TimescaleDB plans only the chunks the
+  page lies in instead of every chunk of the user's history. On a user with 400 days of
+  samples (58 chunks, compressed), a page of 1,000 went from 260 ms to 75 ms (median), and
+  the full export of 125,200 Observations from 47 s to 24 s.
+- FHIR: an ECG's atrial fibrillation classification (`ecg_afib_classification`, Withings) is
+  served as `valueCodeableConcept` (`negative`, `positive`, `inconclusive`) instead of a
+  quantity in the unit "classification".
+- WHOOP energy (`total_kcal` of a cycle, a workout's `active_energy_kcal`) is rounded to a
+  tenth of a kcal instead of carrying the conversion's dozen digits.
+- `pending_jobs` in `GET /v1/users/{id}/coverage` (and the MCP `get_coverage`) also counts the
+  provider pulls not done yet. Before, it read 0 right after a provider connection while the
+  backfill had not run, so a client waiting on it concluded too early.
+- The FHIR Observation search answers 400 for a parameter it does not support instead of
+  ignoring it: `date` and `_count` used to return the whole list unfiltered. The message names
+  `start`/`end` and `limit`. `_format` asking for JSON is accepted.
+- `ohs import apple-health` prints its first progress line two seconds in (a short import
+  prints only the summary), and the summary splits parts into `stored now` and
+  `already stored` instead of `uploaded`, which counted both.
+
 
 ### Fixed
 
+- Disconnecting or deleting a user now revokes the Oura access token (`GET /oauth/revoke`),
+  like WHOOP, Strava and Polar.
+- A provider deletion notice (Oura, WHOOP, Strava) now updates the connection's
+  `last_event_at`, so `push_healthy` no longer reads false for a connection whose only recent
+  notifications were deletions.
 - MCP `get_coverage` without `start` reports the last 30 days. On years of Apple Health history
   it answered with over a megabyte of JSON, more than an agent can read.
 

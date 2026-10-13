@@ -87,6 +87,9 @@ health (see [sync history and connection health](sync-health.md)).
 - `state` is `fresh`; `stale` when behind by more than two pull intervals plus an hour (or
   no upload for 26 hours for a device source); `failing` after 3 failed pulls in a row (see
   `last_error`); `syncing` until the first pull finishes; `needs_reauth`; `disconnected`.
+- `last_event_at` is the last provider notification accepted for the connection, a deletion
+  notice included. `push_healthy` is true while notifications arrive within 24 hours: the
+  regular pull is then only a backstop.
 
 Each connection also has a `health` object that says whether it syncs and what fixes it, the
 history of its pulls is at `GET /v1/users/{id}/sync-runs`, and a pull can be started on demand: see
