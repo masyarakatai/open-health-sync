@@ -4,8 +4,10 @@
 // page, one JavaScript module and one stylesheet, embedded in the binary. The
 // page holds no server-side state and has no auth of its own: it asks for a
 // tenant API key, keeps it in the tab's sessionStorage and calls the existing
-// read routes of the API (GET only) on the same origin. It is mounted only
-// when OHS_CONSOLE=true.
+// read routes of the API (GET only) on the same origin. Beside it,
+// /console/setup is the separate first-run page: it posts the setup token to
+// POST /v1/setup and shows the first tenant's API key once. Both are mounted
+// only when OHS_CONSOLE=true.
 package console
 
 import (
@@ -13,7 +15,7 @@ import (
 	"net/http"
 )
 
-//go:embed static/index.html static/app.mjs static/console.css
+//go:embed static/index.html static/app.mjs static/console.css static/setup.html static/setup.mjs
 var static embed.FS
 
 // CSP is the Content-Security-Policy of every console response: no inline
@@ -31,6 +33,8 @@ var assets = map[string]asset{
 	"":            {"static/index.html", "text/html; charset=utf-8", "no-store"},
 	"app.mjs":     {"static/app.mjs", "text/javascript; charset=utf-8", "no-cache"},
 	"console.css": {"static/console.css", "text/css; charset=utf-8", "no-cache"},
+	"setup":       {"static/setup.html", "text/html; charset=utf-8", "no-store"},
+	"setup.mjs":   {"static/setup.mjs", "text/javascript; charset=utf-8", "no-cache"},
 }
 
 // Mount registers GET /console and GET /console/{asset} on mux (HEAD

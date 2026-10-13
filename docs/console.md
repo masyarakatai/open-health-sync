@@ -16,8 +16,14 @@ OHS_CONSOLE=true
 ```
 
 Then open `https://your-host/console` and paste a tenant API key (`ohs_sk_...`, from
-`ohs admin tenant create`, `ohs admin key create` or the bootstrap tenant). With `OHS_CONSOLE`
+`ohs admin tenant create`, `ohs admin key create`, the bootstrap tenant or the
+[first-run setup](setup.md)). With `OHS_CONSOLE`
 unset or `false` the route is not mounted and `/console` answers 404.
+
+No key yet and no terminal? With `OHS_SETUP_TOKEN` set, the sign-in screen of an instance that
+has no tenant links to `/console/setup`, a separate page that creates the first tenant and shows
+its key once; see [setup.md](setup.md). It is the only page under `/console` that writes, and it
+writes nothing once a tenant exists.
 
 The console sees what that key sees: one tenant. To look at another tenant, sign out and use its
 key.
@@ -61,7 +67,8 @@ attempt. Parked deliveries are red. Retrying a delivery or changing an endpoint 
   URL that is not a path on the same server. The routes it reads are `GET /v1/providers`,
   `/v1/users`, `/v1/users/{id}`, `/v1/users/{id}/connections`, `/v1/users/{id}/freshness`,
   `/v1/users/{id}/coverage`, `/v1/webhooks`, `/v1/webhooks/{id}`,
-  `/v1/webhooks/{id}/deliveries`, `/healthz` and `/readyz`. The console shows no health values:
+  `/v1/webhooks/{id}/deliveries`, `/healthz`, `/readyz` and, without the key, `/v1/setup` (to
+  show the first-run link). The console shows no health values:
   coverage counts records, it does not read them.
 - **Same origin, strict headers.** The page, its one script and its one stylesheet are embedded
   in the binary; nothing loads from a CDN. Every console response carries

@@ -2933,6 +2933,62 @@
       "name": "ops",
       "item": [
         {
+          "name": "Whether the first-run setup is open (only when OHS_SETUP_TOKEN is set)",
+          "request": {
+            "method": "GET",
+            "description": "Whether the first-run setup is open (only when OHS_SETUP_TOKEN is set).\n\n`GET /v1/setup`\n\nPublic, no credential. `needed` is true while `OHS_SETUP_TOKEN` is set and the\ninstance has no tenant. With no `OHS_SETUP_TOKEN` the route is not mounted (404).\nSee docs/setup.md.",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/setup",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "setup"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create the first tenant and its API key with the setup token",
+          "request": {
+            "method": "POST",
+            "description": "Create the first tenant and its API key with the setup token.\n\n`POST /v1/setup`\n\nThe first run without a terminal: the body carries `OHS_SETUP_TOKEN` (compared in\nconstant time) instead of a bearer credential. It works once: while the instance\nhas no tenant, it creates one with its first API key and returns the key, shown only\nthis once. Any tenant existing, however it was created, closes it for good (409).\nThe body is at most 4 KiB. The creation is recorded in the new tenant's audit log\n(`tenant.create`, actor `system` / `setup`). With no `OHS_SETUP_TOKEN` the route is\nnot mounted (404). See docs/setup.md.",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/setup",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "setup"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"setup_token\": \"example\",\n  \"tenant_name\": \"example\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
           "name": "Liveness",
           "request": {
             "method": "GET",

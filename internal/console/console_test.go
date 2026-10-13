@@ -115,19 +115,21 @@ func TestOnlyGetIsServed(t *testing.T) {
 // The page carries no inline script, style or event handler (the CSP would
 // block them anyway) and loads nothing from another origin.
 func TestPageHasNoInlineCode(t *testing.T) {
-	page, err := static.ReadFile("static/index.html")
-	if err != nil {
-		t.Fatal(err)
-	}
-	html := string(page)
-	if regexp.MustCompile(`<script(?:\s[^>]*)?>\s*[^<\s]`).MatchString(html) {
-		t.Error("index.html has an inline script")
-	}
-	if regexp.MustCompile(`(?i)<style|\sstyle=|\son[a-z]+=`).MatchString(html) {
-		t.Error("index.html has inline style or an event handler attribute")
-	}
-	if regexp.MustCompile(`(?i)(src|href)="(https?:)?//`).MatchString(html) {
-		t.Error("index.html loads from another origin")
+	for _, name := range []string{"index.html", "setup.html"} {
+		page, err := static.ReadFile("static/" + name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		html := string(page)
+		if regexp.MustCompile(`<script(?:\s[^>]*)?>\s*[^<\s]`).MatchString(html) {
+			t.Errorf("%s has an inline script", name)
+		}
+		if regexp.MustCompile(`(?i)<style|\sstyle=|\son[a-z]+=`).MatchString(html) {
+			t.Errorf("%s has inline style or an event handler attribute", name)
+		}
+		if regexp.MustCompile(`(?i)(src|href)="(https?:)?//`).MatchString(html) {
+			t.Errorf("%s loads from another origin", name)
+		}
 	}
 }
 
@@ -151,6 +153,57 @@ func TestScriptAvoidsUnsafeSinks(t *testing.T) {
 	for _, m := range []string{`"POST"`, `"PUT"`, `"PATCH"`, `"DELETE"`} {
 		if strings.Contains(src, m) {
 			t.Errorf("app.mjs mentions method %s", m)
+		}
+	}
+}
+
+func TestSetupPageServed(t *testing.T) {
+	rec := serveConsole(t, "GET", "/console/setup")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("/console/setup: %d", rec.Code)
+	}
+	assertSecurityHeaders(t, rec)
+	if got := rec.Header().Get("Content-Type"); got != "text/html; charset=utf-8" {
+		t.Errorf("Content-Type %q", got)
+	}
+	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+		t.Errorf("Cache-Control %q", got)
+	}
+	if !strings.Contains(rec.Body.String(), `src="/console/setup.mjs"`) {
+		t.Error("setup page lacks its script")
+	}
+	rec = serveConsole(t, "GET", "/console/setup.mjs")
+	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "text/javascript; charset=utf-8" {
+		t.Fatalf("/console/setup.mjs: %d %q", rec.Code, rec.Header().Get("Content-Type"))
+	}
+	assertSecurityHeaders(t, rec)
+	if rec := serveConsole(t, "POST", "/console/setup"); rec.Code != http.StatusMethodNotAllowed {
+		t.Errorf("POST /console/setup: %d", rec.Code)
+	}
+}
+
+// The setup script shows the key with textContent only and makes one kind
+// of request: to /v1/setup on this origin, without cookies.
+func TestSetupScriptAvoidsUnsafeSinks(t *testing.T) {
+	js, err := static.ReadFile("static/setup.mjs")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(js)
+	for _, bad := range []string{"innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", "eval(", "new Function", "localStorage", "XMLHttpRequest", "console.log"} {
+		if strings.Contains(src, bad) {
+			t.Errorf("setup.mjs uses %s", bad)
+		}
+	}
+	if n := strings.Count(src, "fetch("); n != 1 {
+		t.Errorf("setup.mjs calls fetch %d times; every request goes through makeSetupClient", n)
+	}
+	if !strings.Contains(src, `SETUP_PATH = "/v1/setup"`) || !strings.Contains(src, `credentials: "omit"`) || !strings.Contains(src, `redirect: "error"`) {
+		t.Error("setup.mjs does not pin its path, cookies and redirects")
+	}
+	for _, m := range []string{`"PUT"`, `"PATCH"`, `"DELETE"`} {
+		if strings.Contains(src, m) {
+			t.Errorf("setup.mjs mentions method %s", m)
 		}
 	}
 }

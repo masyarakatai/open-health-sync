@@ -5,6 +5,24 @@
 // The types of the Open Health Sync API 1.0.0: one per schema of components/schemas,
 // and one per object a schema or an operation writes in place.
 
+export interface SetupStatus {
+  /** True while the instance has no tenant and POST /v1/setup can create one. */
+  needed: boolean;
+}
+
+export interface SetupRequest {
+  /** The instance's `OHS_SETUP_TOKEN`. */
+  setup_token: string;
+  /** Name of the tenant; surrounding spaces are trimmed. Empty or absent means `default`. No control character. */
+  tenant_name?: string;
+}
+
+export interface SetupResult {
+  tenant_id: string;
+  /** The tenant API key (`ohs_sk_...`), shown only this once. */
+  api_key: string;
+}
+
 /** RFC 9457 problem details. */
 export interface Problem {
   type: string;

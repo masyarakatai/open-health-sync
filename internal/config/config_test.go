@@ -343,6 +343,30 @@ func TestLoadMetricsToken(t *testing.T) {
 	}
 }
 
+func TestLoadSetupToken(t *testing.T) {
+	c, err := load(t, base())
+	if err != nil || c.SetupToken != "" {
+		t.Fatalf("default: %q %v", c.SetupToken, err)
+	}
+	m := base()
+	m["OHS_SETUP_TOKEN"] = "fifteen-chars.."
+	_, err = load(t, m)
+	if err == nil || !strings.Contains(err.Error(), "OHS_SETUP_TOKEN") {
+		t.Fatalf("short token: %v", err)
+	}
+	if strings.Contains(err.Error(), m["OHS_SETUP_TOKEN"]) {
+		t.Fatalf("the error repeats the secret: %v", err)
+	}
+	m["OHS_SETUP_TOKEN"] = "0123456789abcdef"
+	c, err = load(t, m)
+	if err != nil || c.SetupToken != "0123456789abcdef" {
+		t.Fatalf("token: %q %v", c.SetupToken, err)
+	}
+	if len(c.Providers) != 0 {
+		t.Fatalf("OHS_SETUP_TOKEN read as a provider setting: %v", c.Providers)
+	}
+}
+
 func TestLoadRateLimits(t *testing.T) {
 	c, err := load(t, base())
 	if err != nil {

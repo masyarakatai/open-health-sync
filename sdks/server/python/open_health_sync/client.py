@@ -74,6 +74,9 @@ from .models import (
     SamplePage,
     SampleStats,
     SetConsentRequest,
+    SetupRequest,
+    SetupResult,
+    SetupStatus,
     SleepPhase,
     SleepPhasePage,
     SleepSession,
@@ -2241,6 +2244,39 @@ class OpenHealthSync:
                 cursor=cursor,
                 limit=limit,
             )
+        )
+
+    def get_setup(self) -> SetupStatus:
+        """Whether the first-run setup is open (only when OHS_SETUP_TOKEN is set).
+
+        ``GET /v1/setup``
+
+        Public, no credential. `needed` is true while `OHS_SETUP_TOKEN` is set and the
+        instance has no tenant. With no `OHS_SETUP_TOKEN` the route is not mounted (404).
+        See docs/setup.md.
+        """
+        return self._request(
+            "GET",
+            "/v1/setup",
+        )
+
+    def run_setup(self, body: SetupRequest) -> SetupResult:
+        """Create the first tenant and its API key with the setup token.
+
+        ``POST /v1/setup``
+
+        The first run without a terminal: the body carries `OHS_SETUP_TOKEN` (compared in
+        constant time) instead of a bearer credential. It works once: while the instance
+        has no tenant, it creates one with its first API key and returns the key, shown only
+        this once. Any tenant existing, however it was created, closes it for good (409).
+        The body is at most 4 KiB. The creation is recorded in the new tenant's audit log
+        (`tenant.create`, actor `system` / `setup`). With no `OHS_SETUP_TOKEN` the route is
+        not mounted (404). See docs/setup.md.
+        """
+        return self._request(
+            "POST",
+            "/v1/setup",
+            json_body=body,
         )
 
     def healthz(self) -> HealthzResponse:

@@ -1,0 +1,57 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Set up Open Health Sync</title>
+<link rel="stylesheet" href="/console/console.css">
+<script type="module" src="/console/setup.mjs"></script>
+</head>
+<body>
+<header class="bar">
+  <span class="brand">Open Health Sync setup</span>
+</header>
+<main id="main">
+  <section id="setup">
+    <h1>Set up this instance</h1>
+    <p id="setup-loading" class="muted">Checking this instance...</p>
+
+    <div id="setup-done" hidden>
+      <p>This instance is already set up.</p>
+      <p><a href="/console">Open the console</a></p>
+    </div>
+
+    <div id="setup-off" hidden>
+      <p>The first-run setup is off on this instance: <code>OHS_SETUP_TOKEN</code> is not set.
+      Create a tenant with <code>ohs admin tenant create</code>, or set the token and restart.</p>
+      <p><a href="/console">Open the console</a></p>
+    </div>
+
+    <form id="setup-form" autocomplete="off" hidden>
+      <p>This instance has no tenant yet. Enter its setup token (<code>OHS_SETUP_TOKEN</code>; on an
+      app store it is the app's password) to create the first tenant and its API key. This works
+      once.</p>
+      <label for="setup-token">Setup token</label>
+      <input id="setup-token" name="setup-token" type="password" autocomplete="off" spellcheck="false" required>
+      <label for="tenant-name">Tenant name (optional)</label>
+      <input id="tenant-name" name="tenant-name" type="text" autocomplete="off" spellcheck="false" maxlength="100" placeholder="default">
+      <button id="setup-submit" type="submit">Create the tenant</button>
+    </form>
+
+    <p id="setup-error" class="bad" role="alert"></p>
+
+    <div id="setup-result" hidden>
+      <p class="warn"><strong>Store this API key now: it will not be shown again.</strong></p>
+      <p>Tenant <code id="result-tenant"></code></p>
+      <p class="key-line"><code id="result-key"></code></p>
+      <p><button id="copy-key" type="button">Copy the key</button> <span id="copy-status" class="muted" role="status"></span></p>
+      <p>This tab is signed in to the console with it until the tab closes.</p>
+      <p><a href="/console">Open the console</a></p>
+    </div>
+  </section>
+</main>
+<noscript><p>The setup page needs JavaScript.</p></noscript>
+</body>
+</html>

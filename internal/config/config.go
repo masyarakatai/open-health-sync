@@ -36,6 +36,11 @@ type Config struct {
 	// /metrics presents. MetricsListen (OHS_METRICS_LISTEN) serves /metrics
 	// on an address of its own instead of the API listener.
 	MetricsToken, MetricsListen string
+	// SetupToken (OHS_SETUP_TOKEN) opens the browser first run: POST
+	// /v1/setup creates the first tenant and its API key for whoever
+	// presents it, once, while the instance has no tenant. Empty (the
+	// default) leaves the setup routes out. A secret: never logged.
+	SetupToken string
 	// RetentionDays prunes raw files and normalized data older than this
 	// many days; 0 keeps everything.
 	RetentionDays int
@@ -122,6 +127,9 @@ type RateLimit struct {
 // MinMetricsToken is the shortest OHS_METRICS_TOKEN accepted.
 const MinMetricsToken = 16
 
+// MinSetupToken is the shortest OHS_SETUP_TOKEN accepted.
+const MinSetupToken = 16
+
 // DefaultAuditRetentionDays is OHS_AUDIT_RETENTION_DAYS when unset: a year
 // of audit events.
 const DefaultAuditRetentionDays = 365
@@ -153,6 +161,7 @@ var reserved = map[string]bool{
 	"CONSOLE":                     true,
 	"METRICS_TOKEN":               true,
 	"METRICS_LISTEN":              true,
+	"SETUP_TOKEN":                 true,
 	"RETENTION_DAYS":              true,
 	"AUDIT_RETENTION_DAYS":        true,
 	"INGEST_CONCURRENCY":          true,
@@ -283,6 +292,11 @@ func Load(env func(string) (string, bool), environ []string) (Config, error) {
 	c.MetricsListen = get("OHS_METRICS_LISTEN", "")
 	if c.MetricsListen != "" && c.MetricsListen == c.Listen {
 		return Config{}, fmt.Errorf("OHS_METRICS_LISTEN %q must differ from OHS_LISTEN", c.MetricsListen)
+	}
+
+	c.SetupToken = get("OHS_SETUP_TOKEN", "")
+	if c.SetupToken != "" && len(c.SetupToken) < MinSetupToken {
+		return Config{}, fmt.Errorf("OHS_SETUP_TOKEN must be at least %d characters (generate one with `openssl rand -hex 32`)", MinSetupToken)
 	}
 
 	if v := get("OHS_CONSOLE", ""); v != "" {

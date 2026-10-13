@@ -18,6 +18,14 @@ release may change the API, the configuration or the database schema.
   of daily heart rate takes 31 ms instead of 443 ms from the samples. Builds without
   continuous aggregates, and zones with a half-hour offset, get the same answer from the
   samples.
+- First-run setup in the browser, for installs with no terminal (Umbrel, CasaOS and other app
+  stores). With `OHS_SETUP_TOKEN` (16 characters or more) and `OHS_CONSOLE=true`, the page
+  `/console/setup` creates the first tenant and shows its API key once, for whoever types the
+  token. `GET /v1/setup` tells whether the instance still needs it, and `POST /v1/setup` does it:
+  one shot, atomic under concurrent calls, closed for good (409) once any tenant exists, token
+  compared in constant time and never logged, creation recorded in the audit log. The console's
+  sign-in screen links to the page while it is needed; the console itself stays read only.
+  Unset, the routes are not mounted. See [docs/setup.md](docs/setup.md).
 - A reproducible ingestion benchmark against Open Wearables: `bench/openwearables/` and
   [the method and results](docs/benchmarks/open-wearables.md).
 - MCP prompts: the prompt library is now served by the MCP server (`prompts/list`,

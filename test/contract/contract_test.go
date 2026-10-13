@@ -92,6 +92,9 @@ func freeAddr(t *testing.T) string {
 // contractMetricsToken is the OHS_METRICS_TOKEN of the contract server.
 const contractMetricsToken = "contract-metrics-token"
 
+// contractSetupToken is the OHS_SETUP_TOKEN of the contract server.
+const contractSetupToken = "contract-setup-token"
+
 func startServer(t *testing.T) (string, string) {
 	t.Helper()
 	url := db.TestDB(t)
@@ -105,6 +108,7 @@ func startServer(t *testing.T) (string, string) {
 		Roles:         map[string]bool{"api": true, "collect": true, "etl": true},
 		Metrics:       true,
 		MetricsToken:  contractMetricsToken,
+		SetupToken:    contractSetupToken,
 		EncryptionKey: make([]byte, 32),
 		// One OAuth callback per address, so the run sees a 429.
 		RateLimitOAuth: config.RateLimit{Rate: 0.001, Burst: 1},
@@ -150,6 +154,20 @@ func TestQuickstartMatchesOpenAPI(t *testing.T) {
 	require.NoError(t, err)
 	c := &client{t: t, base: base, http: &http.Client{Transport: rec, Timeout: 30 * time.Second}}
 
+	// The browser first run (/console/setup), while no tenant exists.
+	assert.Equal(t, 200, c.json("GET", "/v1/setup", "", "").status)
+	assert.Equal(t, 401, c.json("POST", "/v1/setup", "", `{"setup_token":"not-the-setup-token"}`).status)
+	assert.Equal(t, 400, c.json("POST", "/v1/setup", "", `{"setup_token":"`+contractSetupToken+`","tenant_name":"a\u0000"}`).status)
+	r := c.json("POST", "/v1/setup", "", `{"setup_token":"`+contractSetupToken+`","tenant_name":"first run"}`)
+	require.Equal(t, 201, r.status, "%s", r.body)
+	var first struct {
+		APIKey string `json:"api_key"`
+	}
+	r.json(t, &first)
+	assert.Equal(t, 200, c.json("GET", "/v1/providers", first.APIKey, "").status)
+	assert.Equal(t, 409, c.json("POST", "/v1/setup", "", `{"setup_token":"`+contractSetupToken+`"}`).status)
+	assert.Equal(t, 200, c.json("GET", "/v1/setup", "", "").status)
+
 	// ohs admin tenant create --name contract
 	pool, err := db.Open(context.Background(), url)
 	require.NoError(t, err)
@@ -167,7 +185,7 @@ func TestQuickstartMatchesOpenAPI(t *testing.T) {
 	assert.Equal(t, 400, c.json("GET", "/v1/audit?cursor=abc", key, "").status)
 
 	// User and token.
-	r := c.json("POST", "/v1/users", key, `{"external_ref":"contract-user"}`)
+	r = c.json("POST", "/v1/users", key, `{"external_ref":"contract-user"}`)
 	require.Equal(t, 201, r.status, "%s", r.body)
 	var user struct{ ID string }
 	r.json(t, &user)

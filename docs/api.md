@@ -20,7 +20,7 @@ Every call carries `Authorization: Bearer <secret>`.
 | User token | `ohs_ut_` + 43 characters | one end user's app | user routes: uploads (`upload`), reads over MCP and the user archive (`read`) |
 
 The first key comes from `ohs admin tenant create --name <name>` (or `OHS_BOOTSTRAP_TENANT`,
-which logs a key once on first start). Both secrets are stored as SHA-256 hashes: a lost one
+which logs a key once on first start, or the browser [first-run setup](setup.md)). Both secrets are stored as SHA-256 hashes: a lost one
 cannot be shown again. The connection routes (`/v1/users/{id}/connections...`) take the tenant key. The `connect` scope
 exists but no route uses it yet.
 A tenant key on a user route, or a user token on a tenant route, gets 403.
@@ -460,6 +460,7 @@ grant are not stored, and a revoked category's stored records are deleted. Detai
 | `GET /healthz` | Liveness |
 | `GET /readyz` | Readiness: database ping and raw store check, 503 when either fails |
 | `GET /metrics` | Prometheus text format; absent when `OHS_METRICS=false` |
+| `GET /v1/setup`, `POST /v1/setup` | The browser [first-run setup](setup.md): creates the first tenant and its key with `OHS_SETUP_TOKEN`, once; only when that is set |
 | `GET /console` | Read-only admin console (HTML), only when `OHS_CONSOLE=true`; see [console.md](console.md) |
 
 The OAuth callback and the notification routes take no credential and are rate limited per

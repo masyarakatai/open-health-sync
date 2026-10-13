@@ -38,6 +38,27 @@ TimeTagKind = Literal["illness", "injury", "travel", "jet_lag", "vaccination", "
 TimeTagTime = str
 
 
+class SetupStatus(TypedDict):
+    # True while the instance has no tenant and POST /v1/setup can create one.
+    needed: bool
+
+
+class _SetupRequestRequired(TypedDict):
+    # The instance's `OHS_SETUP_TOKEN`.
+    setup_token: str
+
+
+class SetupRequest(_SetupRequestRequired, total=False):
+    # Name of the tenant; surrounding spaces are trimmed. Empty or absent means `default`. No control character.
+    tenant_name: str
+
+
+class SetupResult(TypedDict):
+    tenant_id: str
+    # The tenant API key (`ohs_sk_...`), shown only this once.
+    api_key: str
+
+
 class _ProblemRequired(TypedDict):
     type: str
     title: str
@@ -1494,6 +1515,9 @@ __all__ = [
     "SampleStats",
     "SampleStatsBucket",
     "SetConsentRequest",
+    "SetupRequest",
+    "SetupResult",
+    "SetupStatus",
     "SleepPhase",
     "SleepPhasePage",
     "SleepSession",
