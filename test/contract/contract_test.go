@@ -110,8 +110,9 @@ func startServer(t *testing.T) (string, string) {
 		MetricsToken:  contractMetricsToken,
 		SetupToken:    contractSetupToken,
 		EncryptionKey: make([]byte, 32),
-		// One OAuth callback per address, so the run sees a 429.
-		RateLimitOAuth: config.RateLimit{Rate: 0.001, Burst: 1},
+		// Four OAuth callbacks and four setup attempts per address, so the
+		// run sees a 429 on each route.
+		RateLimitOAuth: config.RateLimit{Rate: 0.001, Burst: 4},
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
@@ -166,6 +167,7 @@ func TestQuickstartMatchesOpenAPI(t *testing.T) {
 	r.json(t, &first)
 	assert.Equal(t, 200, c.json("GET", "/v1/providers", first.APIKey, "").status)
 	assert.Equal(t, 409, c.json("POST", "/v1/setup", "", `{"setup_token":"`+contractSetupToken+`"}`).status)
+	assert.Equal(t, 429, c.json("POST", "/v1/setup", "", `{"setup_token":"`+contractSetupToken+`"}`).status, "over the setup rate limit")
 	assert.Equal(t, 200, c.json("GET", "/v1/setup", "", "").status)
 
 	// ohs admin tenant create --name contract
@@ -537,9 +539,11 @@ func TestQuickstartMatchesOpenAPI(t *testing.T) {
 		"X-OHS-Day": "2026-01-10", "X-OHS-Batch": "contract", "X-OHS-Part": "99",
 	}).status, "not gzip")
 	// The callback's own pages are HTML, which the recorder does not decode:
-	// the call spending the address's one token goes around it.
+	// the calls spending the address's tokens go around it.
 	plain := &client{t: t, base: base, http: &http.Client{Timeout: 30 * time.Second}}
-	assert.Equal(t, 400, plain.json("GET", "/oauth/withings/callback?state=unknown", "", "").status, "unknown state")
+	for range 4 {
+		assert.Equal(t, 400, plain.json("GET", "/oauth/withings/callback?state=unknown", "", "").status, "unknown state")
+	}
 	r = c.json("GET", "/oauth/withings/callback?state=unknown", "", "")
 	assert.Equal(t, 429, r.status, "over the callback rate limit: %s", r.body)
 
