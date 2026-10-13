@@ -92,7 +92,9 @@ Secrets: API keys and user tokens are stored as SHA-256 hashes only. OAuth acces
 tokens are sealed with AES-256-GCM under `OHS_ENCRYPTION_KEY`, bound to
 `tenant_id|user_id|provider` so a stolen ciphertext cannot be moved to another row. Each sealed
 value names the key that sealed it, so the key can be rotated online
-([key rotation](key-rotation.md)). Logs never contain tokens, keys or health values.
+([key rotation](key-rotation.md)). Logs never contain tokens, keys or health values. The
+[security model](security-model.md) covers the trust boundaries, the mitigations and the
+residual risks; [hardening.md](hardening.md) is the operator checklist.
 
 ## Tenancy and auth
 
