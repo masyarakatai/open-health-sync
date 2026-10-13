@@ -673,7 +673,11 @@ export interface MenstrualCycle {
 }
 
 export interface Coverage {
-  /** ETL jobs of the user not finished yet (pending or running). */
+  /**
+   * Work of the user not finished yet: ETL jobs and provider pulls (backfill,
+   * scheduled or notified), pending or running. A pull that keeps failing stays
+   * pending while it retries; `GET /v1/users/{id}/freshness` says why.
+   */
   pending_jobs: number;
   /** ETL jobs that exhausted their retries (an operator must look). */
   parked_jobs: number;
@@ -1069,6 +1073,8 @@ export interface FHIRObservation {
   /** When the record was ingested (the later of a panel's two samples). */
   issued?: string;
   valueQuantity?: FHIRQuantity;
+  /** Instead of valueQuantity for a classification (ecg_afib_classification). */
+  valueCodeableConcept?: FHIRObservationValueCodeableConcept;
   dataAbsentReason?: FHIRCodeableConcept;
   device?: FHIRReference;
   /**
@@ -1094,6 +1100,12 @@ export interface FHIRObservationIdentifier {
 export interface FHIRObservationEffectivePeriod {
   start?: string;
   end?: string;
+}
+
+/** Instead of valueQuantity for a classification (ecg_afib_classification). */
+export interface FHIRObservationValueCodeableConcept {
+  coding?: FHIRCoding[];
+  text?: string;
 }
 
 export interface FHIRObservationComponent {
