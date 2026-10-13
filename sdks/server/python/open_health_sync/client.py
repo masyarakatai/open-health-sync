@@ -47,6 +47,7 @@ from .models import (
     HealthzResponse,
     IngestAppleHealthResponse,
     IngestHealthConnectResponse,
+    IngestXiaomiResponse,
     ListAuditEventsResponse,
     ListConnectionsResponse,
     ListConsentHistoryResponse,
@@ -2120,6 +2121,47 @@ class OpenHealthSync:
         return self._request(
             "POST",
             "/v1/ingest/health-connect",
+            headers={
+                "X-OHS-Type": ohs_type,
+                "X-OHS-Day": ohs_day,
+                "X-OHS-Batch": ohs_batch,
+                "X-OHS-Part": ohs_part,
+            },
+            data=body,
+            content_type="application/gzip",
+        )
+
+    def ingest_xiaomi(
+        self,
+        body: bytes,
+        *,
+        ohs_type: str,
+        ohs_day: str,
+        ohs_batch: str,
+        ohs_part: int,
+    ) -> IngestXiaomiResponse:
+        """Upload one part of a Mi Fitness data copy.
+
+        ``POST /v1/ingest/xiaomi``
+
+        One gzip NDJSON part (at most 64 MiB, never truncated), one row of the Mi Fitness data
+        copy per line, each a JSON object with a `table` and a `key` (the line format is in
+        docs/connectors/xiaomi.md; `ohs import mi-fitness` writes it). Same headers, limits and
+        answers as the Apple Health upload.
+        Re-sending the same part is safe: the answer is 200 with `duplicate: true`. Other
+        bytes under a (day, batch, part) already stored are a 409, and so is a part sent while
+        this provider's data is being deleted for the user (nothing is kept; send it again
+        once the deletion job is done). Each instance processes a
+        bounded number of uploads at once; above it the answer is 503 with `Retry-After`.
+
+        Needs a user token (ohs_ut_) as the client's api_key.
+
+        Args:
+            ohs_type: Sent as the X-OHS-Type header. Export table of the lines of the part (fitness_data or sport_record).
+        """
+        return self._request(
+            "POST",
+            "/v1/ingest/xiaomi",
             headers={
                 "X-OHS-Type": ohs_type,
                 "X-OHS-Day": ohs_day,

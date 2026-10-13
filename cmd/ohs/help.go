@@ -36,7 +36,7 @@ Commands:
   admin     create tenants, create, list and revoke their API keys, personal setup,
             re-seal stored secrets after an encryption key rotation
   mcp       serve MCP on stdin and stdout for a local agent (Claude Desktop, Claude Code)
-  import    load an existing history from a file export: apple-health
+  import    load an existing history from a file export: apple-health, mi-fitness
   seed      fill an instance with synthetic demo data: seed --demo
   version   print the version and commit
   help      print this help, or the help of one command: ohs help <command>
@@ -125,6 +125,7 @@ every call to the instance's /mcp endpoint and needs no database.
 Setup for each client: docs/mcp.md.
 `,
 	"import": `usage: ohs import apple-health <export.zip|export.xml> [flags]
+       ohs import mi-fitness <folder|copy.zip> [flags]
 
 Loads the history of an Apple Health export ("Export All Health Data" in the
 Health app on the iPhone) into an instance, through the same upload API an
@@ -144,8 +145,14 @@ it is, in constant memory, and needs no database.
   --concurrency N   parts uploaded at once (default 4)
   --allow-http      accept a plain http URL off localhost
 
+mi-fitness loads the copy of Mi Fitness data that Xiaomi sends from its
+account privacy center (account.xiaomi.com, Privacy, Manage your data):
+readings, sleep and workouts of Xiaomi bands and watches. Pass the folder of
+CSV files, or a zip of it. --tz does not apply: readings carry their own UTC
+offset, and --since days are UTC days.
+
 Prints counts only, never a health value or the token. Details:
-docs/connectors/apple-health.md.
+docs/connectors/apple-health.md and docs/connectors/xiaomi.md.
 `,
 	"seed": `usage: ohs seed --demo [flags]
 

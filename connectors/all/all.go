@@ -18,4 +18,5 @@ import (
 	_ "github.com/soma-intelligence/open-health-sync/connectors/ultrahuman"
 	_ "github.com/soma-intelligence/open-health-sync/connectors/whoop"
 	_ "github.com/soma-intelligence/open-health-sync/connectors/withings"
+	_ "github.com/soma-intelligence/open-health-sync/connectors/xiaomi"
 )

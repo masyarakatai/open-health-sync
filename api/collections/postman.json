@@ -2798,6 +2798,63 @@
               }
             }
           }
+        },
+        {
+          "name": "Upload one part of a Mi Fitness data copy",
+          "request": {
+            "method": "POST",
+            "description": "Upload one part of a Mi Fitness data copy.\n\n`POST /v1/ingest/xiaomi`\n\nOne gzip NDJSON part (at most 64 MiB, never truncated), one row of the Mi Fitness data\ncopy per line, each a JSON object with a `table` and a `key` (the line format is in\ndocs/connectors/xiaomi.md; `ohs import mi-fitness` writes it). Same headers, limits and\nanswers as the Apple Health upload.\nRe-sending the same part is safe: the answer is 200 with `duplicate: true`. Other\nbytes under a (day, batch, part) already stored are a 409, and so is a part sent while\nthis provider's data is being deleted for the user (nothing is kept; send it again\nonce the deletion job is done). Each instance processes a\nbounded number of uploads at once; above it the answer is 503 with `Retry-After`.\n\nNeeds a user token (ohs_ut_) as the client's apiKey.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{userToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "X-OHS-Type",
+                "value": "fitness_data",
+                "description": "Export table of the lines of the part (fitness_data or sport_record)."
+              },
+              {
+                "key": "X-OHS-Day",
+                "value": "2026-01-01"
+              },
+              {
+                "key": "X-OHS-Batch",
+                "value": ""
+              },
+              {
+                "key": "X-OHS-Part",
+                "value": "0"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/gzip"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/ingest/xiaomi",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "ingest",
+                "xiaomi"
+              ]
+            },
+            "body": {
+              "mode": "file",
+              "file": {
+                "src": ""
+              }
+            }
+          }
         }
       ]
     },

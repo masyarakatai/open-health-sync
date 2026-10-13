@@ -4,7 +4,7 @@ A connector teaches Open Health Sync one source. Thirteen are available: [Apple 
 [Health Connect](health-connect.md), [Withings](withings.md), [Oura](oura.md), [WHOOP](whoop.md),
 [Strava](strava.md), [Polar](polar.md), [Fitbit](fitbit.md), [Suunto](suunto.md),
 [Ultrahuman](ultrahuman.md), [intervals.icu](intervals-icu.md), [Dexcom](dexcom.md) and
-[OMRON](omron.md).
+[OMRON](omron.md). [Xiaomi](xiaomi.md) is on main for the next release.
 Every other source below is **planned**: it is not built yet, and no code for it runs today. To build one, start with
 [writing a connector](../writing-a-connector.md).
 
@@ -13,6 +13,7 @@ Every other source below is **planned**: it is not built yet, and no code for it
 Status:
 
 - **Available**: ships in this release.
+- **Next release**: on main, ships in the next release.
 - **Planned**: on the roadmap, not built yet.
 - **Via Health Connect**: no server-side path we intend to use; the data comes through
   Android's [Health Connect](health-connect.md) upload, from your Android app.
@@ -47,6 +48,7 @@ linked tracking issue or the vendor's developer site before you start):
 | Health Connect | Available on the server | On-device (Android). Your Android app uploads gzip NDJSON parts to `POST /v1/ingest/health-connect` | Steps, heart rate, resting heart rate, HRV, SpO2, respiratory rate, temperature, blood pressure, blood glucose, weight, height, body fat, active energy, distance, sleep with stages, exercise sessions, deletions | Your app implements the [upload contract](health-connect.md); the Kotlin SDK that does it is being built. By default an app reads back only 30 days before its first permission grant; older data needs the history permission. Many Android apps write here, which is how Samsung Health, Fitbit, Zepp and CGM apps can reach it | |
 | Samsung Health | Via Health Connect | On-device only: the Samsung Health Data SDK (partner approval needed to distribute), or Health Connect, which Samsung Health writes to | Activity, sleep, heart rate, skin temperature | The older Samsung Health SDK for Android was deprecated on 2025-07-31. We plan to read Samsung Health data through Health Connect, which needs no Samsung partnership | |
 | Google Fit | Deprecated by Google, use Health Connect (planned Kotlin SDK) | None to build on | | Google closed sign-ups on 2024-05-01 and supports the Fit APIs only until the end of 2026. It points Android apps to Health Connect and cloud apps to the Google Health API | |
+| Xiaomi | Next release | Data copy from the Xiaomi account privacy center, imported with `ohs import mi-fitness` to `POST /v1/ingest/xiaomi`; ongoing data through Health Connect (Android) or Apple Health (iPhone) | Heart rate, resting heart rate, SpO2, steps, distance, active energy, weight, body fat, VO2 max, sleep with stages, workouts | Xiaomi publishes no health API. The Mi Fitness data copy holds the full history; Mi Fitness, Mi Health and Zepp Life records in Health Connect get the source slug `xiaomi` ([guide](xiaomi.md)). No private Xiaomi API is used | |
 | Zepp / Amazfit | Via Health Connect | On-device: the Zepp app writes to Health Connect on Android and to Apple Health on iOS | Steps, heart rate, sleep, workouts, calories | We found no official public API. On iPhone, what the Zepp app writes to HealthKit is ordinary Apple Health data | |
 | Health records (EHR): Epic, Oracle Health and other certified EHRs | Planned, after the SDKs | SMART on FHIR patient access (OAuth 2.0), FHIR R4 | Lab results, vital signs, conditions, medications, allergies, immunizations | US first, where certified EHRs must offer patient access APIs. Each operator registers its own app with each EHR vendor, and each health system activates it. The health records found in Apple Health exports are planned too | |
 | Eight Sleep | No public API | None | | Eight Sleep publishes no official developer API. Community clients call the private app API, which is unsupported and can change without notice; we will not build on it | |

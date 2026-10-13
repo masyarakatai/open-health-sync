@@ -170,8 +170,9 @@ pull, the last error, and a `state` (`fresh`, `stale`, `failing`, `syncing`, `ne
 scope. The contract (headers, size, idempotency) is in
 [connectors/apple-health.md](connectors/apple-health.md). `POST /v1/ingest/health-connect` takes
 Android Health Connect records the same way; its line format is in
-[connectors/health-connect.md](connectors/health-connect.md). Both routes share the limit of
-uploads in flight.
+[connectors/health-connect.md](connectors/health-connect.md). `POST /v1/ingest/xiaomi` takes the
+rows of a Mi Fitness data copy, as `ohs import mi-fitness` writes them
+([connectors/xiaomi.md](connectors/xiaomi.md)). The routes share the limit of uploads in flight.
 
 ## Reading data
 

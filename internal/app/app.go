@@ -24,6 +24,7 @@ import (
 
 	"github.com/soma-intelligence/open-health-sync/connectors/applehealth"
 	"github.com/soma-intelligence/open-health-sync/connectors/healthconnect"
+	"github.com/soma-intelligence/open-health-sync/connectors/xiaomi"
 	"github.com/soma-intelligence/open-health-sync/internal/api"
 	"github.com/soma-intelligence/open-health-sync/internal/collect"
 	"github.com/soma-intelligence/open-health-sync/internal/config"
@@ -271,6 +272,9 @@ func runWith(ctx context.Context, cfg config.Config, logOut io.Writer, opts opti
 		}
 		if c, ok := providers.lookup(healthconnect.Slug); ok {
 			deps.HealthConnect, _ = connector.AsDevice(c)
+		}
+		if c, ok := providers.lookup(xiaomi.Slug); ok {
+			deps.Xiaomi, _ = connector.AsDevice(c)
 		}
 		if cfg.Metrics && cfg.MetricsListen != "" {
 			deps.MetricsMux = http.NewServeMux()

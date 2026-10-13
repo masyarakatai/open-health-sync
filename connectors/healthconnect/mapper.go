@@ -563,6 +563,9 @@ var knownOrigins = []struct{ prefix, slug string }{
 	{"com.strava", "strava"},
 	{"com.sec.android.app.shealth", "samsung_health"},
 	{"com.google.android.apps.fitness", "google_fit"},
+	{"com.xiaomi.wearable", "xiaomi"},  // Mi Fitness
+	{"com.mi.health", "xiaomi"},        // Mi Health
+	{"com.xiaomi.hm.health", "xiaomi"}, // Zepp Life (Mi Band 7 and earlier)
 }
 
 // SourceSlug is the source slug of the app that wrote a record (its package

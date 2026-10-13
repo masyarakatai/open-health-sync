@@ -49,6 +49,9 @@ type Deps struct {
 	// HealthConnect handles POST /v1/ingest/health-connect. Nil leaves the
 	// route out.
 	HealthConnect connector.DeviceConnector
+	// Xiaomi handles POST /v1/ingest/xiaomi (Mi Fitness exports). Nil leaves
+	// the route out.
+	Xiaomi connector.DeviceConnector
 	// IngestLimit bounds uploads in flight (0 means DefaultIngestLimit).
 	IngestLimit int
 	// Metrics mounts GET /metrics (OHS_METRICS).

@@ -38,6 +38,7 @@ import type {
   HealthzResponse,
   IngestAppleHealthResponse,
   IngestHealthConnectResponse,
+  IngestXiaomiResponse,
   ListAuditEventsResponse,
   ListConnectionsResponse,
   ListConsentHistoryResponse,
@@ -581,6 +582,18 @@ export interface IngestAppleHealthParams {
 /** Query and header parameters of {@link OpenHealthSync.ingestHealthConnect}. */
 export interface IngestHealthConnectParams {
   /** Sent as the X-OHS-Type header. Health Connect record type of the lines of the part (for example BloodGlucose). */
+  ohsType: string;
+  /** Sent as the X-OHS-Day header. */
+  ohsDay: string;
+  /** Sent as the X-OHS-Batch header. */
+  ohsBatch: string;
+  /** Sent as the X-OHS-Part header. */
+  ohsPart: number;
+}
+
+/** Query and header parameters of {@link OpenHealthSync.ingestXiaomi}. */
+export interface IngestXiaomiParams {
+  /** Sent as the X-OHS-Type header. Export table of the lines of the part (fitness_data or sport_record). */
   ohsType: string;
   /** Sent as the X-OHS-Day header. */
   ohsDay: string;
@@ -2343,6 +2356,44 @@ export class OpenHealthSync {
     return this.#request<IngestHealthConnectResponse>({
       method: "POST",
       path: "/v1/ingest/health-connect",
+      headers: {
+        "X-OHS-Type": params.ohsType,
+        "X-OHS-Day": params.ohsDay,
+        "X-OHS-Batch": params.ohsBatch,
+        "X-OHS-Part": params.ohsPart,
+      },
+      body,
+      contentType: "application/gzip",
+      expect: "json",
+      options,
+    });
+  }
+
+  /**
+   * Upload one part of a Mi Fitness data copy.
+   *
+   * `POST /v1/ingest/xiaomi`
+   *
+   * One gzip NDJSON part (at most 64 MiB, never truncated), one row of the Mi Fitness data
+   * copy per line, each a JSON object with a `table` and a `key` (the line format is in
+   * docs/connectors/xiaomi.md; `ohs import mi-fitness` writes it). Same headers, limits and
+   * answers as the Apple Health upload.
+   * Re-sending the same part is safe: the answer is 200 with `duplicate: true`. Other
+   * bytes under a (day, batch, part) already stored are a 409, and so is a part sent while
+   * this provider's data is being deleted for the user (nothing is kept; send it again
+   * once the deletion job is done). Each instance processes a
+   * bounded number of uploads at once; above it the answer is 503 with `Retry-After`.
+   *
+   * Needs a user token (ohs_ut_) as the client's apiKey.
+   */
+  ingestXiaomi(
+    body: Uint8Array | ArrayBuffer | Blob,
+    params: IngestXiaomiParams,
+    options?: RequestOptions,
+  ): Promise<IngestXiaomiResponse> {
+    return this.#request<IngestXiaomiResponse>({
+      method: "POST",
+      path: "/v1/ingest/xiaomi",
       headers: {
         "X-OHS-Type": params.ohsType,
         "X-OHS-Day": params.ohsDay,

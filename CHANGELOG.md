@@ -19,6 +19,12 @@ release may change the API, the configuration or the database schema.
   Unset, the routes are not mounted. See [docs/setup.md](docs/setup.md).
 - A reproducible ingestion benchmark against Open Wearables: `bench/openwearables/` and
   [the method and results](docs/benchmarks/open-wearables.md).
+- Xiaomi: `ohs import mi-fitness <folder|copy.zip>` loads the copy of Mi Fitness data that
+  Xiaomi sends from its account privacy center (heart rate, resting heart rate, SpO2, steps,
+  distance, active energy, weight, body fat, VO2 max, sleep with stages, workouts) through the new
+  `POST /v1/ingest/xiaomi` upload route, provider `xiaomi`. Records that Mi Fitness, Mi Health and
+  Zepp Life write to Health Connect now get the source slug `xiaomi`. No private Xiaomi API is
+  used. See [docs/connectors/xiaomi.md](docs/connectors/xiaomi.md).
 - MCP prompts: the prompt library is now served by the MCP server (`prompts/list`,
   `prompts/get`). Twelve ready-made questions about a person's own training, sleep and recovery
   (morning check, taper check, after a break, a new habit, two devices side by side...), each
