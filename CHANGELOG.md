@@ -265,6 +265,10 @@ release may change the API, the configuration or the database schema.
 
 - MCP `get_coverage` without `start` reports the last 30 days. On years of Apple Health history
   it answered with over a megabyte of JSON, more than an agent can read.
+- Apple Health walking and running speed are stored. HealthKit spells them in `km/hr` (or
+  `mi/hr`), which had no conversion to `m/s`, so every such sample was parked as a unit error. An
+  instance restarted on this version replays the parked records. The recorded-contract replay now
+  applies the same unit conversion as the ETL, so CI catches the next unit with no conversion.
 - `OHS_<SLUG>_<FIELD>` keys of a provider slug that contains an underscore (`intervals_icu`) are
   now read under the whole slug.
 
