@@ -86,6 +86,12 @@ checklist see [hardening.md](hardening.md); to report a problem see
   is set.
 - **Slow or large bodies.** Inbound bodies are capped at 1 MiB and must arrive within 30 seconds
   (`internal/collect/inbound.go`).
+- **Request floods.** The notification and callback routes take no credential, so each sits
+  behind an in-memory token bucket per client address, plus one per provider for
+  notifications. Over a limit the answer is 429 with `Retry-After` before any signature check,
+  database read or queued pull, counted in `ohs_rate_limited_total`. `X-Forwarded-For` is read
+  only from the proxies listed in `OHS_TRUSTED_PROXIES` (`internal/api/ratelimit.go`, see
+  [self-hosting.md](self-hosting.md#rate-limits)).
 
 ### Stored provider tokens
 
@@ -94,6 +100,11 @@ checklist see [hardening.md](hardening.md); to report a problem see
   `tenant_id|user_id|provider`, so a ciphertext copied to another row does not open
   (`internal/crypto/box.go`, `internal/collect/connections.go`). Webhook secrets are sealed the
   same way, bound to their endpoint id (`internal/webhook/endpoints.go`).
+- **A leaked or retired key.** Sealed values carry the id of the key that sealed them.
+  `OHS_PREVIOUS_ENCRYPTION_KEYS` keeps the replaced keys able to open, never to seal, and
+  `ohs admin rekey` re-seals every stored secret under the active key while the instance runs;
+  `ohs doctor` says when no secret needs a previous key any more (see
+  [key-rotation.md](key-rotation.md)).
 
 ### Webhook receivers
 
@@ -164,11 +175,13 @@ checklist see [hardening.md](hardening.md); to report a problem see
 - **The database and the raw store are trusted.** Anyone who can read them reads every tenant's
   health data. Anyone who can also read the environment can open the OAuth tokens. Tenant
   isolation is enforced in application queries, not by Postgres row-level security.
-- **One encryption key, no rotation.** Changing `OHS_ENCRYPTION_KEY` makes the stored OAuth
-  tokens and webhook secrets unreadable; users must reconnect and webhook secrets must be
-  rotated. Losing it has the same effect; leaking it exposes the tokens of a stolen database.
-- **No rate limiting** in the application beyond the upload concurrency bound. Brute force of
-  credentials is not practical at 256 bits, but request floods must be handled at the proxy.
+- **Losing the encryption key is final.** Rotation needs the old key listed in
+  `OHS_PREVIOUS_ENCRYPTION_KEYS` until `ohs admin rekey` has run. Without it, the stored OAuth
+  tokens and webhook secrets do not open: users must reconnect and webhook secrets must be
+  rotated. A leaked key exposes the tokens of a stolen database until they are re-sealed.
+- **Rate limits are per instance and in memory.** Each replica counts on its own and a restart
+  empties the buckets. Only the provider-facing routes are limited: authenticated API routes
+  are not, and floods larger than one instance can absorb belong at the proxy.
 - **OAuth state is not bound to a browser session.** Whoever completes a consent link connects
   the account they sign in with to the user it was minted for. Tenants must hand an authorize
   URL only to its user.
@@ -199,11 +212,3 @@ checklist see [hardening.md](hardening.md); to report a problem see
 - Clients built by tenants: how they store keys and tokens, and what they do with the data.
 - Medical correctness of the data; the application validates plausibility only.
 - An instance operator acting against tenants or users.
-
-## Planned hardening
-
-These are in progress and not in a release yet; check the [changelog](../CHANGELOG.md) for what
-has shipped:
-
-- encryption key rotation (`OHS_PREVIOUS_ENCRYPTION_KEYS`, `ohs admin rekey`);
-- rate limits on the provider-facing routes (`OHS_RATE_LIMIT_*`, `OHS_TRUSTED_PROXIES`).

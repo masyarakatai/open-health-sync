@@ -20,8 +20,10 @@ DC="docker compose --env-file .env -f deploy/docker-compose.yml"
 - **Never expose Postgres.** The bundled compose file publishes no database port; keep it
   that way. A database elsewhere belongs on a private network, reached with `sslmode=verify-full`
   in `OHS_DATABASE_URL`.
-- **Rate limit at the proxy.** The application only bounds concurrent uploads
-  (`OHS_INGEST_CONCURRENCY`).
+- **Keep the rate limits on, and rate limit at the proxy too.** The application limits only
+  the provider-facing routes, per instance (`OHS_RATE_LIMIT_*`, see
+  [self-hosting.md](self-hosting.md#rate-limits)). Behind a reverse proxy, list it in
+  `OHS_TRUSTED_PROXIES` so limits apply to client addresses, not to the proxy's.
 - **Keep `/metrics` private.** It is closed by default (403). To scrape it, set
   `OHS_METRICS_TOKEN` and give that bearer token to Prometheus, or serve it on a private address
   with `OHS_METRICS_LISTEN` and never publish that port. `OHS_METRICS=false` removes it.
@@ -30,9 +32,10 @@ DC="docker compose --env-file .env -f deploy/docker-compose.yml"
 
 ## Secrets
 
-- **Generate `OHS_ENCRYPTION_KEY` once** with `openssl rand -base64 32` and keep it for the life
-  of the instance. Store it in a secret manager and with your backups, not in the repository.
-  Changing or losing it makes stored OAuth tokens and webhook secrets unreadable.
+- **Generate `OHS_ENCRYPTION_KEY`** with `openssl rand -base64 32`. Store it in a secret
+  manager and with your backups, not in the repository. Losing it makes stored OAuth tokens and
+  webhook secrets unreadable. To replace it, follow [key-rotation.md](key-rotation.md): the old
+  key goes to `OHS_PREVIOUS_ENCRYPTION_KEYS` until `ohs admin rekey` has run.
 - **Set a strong `POSTGRES_PASSWORD`** before the first `up` (it only applies when the volume
   is created; afterwards use `ALTER USER ohs PASSWORD '...'`, see
   [self-hosting.md](self-hosting.md#rotating-secrets)).
