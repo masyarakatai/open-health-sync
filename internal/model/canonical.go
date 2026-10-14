@@ -128,9 +128,15 @@ type SleepPhase struct {
 
 // Workout represents a workout session with performance metrics.
 type Workout struct {
-	TenantID         string // owning tenant; set by the pipeline, not part of any content hash
-	UserID           string
-	Provider         string
+	TenantID string // owning tenant; set by the pipeline, not part of any content hash
+	UserID   string
+	Provider string
+	// SourceSlug is the upstream that recorded the workout, as for a
+	// QuantitySample. Empty means the provider itself.
+	SourceSlug string
+	// DeviceID names the device that recorded it ("Garmin edge_530"). Empty
+	// when the provider does not say.
+	DeviceID         string
 	ExternalID       string
 	ActivityType     string // Canonical: "running", "cycling", etc.
 	StartDate        time.Time

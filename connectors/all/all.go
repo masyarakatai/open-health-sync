@@ -5,6 +5,7 @@
 package all
 
 import (
+	_ "github.com/soma-intelligence/open-health-sync/connectors/activityfiles"
 	_ "github.com/soma-intelligence/open-health-sync/connectors/applehealth"
 	_ "github.com/soma-intelligence/open-health-sync/connectors/dexcom"
 	_ "github.com/soma-intelligence/open-health-sync/connectors/fitbit"

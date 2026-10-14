@@ -2923,6 +2923,65 @@
               }
             }
           }
+        },
+        {
+          "name": "Upload one activity file (FIT, GPX or TCX)",
+          "request": {
+            "method": "POST",
+            "description": "Upload one activity file (FIT, GPX or TCX).\n\n`POST /v1/ingest/activity-files`\n\nOne gzip NDJSON part (at most 64 MiB, never truncated) holding one activity file on one\nline: `{\"type\":\"fit\",\"data\":\"<base64 of the file>\"}`, `type` being `fit`, `gpx` or `tcx`\nand equal to `X-OHS-Type`. The file is at most 20 MiB once decoded (the line format is in\ndocs/connectors/activity-files.md; `ohs import files` writes it). The part is refused\nwith 400, and nothing is stored, unless the file parses as an activity that starts at\nmost 48 hours from now: a FIT course, settings or monitoring file, a GPX route without\ntimes or a file with a broken CRC is refused. Same headers, limits and answers as the\nApple Health upload.\nRe-sending the same part is safe: the answer is 200 with `duplicate: true`. Other\nbytes under a (day, batch, part) already stored are a 409, and so is a part sent while\nthis provider's data is being deleted for the user (nothing is kept; send it again\nonce the deletion job is done). Each instance processes a\nbounded number of uploads at once; above it the answer is 503 with `Retry-After`.\n\nNeeds a user token (ohs_ut_) as the client's apiKey.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{userToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "X-OHS-Type",
+                "value": "fit",
+                "description": "Format of the file in the part."
+              },
+              {
+                "key": "X-OHS-Day",
+                "value": "2026-01-01",
+                "description": "UTC day the activity starts (`ohs import files` sends it; the server does not check it)."
+              },
+              {
+                "key": "X-OHS-Batch",
+                "value": "",
+                "description": "`ohs import files` sends `af1-` and the first 32 hex digits of the file's SHA-256."
+              },
+              {
+                "key": "X-OHS-Part",
+                "value": "0"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/gzip"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/ingest/activity-files",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "ingest",
+                "activity-files"
+              ]
+            },
+            "body": {
+              "mode": "file",
+              "file": {
+                "src": ""
+              }
+            }
+          }
         }
       ]
     },
