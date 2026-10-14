@@ -92,10 +92,10 @@ against.
 - The same activity from Strava, intervals.icu, Apple Health or Health Connect is stored under
   each provider. The merged view (package `fusion`) shows one: two workouts sharing at least
   half of the shorter one are the same session, and the better ranked source stays. The
-  default workouts order is `polar, strava, apple_health, whoop, oura, withings`; `garmin`,
-  `coros`, `wahoo`, `suunto` and `zwift` are not in it, so by default a Strava or Apple Health
-  copy wins over the file. A user who wants the file's copy (it has the streams) sets
-  `PUT /v1/users/{id}/source-priorities` with `{"priorities":{"workouts":["garmin","strava"]}}`.
+  default workouts order becomes `polar, garmin, coros, wahoo, suunto, zwift, strava,
+  apple_health, whoop, oura, withings`, so by default the file's copy (it has the streams) wins
+  over a Strava or Apple Health copy. A user who prefers another order sets it with
+  `PUT /v1/users/{id}/source-priorities`.
   intervals.icu workouts keep the source `intervals_icu` (their mapper keeps the upstream only
   in metadata); between two sources that no order lists, the tie is broken by provider name,
   which nobody should rely on. Heart rate follows the heart group order the same way
@@ -174,9 +174,9 @@ Repository rule: standard library first, every dependency with a written reason.
 
 ## Open questions
 
-1. Should the default workouts order list the device vendors that only files bring
-   (`garmin`, `coros`, `wahoo`, `suunto`, `zwift`) ahead of `strava`? The original recording
-   carries the streams, and Strava's copy of it does not.
+1. The default workouts order now lists the device vendors that files bring (`garmin`,
+   `coros`, `wahoo`, `suunto`, `zwift`) ahead of `strava`, since the original recording carries
+   the streams and Strava's copy of it does not. To confirm in review.
 2. Now that workouts carry a source slug, should intervals.icu write its upstream
    (`source_provider`, such as `garmin`) as the workout's source? The same activity from a
    file and from intervals.icu would then share a source.

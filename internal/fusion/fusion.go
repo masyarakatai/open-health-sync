@@ -131,7 +131,9 @@ func Defaults() map[string][]string {
 		GroupRecovery: {"oura", "whoop", "polar", "apple_health", "withings"},
 		GroupBody:     {"withings", "apple_health", "oura", "whoop", "polar"},
 		GroupSleep:    {"oura", "whoop", "withings", "polar", "apple_health"},
-		GroupWorkouts: {"polar", "strava", "apple_health", "whoop", "oura", "withings"},
+		// The vendors whose activity files carry the full streams come
+		// before the services that keep summary figures only.
+		GroupWorkouts: {"polar", "garmin", "coros", "wahoo", "suunto", "zwift", "strava", "apple_health", "whoop", "oura", "withings"},
 	}
 }
 

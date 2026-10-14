@@ -84,6 +84,10 @@ release may change the API, the configuration or the database schema.
 - A canonical `Workout` can name its source and device (`SourceSlug`, `DeviceID`), written to
   `workouts.source_slug` and `workouts.device_id` (columns that already existed). A connector
   that leaves them empty gets the previous behavior: the provider as the source, no device.
+- The default workouts order of the merged view puts `garmin`, `coros`, `wahoo`, `suunto` and
+  `zwift` after `polar` and before `strava`: the original recording of a workout, which carries
+  its route and streams, wins over a summary copy of it. A user's own `source-priorities` still
+  take precedence.
 - Merged view reads are faster on a long history: a merged page's lookups of a better ranked
   record are bounded by the page's dates, a page with no end is read through growing windows
   (2, 16, 128 days), and these statements are planned for their parameters at every run (a

@@ -200,15 +200,14 @@ Duplicates:
 - **The same activity from another provider** (Strava, intervals.icu, Apple Health, Health
   Connect) is stored under each provider. The merged views (`view=merged`, the default) show one:
   two workouts that share at least half of the shorter one are the same session, and the better
-  ranked source stays. The default workouts order is `polar, strava, apple_health, whoop, oura,
-  withings`, which does not list `garmin`, `coros`, `wahoo`, `suunto` or `zwift`, so a Strava or
-  Apple Health copy wins by default. To prefer the file's copy, which has the streams, put its
-  source first:
+  ranked source stays. The default workouts order is `polar, garmin, coros, wahoo, suunto, zwift,
+  strava, apple_health, whoop, oura, withings`: a file's copy, which has the streams, wins over
+  a Strava or Apple Health copy by default. A user who prefers another order sets it:
 
   ```sh
   curl -X PUT "$OHS_URL/v1/users/$USER_ID/source-priorities" \
     -H "Authorization: Bearer $OHS_API_KEY" -H "Content-Type: application/json" \
-    -d '{"priorities":{"workouts":["garmin","strava"]}}'
+    -d '{"priorities":{"workouts":["strava","garmin"]}}'
   ```
 
   Heart rate follows the heart order the same way (`apple_health` first by default): a file's
