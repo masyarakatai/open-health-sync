@@ -67,6 +67,17 @@ release may change the API, the configuration or the database schema.
   [SECURITY.md](SECURITY.md#verifying-releases).
 - Docs: [security model](docs/security-model.md) (assets, trust boundaries, mitigations with
   their code, residual risks) and a [hardening checklist](docs/hardening.md) for production.
+- ECG recordings are served. `GET /v1/users/{id}/ecg` lists a user's Apple Watch and Withings
+  recordings (metadata, paged, `start` and `end`), `GET /v1/users/{id}/ecg/{ecg_id}` returns one
+  with its voltage samples (offsets in seconds, microvolts, at most 100000). The classification
+  is the recording device's own, passed through in its maker's vocabulary with the stored value;
+  nothing is computed from the signal. FHIR: each recording is an Observation `ecg-{id}`
+  (LOINC 11524-6, the waveform as `component.valueSampledData` under MDC 131328), in the
+  Observation search (`code=http://loinc.org|11524-6`), read by id, Provenance and
+  `$everything`; a search page holds at most 100 of them. MCP: `get_ecg_recordings` lists them
+  and summarizes one without its samples. Exports: dataset `ecg` (metadata) and
+  `canonical/ecg.ndjson` in the user archive (with samples). No migration. See
+  [docs/api.md](docs/api.md#ecg-recordings) and [docs/fhir.md](docs/fhir.md#ecg-recordings).
 
 ### Changed
 

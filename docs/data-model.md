@@ -16,8 +16,8 @@ the JSON the API returns uses snake_case names, and some differ (for example
 
 The read API returns these records with the provenance fields `provider`,
 `source`, `device` and `ingested_at`; see [api.md](api.md). ECG
-recordings, ECG voltage samples and heartbeat (RR interval) samples are stored but
-have no read route yet: they are planned.
+recordings are served with their voltage samples by `/ecg`, heartbeat (RR
+interval) samples by `/rr-intervals` and `/hrv`.
 
 ## Canonical types
 
@@ -194,7 +194,7 @@ Stored in `ohs_data.nutrition_logs`.
 
 ECGRecording represents ECG metadata (voltage data is in ECGVoltageSample).
 
-Stored in `ohs_data.ecg_recordings`. No read route yet (planned): stored, not served by the API or MCP.
+Stored in `ohs_data.ecg_recordings`.
 
 | Field | Type | Note |
 |---|---|---|
@@ -215,7 +215,7 @@ Stored in `ohs_data.ecg_recordings`. No read route yet (planned): stored, not se
 
 ECGVoltageSample represents a single voltage measurement from an ECG recording.
 
-Stored in `ohs_data.ecg_samples`. No read route yet (planned): stored, not served by the API or MCP.
+Stored in `ohs_data.ecg_samples`.
 
 | Field | Type | Note |
 |---|---|---|

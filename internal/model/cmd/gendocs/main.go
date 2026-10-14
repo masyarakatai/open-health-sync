@@ -46,9 +46,7 @@ var tables = map[string]string{
 
 // notServed names the stored types that no REST route or MCP tool reads yet.
 var notServed = map[string]string{
-	"ECGRecording":     "No read route yet (planned): stored, not served by the API or MCP.",
-	"ECGVoltageSample": "No read route yet (planned): stored, not served by the API or MCP.",
-	"Observation":      "No connector writes it yet, and no read route serves it (planned).",
+	"Observation": "No connector writes it yet, and no read route serves it (planned).",
 }
 
 // notes explain the fields whose meaning is not obvious from the name. The key
@@ -106,8 +104,8 @@ the JSON the API returns uses snake_case names, and some differ (for example
 
 The read API returns these records with the provenance fields ` + "`provider`" + `,
 ` + "`source`" + `, ` + "`device`" + ` and ` + "`ingested_at`" + `; see [api.md](api.md). ECG
-recordings, ECG voltage samples and heartbeat (RR interval) samples are stored but
-have no read route yet: they are planned.
+recordings are served with their voltage samples by ` + "`/ecg`" + `, heartbeat (RR
+interval) samples by ` + "`/rr-intervals`" + ` and ` + "`/hrv`" + `.
 
 ## Canonical types
 `

@@ -192,6 +192,8 @@ All reads are `GET /v1/users/{id}/<resource>` with a tenant key, paged as above.
 | `rr-intervals` | `series_id`, `start`, `end` | `timestamp` (the beat) |
 | `hrv` | `series_id`, `start`, `end` (the series' first beat) | the series' first beat |
 | `menstrual-cycles` | `start`, `end` (compared as dates, on the cycle's start) | `start_date` |
+| `ecg` | `start`, `end` | `start_date`, metadata only ([ECG recordings](#ecg-recordings)) |
+| `ecg/{ecg_id}` | none | one recording with its samples, not paged |
 | `coverage` | `provider`, `start`, `end` | not paged |
 
 `view` is `merged` (the default) or `all`; see
@@ -332,6 +334,65 @@ latest cycle is open, with `end_date` and `cycle_length_days` null. Nothing is p
 rules (local days, gaps inside a period, the read limit) are in
 [menstrual-cycles.md](menstrual-cycles.md).
 
+### ECG recordings
+
+`GET /v1/users/{id}/ecg` lists the user's ECG recordings (Apple Watch through Apple Health,
+Withings) by start time, metadata only. `GET /v1/users/{id}/ecg/{ecg_id}` returns one recording
+with its voltage samples. Both take a tenant key, like every read.
+
+```sh
+curl -s "$OHS/v1/users/$USER_ID/ecg/12" -H "Authorization: Bearer $KEY"
+```
+
+```json
+{
+  "id": 12,
+  "start_date": "2026-03-01T08:00:00Z",
+  "end_date": "2026-03-01T08:00:30Z",
+  "classification": "sinus_rhythm",
+  "classification_value": 1,
+  "symptoms_status": "none",
+  "average_heart_rate": 64,
+  "sampling_frequency_hz": 512,
+  "number_of_measurements": 15360,
+  "metadata": { "timezone": "Europe/Paris" },
+  "provider": "apple_health",
+  "source": "apple_health",
+  "device": null,
+  "ingested_at": "2026-03-01T09:15:30.25Z",
+  "samples": {
+    "count": 15360,
+    "truncated": false,
+    "offsets_s": [0, 0.001953125, 0.00390625],
+    "voltages_uv": [12.5, 14.25, 20]
+  }
+}
+```
+
+The arrays are cut to three values here. `offsets_s` is the time of each sample from
+`start_date`, in seconds; `voltages_uv` the voltage of the same sample, in microvolts, single
+lead. Both are as stored, in offset order. One read returns at most 100000 samples (an Apple
+Watch recording holds about 15360, a Withings one about 9000); `truncated` is true when more are
+stored.
+
+`classification` is the label the recording device or its app gave the recording, in its
+maker's vocabulary, passed through as recorded. Open Health Sync does not compute, check or
+interpret it. `classification_value` keeps the stored integer.
+
+| Provider | `classification_value` | `classification` |
+|---|---|---|
+| `apple_health` | HealthKit's `HKElectrocardiogram.Classification`: 0, 1, 2, 3, 4, 5, 6, 100 | `not_set`, `sinus_rhythm`, `atrial_fibrillation`, `inconclusive_low_heart_rate`, `inconclusive_high_heart_rate`, `inconclusive_poor_reading`, `inconclusive_other`, `unrecognized` |
+| `withings` | the recording's AFib result: 0, 1, 2 | `negative`, `positive`, `inconclusive` |
+
+Another value is served with `classification` null. `symptoms_status` is HealthKit's: `not_set`,
+`none` or `present` (Withings recordings are `not_set`).
+
+Recordings are the `ecg` consent category: revoking it deletes the provider's recordings and
+their samples. The same recordings are FHIR Observations with the waveform as `SampledData`
+([fhir.md](fhir.md#ecg-recordings)), the MCP tool `get_ecg_recordings` lists them and
+summarizes one without its samples, and `exports/ecg` and the user archive hold them
+([exports.md](exports.md)).
+
 ### Knowing when an upload is processed
 
 Processing is asynchronous. `GET /v1/users/{id}/coverage` returns record counts per provider and
@@ -370,8 +431,8 @@ curl -s "$OHS/v1/users/$USER_ID/tags?start=2026-03-01&end=2026-04-01" -H "Author
 ## FHIR R4
 
 `GET /v1/users/{id}/fhir/Observation` serves the same quantity samples, blood pressure readings
-(a systolic and a diastolic sample paired into one panel), sleep sessions, workouts and daily
-summaries as FHIR R4 Observations, in one `searchset` Bundle (`application/fhir+json`) in time
+(a systolic and a diastolic sample paired into one panel), sleep sessions, workouts, daily
+summaries and ECG recordings as FHIR R4 Observations, in one `searchset` Bundle (`application/fhir+json`) in time
 order, paged by its `next` link, and `GET /v1/users/{id}/fhir/Observation/{observation_id}` reads
 one back. Filters: `type`, `code` (`http://loinc.org|8867-4`), `category` (`vital-signs`,
 `laboratory`, `activity`), `start`, `end`. The user is `GET /v1/users/{id}/fhir/Patient/{id}`,
@@ -402,7 +463,7 @@ curl -s "$OHS/v1/users/$USER_ID/omh/data-points?schema=omh:blood-pressure&start=
 ## Exports
 
 `GET /v1/users/{id}/exports/{dataset}` streams every record of one list (`samples`,
-`category-samples`, `sleep`, `workouts`, `nutrition` or `daily`) in `[start, end)` as one CSV
+`category-samples`, `sleep`, `workouts`, `nutrition`, `daily` or `ecg`) in `[start, end)` as one CSV
 (`format=csv`, the default) or Parquet (`format=parquet`) file, with the columns of the list's
 JSON records. Not paged. See [exports.md](exports.md).
 
