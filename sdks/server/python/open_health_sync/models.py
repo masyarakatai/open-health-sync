@@ -732,6 +732,84 @@ class MenstrualCycle(TypedDict):
     flow_days: List[MenstrualFlowDay]
 
 
+class ECGRecording(TypedDict):
+    # The integration the record came through (apple_health, withings...).
+    provider: str
+    # The vendor that produced the record, when it differs or is known.
+    source: Optional[str]
+    device: Optional[str]
+    ingested_at: str
+    id: int
+    start_date: str
+    end_date: Optional[str]
+    # The label the recording device gave, in its maker's vocabulary, passed through as
+    # recorded. Apple Health: not_set, sinus_rhythm, atrial_fibrillation,
+    # inconclusive_low_heart_rate, inconclusive_high_heart_rate, inconclusive_poor_reading,
+    # inconclusive_other, unrecognized. Withings: negative, positive, inconclusive. Null
+    # when the stored value is none of these.
+    classification: Optional[str]
+    # The stored value the label comes from.
+    classification_value: int
+    # Whether the person recorded symptoms with the recording (not_set, none, present).
+    symptoms_status: Optional[str]
+    # Beats per minute, as the device reported it.
+    average_heart_rate: Optional[float]
+    # Samples per second; 0 when the provider gives none.
+    sampling_frequency_hz: float
+    # The sample count the device reported.
+    number_of_measurements: int
+    # Provider fields kept as is, plus timezone (IANA name) when known.
+    metadata: Metadata
+
+
+class ECGSamples(TypedDict):
+    # Samples returned.
+    count: int
+    # More samples are stored than the 100000 returned.
+    truncated: bool
+    # Seconds from start_date, in order.
+    offsets_s: List[float]
+    # Microvolts, single lead, one per offset.
+    voltages_uv: List[float]
+
+
+class ECGRecordingDetail(TypedDict):
+    # The integration the record came through (apple_health, withings...).
+    provider: str
+    # The vendor that produced the record, when it differs or is known.
+    source: Optional[str]
+    device: Optional[str]
+    ingested_at: str
+    id: int
+    start_date: str
+    end_date: Optional[str]
+    # The label the recording device gave, in its maker's vocabulary, passed through as
+    # recorded. Apple Health: not_set, sinus_rhythm, atrial_fibrillation,
+    # inconclusive_low_heart_rate, inconclusive_high_heart_rate, inconclusive_poor_reading,
+    # inconclusive_other, unrecognized. Withings: negative, positive, inconclusive. Null
+    # when the stored value is none of these.
+    classification: Optional[str]
+    # The stored value the label comes from.
+    classification_value: int
+    # Whether the person recorded symptoms with the recording (not_set, none, present).
+    symptoms_status: Optional[str]
+    # Beats per minute, as the device reported it.
+    average_heart_rate: Optional[float]
+    # Samples per second; 0 when the provider gives none.
+    sampling_frequency_hz: float
+    # The sample count the device reported.
+    number_of_measurements: int
+    # Provider fields kept as is, plus timezone (IANA name) when known.
+    metadata: Metadata
+    samples: ECGSamples
+
+
+class ECGRecordingPage(TypedDict):
+    data: List[ECGRecording]
+    # Null on the last page.
+    next_cursor: Optional[str]
+
+
 class Coverage(TypedDict):
     # Work of the user not finished yet: ETL jobs and provider pulls (backfill,
     # scheduled or notified), pending or running. A pull that keeps failing stays
@@ -1187,7 +1265,7 @@ class _FHIRObservationRequired(TypedDict):
 
 class FHIRObservation(_FHIRObservationRequired, total=False):
     """A FHIR R4 Observation made from one quantity sample, a blood pressure pair, a sleep
-    session, a workout or a daily summary (docs/fhir.md).
+    session, a workout, a daily summary or an ECG recording (docs/fhir.md).
     """
 
     meta: FHIRObservationMeta
@@ -1203,8 +1281,8 @@ class FHIRObservation(_FHIRObservationRequired, total=False):
     valueCodeableConcept: FHIRObservationValueCodeableConcept
     dataAbsentReason: FHIRCodeableConcept
     device: FHIRReference
-    # The two values of a blood pressure panel, or a sleep session's, workout's or daily
-    # summary's other fields; a field without a value is left out.
+    # The two values of a blood pressure panel, or a sleep session's, workout's, daily
+    # summary's or ECG recording's other fields; a field without a value is left out.
     component: List[FHIRObservationComponent]
 
 
@@ -1240,7 +1318,28 @@ class _FHIRObservationComponentRequired(TypedDict):
 class FHIRObservationComponent(_FHIRObservationComponentRequired, total=False):
     valueQuantity: FHIRQuantity
     valueCodeableConcept: FHIRCodeableConcept
+    # An ECG recording's voltage samples: `data` holds the values, separated by spaces, each
+    # `origin + factor * value` in microvolts (factor is absent, so 1), `period` milliseconds
+    # apart; `E` marks a value that is not a finite number.
+    valueSampledData: FHIRSampledData
     dataAbsentReason: FHIRCodeableConcept
+
+
+class _FHIRSampledDataRequired(TypedDict):
+    origin: FHIRQuantity
+    # Milliseconds between two samples.
+    period: float
+    dimensions: int
+    data: str
+
+
+class FHIRSampledData(_FHIRSampledDataRequired, total=False):
+    """An ECG recording's voltage samples: `data` holds the values, separated by spaces, each
+    `origin + factor * value` in microvolts (factor is absent, so 1), `period` milliseconds
+    apart; `E` marks a value that is not a finite number.
+    """
+
+    factor: float
 
 
 class FHIRQuantity(TypedDict, total=False):
@@ -1271,7 +1370,7 @@ class FHIRBundleLink(TypedDict):
 class _FHIRBundleEntryRequired(TypedDict):
     fullUrl: str
     # A FHIR R4 Observation made from one quantity sample, a blood pressure pair, a sleep
-    # session, a workout or a daily summary (docs/fhir.md).
+    # session, a workout, a daily summary or an ECG recording (docs/fhir.md).
     resource: FHIRObservation
 
 
@@ -1439,6 +1538,10 @@ __all__ = [
     "DeleteProviderDataResponse",
     "DeleteUserResponse",
     "DeletionJob",
+    "ECGRecording",
+    "ECGRecordingDetail",
+    "ECGRecordingPage",
+    "ECGSamples",
     "FHIRBundle",
     "FHIRBundleEntry",
     "FHIRBundleEntrySearch",
@@ -1478,6 +1581,7 @@ __all__ = [
     "FHIRProvenanceEntity",
     "FHIRQuantity",
     "FHIRReference",
+    "FHIRSampledData",
     "GetFreshnessResponse",
     "HRVSeries",
     "HRVSeriesPage",

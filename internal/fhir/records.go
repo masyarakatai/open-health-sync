@@ -19,7 +19,8 @@ import (
 // quantity sample.
 const (
 	// RecordTypeSystem codes the kind of record an Observation was made
-	// from: blood_pressure, sleep_session, workout, daily_summary.
+	// from: blood_pressure, sleep_session, workout, daily_summary,
+	// ecg_recording.
 	RecordTypeSystem = Namespace + "/CodeSystem/record-type"
 	// ComponentSystem codes the components: the REST field each one comes
 	// from (deep_sleep_seconds, distance_m...).
@@ -71,6 +72,7 @@ var idPrefixes = []struct {
 	{SleepIDPrefix, read.KindSleep, false},
 	{WorkoutIDPrefix, read.KindWorkout, false},
 	{DailyIDPrefix, read.KindDaily, false},
+	{ECGIDPrefix, read.KindECG, false},
 }
 
 // RecordID is the stable id of the Observation made from r.
@@ -87,6 +89,8 @@ func RecordID(r read.ObservationRecord) string {
 		return WorkoutIDPrefix + strconv.FormatInt(r.Workout.ID, 10)
 	case read.KindDaily:
 		return DailyIDPrefix + strconv.FormatInt(r.Daily.ID, 10)
+	case read.KindECG:
+		return ECGIDPrefix + strconv.FormatInt(r.ECG.ID, 10)
 	}
 	return ""
 }
@@ -116,6 +120,7 @@ type Component struct {
 	Code                 CodeableConcept  `json:"code"`
 	ValueQuantity        *Quantity        `json:"valueQuantity,omitempty"`
 	ValueCodeableConcept *CodeableConcept `json:"valueCodeableConcept,omitempty"`
+	ValueSampledData     *SampledData     `json:"valueSampledData,omitempty"`
 	DataAbsentReason     *CodeableConcept `json:"dataAbsentReason,omitempty"`
 }
 
@@ -128,6 +133,8 @@ func FromRecord(user uuid.UUID, r read.ObservationRecord) Observation {
 		return FromWorkout(user, *r.Workout)
 	case read.KindDaily:
 		return FromDailySummary(user, *r.Daily)
+	case read.KindECG:
+		return FromECG(user, *r.ECG)
 	}
 	if r.Partner != nil {
 		return FromBloodPressure(user, *r.Sample, *r.Partner)

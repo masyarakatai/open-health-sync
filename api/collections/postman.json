@@ -46,6 +46,11 @@
       "description": "The Device id, as an Observation's `device.reference` gives it."
     },
     {
+      "key": "ecgId",
+      "value": "1",
+      "description": "The ecg id."
+    },
+    {
       "key": "jobId",
       "value": "",
       "description": "The `job_id` returned by `DELETE /v1/users/{id}`, `DELETE /v1/users/{id}/data/{provider}`\nor `DELETE /v1/users/{id}/connections/{provider}?delete_data=true`."
@@ -53,7 +58,7 @@
     {
       "key": "observationId",
       "value": "qs-1234",
-      "description": "The Observation id, as the Bundle gives it: `qs-`, `bp-` (the systolic sample's\nid), `sleep-`, `workout-` or `daily-`, then the stored row id."
+      "description": "The Observation id, as the Bundle gives it: `qs-`, `bp-` (the systolic sample's\nid), `sleep-`, `workout-`, `daily-` or `ecg-`, then the stored row id."
     },
     {
       "key": "patientId",
@@ -1868,6 +1873,88 @@
           }
         },
         {
+          "name": "ECG recordings, metadata only",
+          "request": {
+            "method": "GET",
+            "description": "ECG recordings, metadata only.\n\n`GET /v1/users/{id}/ecg`\n\nThe user's ECG recordings (Apple Watch, Withings) by start time, then id, without their\nvoltage samples: read one recording for those. `classification` is the label the recording\ndevice gave, in its maker's vocabulary, passed through as recorded: Open Health Sync does\nnot compute or check it. `start` and `end` bound `start_date`. See docs/api.md.",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/:id/ecg",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                ":id",
+                "ecg"
+              ],
+              "query": [
+                {
+                  "key": "start",
+                  "value": "2026-01-01T00:00:00Z",
+                  "description": "Inclusive lower bound, RFC 3339 or YYYY-MM-DD.",
+                  "disabled": true
+                },
+                {
+                  "key": "end",
+                  "value": "2026-01-01T00:00:00Z",
+                  "description": "Exclusive upper bound, RFC 3339 or YYYY-MM-DD. Must not be before start.",
+                  "disabled": true
+                },
+                {
+                  "key": "cursor",
+                  "value": "",
+                  "description": "The next_cursor of the previous page.",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "100",
+                  "disabled": true
+                }
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{userId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "One ECG recording with its voltage samples",
+          "request": {
+            "method": "GET",
+            "description": "One ECG recording with its voltage samples.\n\n`GET /v1/users/{id}/ecg/{ecg_id}`\n\nOne recording and its stored voltage samples, in offset order, as two parallel arrays:\n`offsets_s` (seconds from `start_date`) and `voltages_uv` (microvolts), single lead. At\nmost 100000 samples are returned (a recording holds about 15360); `truncated` is true when\nmore are stored. A recording that is not the user's, or a user of another tenant, is a 404.",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/:id/ecg/:ecg_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                ":id",
+                "ecg",
+                ":ecg_id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{userId}}"
+                },
+                {
+                  "key": "ecg_id",
+                  "value": "{{ecgId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
           "name": "The order of sources the merged view ranks by",
           "request": {
             "method": "GET",
@@ -2211,7 +2298,7 @@
           "name": "The user's records as FHIR R4 Observations",
           "request": {
             "method": "GET",
-            "description": "The user's records as FHIR R4 Observations.\n\n`GET /v1/users/{id}/fhir/Observation`\n\nThe user's records as one FHIR R4 (4.0.1) `searchset` Bundle of Observations,\n`Content-Type: application/fhir+json`: quantity samples (`qs-` ids), blood pressure\npanels pairing a systolic and a diastolic sample (`bp-`), sleep sessions (`sleep-`),\nworkouts (`workout-`) and daily summaries (`daily-`), merged in time order (a\nsample's start, a bedtime, a workout's start, a day at midnight UTC), then by kind\nand id. Paged like every list: the Bundle's `next` link carries the cursor, and\nthere is no `next` link on the last page; `total` is left out. A blood pressure pair\nis never split across pages, and its two samples are not listed on their own.\nVital signs meet the R4 vital signs profiles they claim in `meta.profile`. The\nmapping (codes, units, categories, provenance and limits) is in docs/fhir.md. In the\nmerged view (the default) a record another source covers better is left out, and a\ndaily summary keeps only the figures it owns (see `view`). The\nfilters below combine: a record is listed when it matches all of them. Errors are\n`application/problem+json` like the rest of the API.",
+            "description": "The user's records as FHIR R4 Observations.\n\n`GET /v1/users/{id}/fhir/Observation`\n\nThe user's records as one FHIR R4 (4.0.1) `searchset` Bundle of Observations,\n`Content-Type: application/fhir+json`: quantity samples (`qs-` ids), blood pressure\npanels pairing a systolic and a diastolic sample (`bp-`), sleep sessions (`sleep-`),\nworkouts (`workout-`), daily summaries (`daily-`) and ECG recordings with their\nvoltage samples (`ecg-`), merged in time order (a sample's start, a bedtime, a\nworkout's start, a day at midnight UTC, a recording's start), then by kind and id.\nPaged like every list: the Bundle's `next` link carries the cursor, and there is no\n`next` link on the last page; `total` is left out. A blood pressure pair is never\nsplit across pages, and its two samples are not listed on their own. A page holds at\nmost 100 ECG recordings: one that reaches them ends there, with a `next` link.\nVital signs meet the R4 vital signs profiles they claim in `meta.profile`. The\nmapping (codes, units, categories, provenance and limits) is in docs/fhir.md. In the\nmerged view (the default) a record another source covers better is left out, and a\ndaily summary keeps only the figures it owns (see `view`). The\nfilters below combine: a record is listed when it matches all of them. Errors are\n`application/problem+json` like the rest of the API.",
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/v1/users/:id/fhir/Observation",
@@ -2235,7 +2322,7 @@
                 {
                   "key": "code",
                   "value": "http://loinc.org|8867-4",
-                  "description": "A FHIR token `system|code` matched against `Observation.code`: a LOINC code\n(`http://loinc.org|8867-4`; 85354-9, 8480-6 and 8462-4 find the blood pressure\npanels, 93832-4 the sleep sessions, 55411-3 the workouts), a quantity type\n(`https://github.com/soma-intelligence/open-health-sync/fhir/CodeSystem/quantity-type|heart_rate`,\nlike `type`), or a record type\n(`https://github.com/soma-intelligence/open-health-sync/fhir/CodeSystem/record-type|`\n`blood_pressure`, `sleep_session`, `workout` or `daily_summary`). One value; other\nsystems are a 400. A code no Observation carries is an empty Bundle.",
+                  "description": "A FHIR token `system|code` matched against `Observation.code`: a LOINC code\n(`http://loinc.org|8867-4`; 85354-9, 8480-6 and 8462-4 find the blood pressure\npanels, 93832-4 the sleep sessions, 55411-3 the workouts, 11524-6 the ECG\nrecordings), a quantity type\n(`https://github.com/soma-intelligence/open-health-sync/fhir/CodeSystem/quantity-type|heart_rate`,\nlike `type`), or a record type\n(`https://github.com/soma-intelligence/open-health-sync/fhir/CodeSystem/record-type|`\n`blood_pressure`, `sleep_session`, `workout`, `daily_summary` or `ecg_recording`). One value; other\nsystems are a 400. A code no Observation carries is an empty Bundle.",
                   "disabled": true
                 },
                 {
@@ -2318,7 +2405,7 @@
                 {
                   "key": "observation_id",
                   "value": "{{observationId}}",
-                  "description": "The Observation id, as the Bundle gives it: `qs-`, `bp-` (the systolic sample's\nid), `sleep-`, `workout-` or `daily-`, then the stored row id."
+                  "description": "The Observation id, as the Bundle gives it: `qs-`, `bp-` (the systolic sample's\nid), `sleep-`, `workout-`, `daily-` or `ecg-`, then the stored row id."
                 }
               ]
             }
@@ -2668,7 +2755,7 @@
           "name": "One list of the user as a CSV or Parquet file",
           "request": {
             "method": "GET",
-            "description": "One list of the user as a CSV or Parquet file.\n\n`GET /v1/users/{id}/exports/{dataset}`\n\nEvery record of one list in `[start, end)`, as one file streamed in a single response\n(`Content-Disposition: attachment`). The columns are the members of the list's JSON\nrecords, in the same order and with the same names and values: times in UTC, a missing\nvalue empty (CSV) or null (Parquet), `metadata` (and the daily `sources`) as JSON text. `samples` holds every\nquantity type unless `type` names one. The file is not paged: `cursor` and `limit` are\na 400. A failure once the file has started cuts the connection, so a truncated file\nnever looks complete. See docs/exports.md.",
+            "description": "One list of the user as a CSV or Parquet file.\n\n`GET /v1/users/{id}/exports/{dataset}`\n\nEvery record of one list in `[start, end)`, as one file streamed in a single response\n(`Content-Disposition: attachment`). The columns are the members of the list's JSON\nrecords, in the same order and with the same names and values: times in UTC, a missing\nvalue empty (CSV) or null (Parquet), `metadata` (and the daily `sources`) as JSON text. `ecg` holds the\nrecordings' metadata, not their voltage samples (in the archive and the FHIR Observation). `samples` holds every\nquantity type unless `type` names one. The file is not paged: `cursor` and `limit` are\na 400. A failure once the file has started cuts the connection, so a truncated file\nnever looks complete. See docs/exports.md.",
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/v1/users/:id/exports/:dataset",
@@ -2726,7 +2813,7 @@
           "name": "Everything held about one user, as one zip file",
           "request": {
             "method": "GET",
-            "description": "Everything held about one user, as one zip file.\n\n`GET /v1/users/{id}/archive`\n\nThe answer to a data portability request: one zip file streamed in a single response\n(`Content-Disposition: attachment`) holding `manifest.json` (user, generation time,\ninstance version, record count of each file, a description of each folder),\n`user.json` (the user and its provider connections, never a token),\n`canonical/<list>.ndjson` (every record of samples, category-samples, sleep,\nsleep-phases, workouts, workout-routes, nutrition and daily, the same JSON as the list\nitems, one per line), `fhir/bundle.json` (a FHIR R4 `collection` Bundle of every\nObservation), `omh/data-points.ndjson` (the Open mHealth data points) and `raw/...`\n(every raw payload of the user, byte for byte, under its path below the user). A\ntenant key reads any user of the tenant; a user token with scope `read` reads only its\nown user, and another user is a 404. A failure once the file has started cuts the\nconnection, so a truncated archive never looks complete. See docs/exports.md.",
+            "description": "Everything held about one user, as one zip file.\n\n`GET /v1/users/{id}/archive`\n\nThe answer to a data portability request: one zip file streamed in a single response\n(`Content-Disposition: attachment`) holding `manifest.json` (user, generation time,\ninstance version, record count of each file, a description of each folder),\n`user.json` (the user and its provider connections, never a token),\n`canonical/<list>.ndjson` (every record of samples, category-samples, sleep,\nsleep-phases, workouts, workout-routes, nutrition and daily, the same JSON as the list\nitems, one per line, and ecg, each ECG recording with its voltage samples as\n`GET /v1/users/{id}/ecg/{ecg_id}` returns it), `fhir/bundle.json` (a FHIR R4 `collection` Bundle of every\nObservation), `omh/data-points.ndjson` (the Open mHealth data points) and `raw/...`\n(every raw payload of the user, byte for byte, under its path below the user). A\ntenant key reads any user of the tenant; a user token with scope `read` reads only its\nown user, and another user is a 404. A failure once the file has started cuts the\nconnection, so a truncated archive never looks complete. See docs/exports.md.",
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/v1/users/:id/archive",

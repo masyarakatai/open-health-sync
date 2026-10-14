@@ -690,6 +690,88 @@ export interface MenstrualCycle {
   flow_days: MenstrualFlowDay[];
 }
 
+export interface ECGRecording {
+  /** The integration the record came through (apple_health, withings...). */
+  provider: string;
+  /** The vendor that produced the record, when it differs or is known. */
+  source: string | null;
+  device: string | null;
+  ingested_at: string;
+  id: number;
+  start_date: string;
+  end_date: string | null;
+  /**
+   * The label the recording device gave, in its maker's vocabulary, passed through as
+   * recorded. Apple Health: not_set, sinus_rhythm, atrial_fibrillation,
+   * inconclusive_low_heart_rate, inconclusive_high_heart_rate, inconclusive_poor_reading,
+   * inconclusive_other, unrecognized. Withings: negative, positive, inconclusive. Null
+   * when the stored value is none of these.
+   */
+  classification: string | null;
+  /** The stored value the label comes from. */
+  classification_value: number;
+  /** Whether the person recorded symptoms with the recording (not_set, none, present). */
+  symptoms_status: string | null;
+  /** Beats per minute, as the device reported it. */
+  average_heart_rate: number | null;
+  /** Samples per second; 0 when the provider gives none. */
+  sampling_frequency_hz: number;
+  /** The sample count the device reported. */
+  number_of_measurements: number;
+  /** Provider fields kept as is, plus timezone (IANA name) when known. */
+  metadata: Metadata;
+}
+
+export interface ECGSamples {
+  /** Samples returned. */
+  count: number;
+  /** More samples are stored than the 100000 returned. */
+  truncated: boolean;
+  /** Seconds from start_date, in order. */
+  offsets_s: number[];
+  /** Microvolts, single lead, one per offset. */
+  voltages_uv: number[];
+}
+
+export interface ECGRecordingDetail {
+  /** The integration the record came through (apple_health, withings...). */
+  provider: string;
+  /** The vendor that produced the record, when it differs or is known. */
+  source: string | null;
+  device: string | null;
+  ingested_at: string;
+  id: number;
+  start_date: string;
+  end_date: string | null;
+  /**
+   * The label the recording device gave, in its maker's vocabulary, passed through as
+   * recorded. Apple Health: not_set, sinus_rhythm, atrial_fibrillation,
+   * inconclusive_low_heart_rate, inconclusive_high_heart_rate, inconclusive_poor_reading,
+   * inconclusive_other, unrecognized. Withings: negative, positive, inconclusive. Null
+   * when the stored value is none of these.
+   */
+  classification: string | null;
+  /** The stored value the label comes from. */
+  classification_value: number;
+  /** Whether the person recorded symptoms with the recording (not_set, none, present). */
+  symptoms_status: string | null;
+  /** Beats per minute, as the device reported it. */
+  average_heart_rate: number | null;
+  /** Samples per second; 0 when the provider gives none. */
+  sampling_frequency_hz: number;
+  /** The sample count the device reported. */
+  number_of_measurements: number;
+  /** Provider fields kept as is, plus timezone (IANA name) when known. */
+  metadata: Metadata;
+  samples: ECGSamples;
+}
+
+export interface ECGRecordingPage {
+  data: ECGRecording[];
+  /** Null on the last page. */
+  next_cursor: string | null;
+}
+
 export interface Coverage {
   /**
    * Work of the user not finished yet: ETL jobs and provider pulls (backfill,
@@ -1101,7 +1183,7 @@ export interface OMHDataPointPage {
 
 /**
  * A FHIR R4 Observation made from one quantity sample, a blood pressure pair, a sleep
- * session, a workout or a daily summary (docs/fhir.md).
+ * session, a workout, a daily summary or an ECG recording (docs/fhir.md).
  */
 export interface FHIRObservation {
   resourceType: "Observation";
@@ -1123,8 +1205,8 @@ export interface FHIRObservation {
   dataAbsentReason?: FHIRCodeableConcept;
   device?: FHIRReference;
   /**
-   * The two values of a blood pressure panel, or a sleep session's, workout's or daily
-   * summary's other fields; a field without a value is left out.
+   * The two values of a blood pressure panel, or a sleep session's, workout's, daily
+   * summary's or ECG recording's other fields; a field without a value is left out.
    */
   component?: FHIRObservationComponent[];
 }
@@ -1157,7 +1239,27 @@ export interface FHIRObservationComponent {
   code: FHIRCodeableConcept;
   valueQuantity?: FHIRQuantity;
   valueCodeableConcept?: FHIRCodeableConcept;
+  /**
+   * An ECG recording's voltage samples: `data` holds the values, separated by spaces, each
+   * `origin + factor * value` in microvolts (factor is absent, so 1), `period` milliseconds
+   * apart; `E` marks a value that is not a finite number.
+   */
+  valueSampledData?: FHIRSampledData;
   dataAbsentReason?: FHIRCodeableConcept;
+}
+
+/**
+ * An ECG recording's voltage samples: `data` holds the values, separated by spaces, each
+ * `origin + factor * value` in microvolts (factor is absent, so 1), `period` milliseconds
+ * apart; `E` marks a value that is not a finite number.
+ */
+export interface FHIRSampledData {
+  origin: FHIRQuantity;
+  /** Milliseconds between two samples. */
+  period: number;
+  factor?: number;
+  dimensions: number;
+  data: string;
 }
 
 export interface FHIRQuantity {
@@ -1185,7 +1287,7 @@ export interface FHIRBundleEntry {
   fullUrl: string;
   /**
    * A FHIR R4 Observation made from one quantity sample, a blood pressure pair, a sleep
-   * session, a workout or a daily summary (docs/fhir.md).
+   * session, a workout, a daily summary or an ECG recording (docs/fhir.md).
    */
   resource: FHIRObservation;
   search?: FHIRBundleEntrySearch;

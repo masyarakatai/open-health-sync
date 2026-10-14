@@ -311,6 +311,20 @@ func TestQuickstartMatchesOpenAPI(t *testing.T) {
 			user.ID, at, "contract-hb-"+strconv.Itoa(i))
 		require.NoError(t, err)
 	}
+	// An ECG recording with invented samples, written the same way.
+	var ecgID int64
+	ecgAt := time.Date(2026, 1, 10, 9, 0, 0, 0, time.UTC)
+	require.NoError(t, pool.QueryRow(context.Background(), `INSERT INTO ohs_data.ecg_recordings
+		(tenant_id, user_id, provider, source_slug, start_date, end_date, classification, symptoms_status,
+		 average_heart_rate, sampling_frequency, number_of_measurements, content_hash)
+		SELECT tenant_id, id, 'apple_health', 'apple_health', $2, $3, 1, 1, 61, 512, 32, 'contract-ecg'
+		FROM ohs_core.end_users WHERE id = $1 RETURNING id`, user.ID, ecgAt, ecgAt.Add(time.Second)).Scan(&ecgID))
+	_, err = pool.Exec(context.Background(), `INSERT INTO ohs_data.ecg_samples
+		(tenant_id, user_id, ecg_id, ts, time_since_sample_start, voltage_uv, content_hash)
+		SELECT u.tenant_id, u.id, $2::bigint, $3::timestamptz + make_interval(secs => g / 512.0), g / 512.0,
+			(g % 8) * 2.5 - 5, 'contract-ecg-' || g::text
+		FROM ohs_core.end_users u, generate_series(0, 31) AS g WHERE u.id = $1`, user.ID, ecgID, ecgAt)
+	require.NoError(t, err)
 	pool.Close()
 	for _, p := range []string{u + "/rr-intervals?limit=5", u + "/hrv", u + "/hrv?series_id=contract-series&start=2026-01-10"} {
 		r := c.json("GET", p, key, "")
@@ -318,6 +332,25 @@ func TestQuickstartMatchesOpenAPI(t *testing.T) {
 		assert.Contains(t, string(r.body), "contract-series", p)
 	}
 	assert.Equal(t, 400, c.json("GET", u+"/hrv?cursor=nope", key, "").status)
+
+	// ECG recordings: the list, one recording with its samples, its FHIR
+	// Observation, and the export.
+	ecgPath := strconv.FormatInt(ecgID, 10)
+	for _, p := range []string{
+		u + "/ecg",
+		u + "/ecg?limit=1&start=2026-01-10&end=2026-01-11",
+		u + "/ecg/" + ecgPath,
+		u + "/fhir/Observation/ecg-" + ecgPath,
+		u + "/fhir/Observation?code=http://loinc.org%7C11524-6",
+		u + "/exports/ecg",
+		u + "/exports/ecg?format=parquet",
+	} {
+		r := c.json("GET", p, key, "")
+		assert.Equal(t, 200, r.status, "%s: %s", p, r.body)
+	}
+	assert.Equal(t, 404, c.json("GET", u+"/ecg/999999999", key, "").status)
+	assert.Equal(t, 404, c.json("GET", u+"/fhir/Observation/ecg-999999999", key, "").status)
+	assert.Equal(t, 400, c.json("GET", u+"/ecg?cursor=%25%25", key, "").status)
 
 	// Page through heart rate with a small limit to exercise next_cursor.
 	r = c.json("GET", u+"/samples?type=heart_rate&limit=100", key, "")
