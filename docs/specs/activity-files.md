@@ -150,8 +150,9 @@ Repository rule: standard library first, every dependency with a written reason.
   2026) and it follows FIT profile 21.x.
 - Rejected: `github.com/tormoder/fit` (MIT): last release v0.15.0 on 2023-10-01, an older
   profile, decodes into fixed structs only.
-- Size: `make build` gave a `bin/ohs` of 57,567,065 bytes before this change; the size after
-  is measured once the code is in.
+- Size: `make build` with the same version flags, from checkouts at paths of the same length,
+  gave a `bin/ohs` of 57,572,345 bytes before this change and 58,764,304 bytes after:
+  +1,191,959 bytes (+2.1 %), for the decoder, its profile tables and the new connector.
 - Licence note: the module also ships Garmin's `Profile.xlsx` and SDK test files under Garmin's
   FIT SDK licence. They serve the library's code generation and tests, are not imported, and
   are not compiled into `ohs`. Reading and writing FIT files is use of the FIT protocol, which

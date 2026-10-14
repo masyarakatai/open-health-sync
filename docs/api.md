@@ -172,7 +172,10 @@ scope. The contract (headers, size, idempotency) is in
 Android Health Connect records the same way; its line format is in
 [connectors/health-connect.md](connectors/health-connect.md). `POST /v1/ingest/xiaomi` takes the
 rows of a Mi Fitness data copy, as `ohs import mi-fitness` writes them
-([connectors/xiaomi.md](connectors/xiaomi.md)). The routes share the limit of uploads in flight.
+([connectors/xiaomi.md](connectors/xiaomi.md)). `POST /v1/ingest/activity-files` takes one FIT, GPX
+or TCX activity file per part, base64 on one line, as `ohs import files` sends them
+([connectors/activity-files.md](connectors/activity-files.md)). The routes share the limit of
+uploads in flight.
 
 ## Reading data
 
