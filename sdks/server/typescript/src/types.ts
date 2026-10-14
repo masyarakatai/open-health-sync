@@ -834,6 +834,60 @@ export interface TimeTag {
   updated_at: string;
 }
 
+/**
+ * The scale of each kind: feeling, mood, stress, energy, sleep_quality and
+ * muscle_soreness from 1 to 5; exertion and pain from 0 to 10 (docs/self-reports.md).
+ */
+export type SelfReportKind = "feeling" | "mood" | "stress" | "energy" | "sleep_quality" | "muscle_soreness" | "exertion" | "pain";
+
+export interface CreateSelfReportsRequest {
+  reports: SelfReportInput[];
+}
+
+export interface SelfReportInput {
+  /**
+   * Your id of the report. Sending it again replaces the stored value. Absent, the
+   * server gives one (a retry then records the report twice, unless it carries the
+   * same Idempotency-Key).
+   */
+  id?: string;
+  /**
+   * The scale of each kind: feeling, mood, stress, energy, sleep_quality and
+   * muscle_soreness from 1 to 5; exertion and pain from 0 to 10 (docs/self-reports.md).
+   */
+  kind: SelfReportKind;
+  /** A whole number on the kind's scale. */
+  value: number;
+  /** When the rating applies, between 1900 and 2200. */
+  start_at: string;
+  /** After `start_at`, for a rating of a period (a training session). Absent or null for an instant. */
+  end_at?: string | null;
+  /** The IANA time zone the person was in. Empty or null is none. */
+  timezone?: string | null;
+}
+
+export interface SelfReport {
+  id: string;
+  /**
+   * The scale of each kind: feeling, mood, stress, energy, sleep_quality and
+   * muscle_soreness from 1 to 5; exertion and pain from 0 to 10 (docs/self-reports.md).
+   */
+  kind: SelfReportKind;
+  /** The quantity type it is stored as, `reported_<kind>`. */
+  type: string;
+  value: number;
+  start_at: string;
+  end_at: string | null;
+  timezone: string | null;
+}
+
+export interface SelfReportsResponse {
+  /** The reports as stored, in request order, each with its id. */
+  reports: SelfReport[];
+  /** true when these exact reports had already been received. */
+  duplicate: boolean;
+}
+
 export interface CreateTimeTagRequest {
   /** The controlled vocabulary of time tags; see docs/time-tags.md. */
   kind: TimeTagKind;
@@ -1117,6 +1171,8 @@ export interface FHIRObservation {
   effectivePeriod?: FHIRObservationEffectivePeriod;
   /** When the record was ingested (the later of a panel's two samples). */
   issued?: string;
+  /** The person, on a self report (category survey); absent otherwise. */
+  performer?: FHIRReference[];
   valueQuantity?: FHIRQuantity;
   /** Instead of valueQuantity for a classification (ecg_afib_classification). */
   valueCodeableConcept?: FHIRObservationValueCodeableConcept;

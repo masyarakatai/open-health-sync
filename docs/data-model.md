@@ -383,6 +383,14 @@ stored as 0 to 100, not as fractions.
 | `readiness_hrv_balance` | `index` |
 | `readiness_score` | `score` |
 | `recovery_high_time` | `min` |
+| `reported_energy` | `score` |
+| `reported_exertion` | `score` |
+| `reported_feeling` | `score` |
+| `reported_mood` | `score` |
+| `reported_muscle_soreness` | `score` |
+| `reported_pain` | `score` |
+| `reported_sleep_quality` | `score` |
+| `reported_stress` | `score` |
 | `respiratory_rate` | `bpm` |
 | `resting_heart_rate` | `bpm` |
 | `running_ground_contact_time` | `ms` |
