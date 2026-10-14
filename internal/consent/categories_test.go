@@ -37,6 +37,14 @@ func TestOf(t *testing.T) {
 		"mood":                         Mental,
 		"environmental_audio_exposure": Other,
 		"HEART_RATE":                   Heart,
+		"reported_feeling":             Mental,
+		"reported_mood":                Mental,
+		"reported_stress":              Mental,
+		"reported_energy":              Mental,
+		"reported_sleep_quality":       Sleep,
+		"reported_muscle_soreness":     Activity,
+		"reported_exertion":            Activity,
+		"reported_pain":                Other,
 	}
 	for name, want := range cases {
 		assert.Equal(t, want, Of(name), name)

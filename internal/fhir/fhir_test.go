@@ -92,7 +92,16 @@ func goldenCases() map[string]read.CodedSample {
 	afib := sample(7007, "ecg_afib_classification", 0, "classification", "", "")
 	afib.Provider, afib.Source = "withings", ptr("withings")
 
+	// Self reports: a rating the person gave, with and without a LOINC code.
+	pain := sample(8008, "reported_pain", 3, "score", "72514-3", "{score}")
+	pain.Provider, pain.Source, pain.Device = "self_report", ptr("self_report"), nil
+	pain.ExternalID = ptr("0192f1a2-0000-7000-8000-00000000beef")
+	feeling := sample(8009, "reported_feeling", 4, "score", "", "{score}")
+	feeling.Provider, feeling.Source, feeling.Device = "self_report", ptr("self_report"), nil
+
 	return map[string]read.CodedSample{
+		"observation-survey-reported-pain":      pain,
+		"observation-survey-reported-feeling":   feeling,
 		"observation-ecg-afib-classification":   afib,
 		"observation-vital-heart-rate":          sample(1001, "heart_rate", 61, "bpm", "8867-4", "/min"),
 		"observation-vital-oxygen-saturation":   sample(1002, "oxygen_saturation", 97, "percent", "59408-5", "%"),

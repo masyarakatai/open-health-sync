@@ -137,6 +137,16 @@ var storageUnits = map[string]string{
 	// Provider day classifications, in minutes of the day.
 	QTStressHighTime:   "min",
 	QTRecoveryHighTime: "min",
+
+	// A person's own ratings (SelfReportScales).
+	QTReportedFeeling:        "score",
+	QTReportedMood:           "score",
+	QTReportedStress:         "score",
+	QTReportedEnergy:         "score",
+	QTReportedSleepQuality:   "score",
+	QTReportedMuscleSoreness: "score",
+	QTReportedExertion:       "score",
+	QTReportedPain:           "score",
 }
 
 // unitAliases renames a unit without touching the value. Keyed by the source

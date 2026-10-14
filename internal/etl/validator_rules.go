@@ -440,6 +440,18 @@ var rangeRules = map[string]rangeRule{
 		HardMin: 0, HardMax: 1440, SoftMin: 0, SoftMax: 960,
 	},
 
+	// A person's own ratings. The scale is the contract (model.SelfReportScales):
+	// the connector refuses anything else before it is stored, so these bounds
+	// only catch a rating that reached the pipeline another way.
+	model.QTReportedFeeling:        selfReportRule(model.QTReportedFeeling),
+	model.QTReportedMood:           selfReportRule(model.QTReportedMood),
+	model.QTReportedStress:         selfReportRule(model.QTReportedStress),
+	model.QTReportedEnergy:         selfReportRule(model.QTReportedEnergy),
+	model.QTReportedSleepQuality:   selfReportRule(model.QTReportedSleepQuality),
+	model.QTReportedMuscleSoreness: selfReportRule(model.QTReportedMuscleSoreness),
+	model.QTReportedExertion:       selfReportRule(model.QTReportedExertion),
+	model.QTReportedPain:           selfReportRule(model.QTReportedPain),
+
 	// --- Legacy aliases without a declared storage unit ---------------------
 	// These are not in model.StorageUnits, so CanonicalizeUnits leaves their
 	// unit untouched and the rule declares no Unit: enforcing one would reject
@@ -460,4 +472,13 @@ var rangeRules = map[string]rangeRule{
 	"intraday_activity": {
 		HardMin: 0, HardMax: unbounded, SoftMin: 0, SoftMax: 200000,
 	},
+}
+
+// selfReportRule is the rule of a self report type: its scale, as hard and
+// soft bounds alike, since every rating on the scale is as plausible as any
+// other.
+func selfReportRule(qt string) rangeRule {
+	sc, _ := model.SelfReportScale(qt)
+	return rangeRule{Unit: "score",
+		HardMin: float64(sc.Min), HardMax: float64(sc.Max), SoftMin: float64(sc.Min), SoftMax: float64(sc.Max)}
 }
