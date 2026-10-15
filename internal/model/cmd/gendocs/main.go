@@ -70,6 +70,8 @@ var notes = map[string]string{
 	"DailySummary.RecordID":              "Writer instruction, not a column: the provider record whose figures the summary carries; not written once that record is deleted.",
 	"NutritionLog.Replaceable":           "Writer instruction, not a column.",
 	"Workout.Replaceable":                "Writer instruction, not a column: an edited workout replaces the stored figures.",
+	"Workout.SourceSlug":                 "The vendor that recorded the workout. Empty means the provider; the column is never null.",
+	"Workout.DeviceID":                   "The device that recorded the workout (`Garmin edge_530`). Null when the provider does not say.",
 	"SleepSession.Replaceable":           "Writer instruction, not a column: a re-scored session replaces the stored figures and phases.",
 	"NutritionLog.NutrientsJSON":         "Extended nutrients by name.",
 	"SleepPhase.Phase":                   "`deep`, `rem`, `light`, `awake`, `in_bed` or `asleep_core`, after label normalization.",

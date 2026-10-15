@@ -20,15 +20,16 @@ import (
 	"github.com/soma-intelligence/open-health-sync/connectors/applehealth/export"
 )
 
-const importUsage = "usage: ohs import apple-health <export.zip|export.xml> | mi-fitness <folder|copy.zip> " +
+const importUsage = "usage: ohs import apple-health <export.zip|export.xml> | mi-fitness <folder|copy.zip> | files <file|folder|zip> " +
 	"[--url URL] [--token TOKEN] [--since YYYY-MM-DD] [--tz ZONE] [--batch ID] [--dry-run]: run `ohs import --help` for details"
 
 var batchPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,100}$`)
 
 // runImport loads an existing history into an instance from a file export,
 // over the same upload API a device uses. The sources are Apple Health's
-// "Export All Health Data" archive and the copy of Mi Fitness data Xiaomi
-// delivers from its account privacy center.
+// "Export All Health Data" archive, the copy of Mi Fitness data Xiaomi
+// delivers from its account privacy center, and activity files (FIT, GPX,
+// TCX) alone, in folders or in vendor export zips.
 func runImport(rest []string, out io.Writer) error {
 	fs := flag.NewFlagSet("import", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
@@ -55,12 +56,15 @@ func runImport(rest []string, out io.Writer) error {
 	if len(args) == 0 {
 		return usageErr(importUsage)
 	}
-	if args[0] != "apple-health" && args[0] != "mi-fitness" {
-		return usageErr(fmt.Sprintf("unknown source %q: the sources are apple-health and mi-fitness (%s)", args[0], importUsage))
+	if args[0] != "apple-health" && args[0] != "mi-fitness" && args[0] != "files" {
+		return usageErr(fmt.Sprintf("unknown source %q: the sources are apple-health, mi-fitness and files (%s)", args[0], importUsage))
 	}
 	if len(args) != 2 {
-		if args[0] == "mi-fitness" {
+		switch args[0] {
+		case "mi-fitness":
 			return usageErr("name one folder or zip of the Mi Fitness copy (" + importUsage + ")")
+		case "files":
+			return usageErr("name one activity file, folder or zip (" + importUsage + ")")
 		}
 		return usageErr("name one export.zip or export.xml (" + importUsage + ")")
 	}
@@ -69,6 +73,18 @@ func runImport(rest []string, out io.Writer) error {
 	}
 	if *batch != "" && !batchPattern.MatchString(*batch) {
 		return usageErr("--batch takes letters, digits, _ and -, at most 100")
+	}
+	if args[0] == "files" {
+		if *zone != "" {
+			return usageErr("--tz is for apple-health only: FIT files carry their own UTC offset, and GPX and TCX times are UTC")
+		}
+		if *batch != "" {
+			return usageErr("--batch is not for files: each file is its own batch, named after its content")
+		}
+		return runImportFiles(args[1], filesFlags{
+			baseURL: *baseURL, token: *token, since: *since,
+			dryRun: *dryRun, allowHTTP: *allowHTTP, concurrency: *concurrency,
+		}, out)
 	}
 	if args[0] == "mi-fitness" {
 		if *zone != "" {

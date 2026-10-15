@@ -128,6 +128,8 @@ Stored in `ohs_data.workouts`.
 | `TenantID` | `string` | Owning tenant. Set by the pipeline. |
 | `UserID` | `string` | Owning end user. Set by the pipeline. |
 | `Provider` | `string` |  |
+| `SourceSlug` | `string` | The vendor that recorded the workout. Empty means the provider; the column is never null. |
+| `DeviceID` | `string` | The device that recorded the workout (`Garmin edge_530`). Null when the provider does not say. |
 | `ExternalID` | `string` |  |
 | `ActivityType` | `string` |  |
 | `StartDate` | `time.Time` |  |

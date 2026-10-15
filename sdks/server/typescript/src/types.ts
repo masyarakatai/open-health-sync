@@ -1459,6 +1459,12 @@ export interface IngestXiaomiResponse {
   duplicate: boolean;
 }
 
+export interface IngestActivityFilesResponse {
+  /** Raw object key. */
+  key: string;
+  duplicate: boolean;
+}
+
 export interface ListAuditEventsResponse {
   data: AuditEvent[];
   /** Null on the last page. */

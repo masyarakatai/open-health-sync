@@ -3,6 +3,7 @@
 package fusion
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -88,5 +89,13 @@ func TestEveryGroupHasADefault(t *testing.T) {
 	assert.NotEmpty(t, d[All])
 	for m := range groupOf {
 		assert.True(t, ValidKey(m), m)
+	}
+}
+
+func TestWorkoutsPreferTheOriginalRecording(t *testing.T) {
+	order := Defaults()[GroupWorkouts]
+	for _, vendor := range []string{"garmin", "coros", "wahoo", "suunto", "zwift"} {
+		assert.Less(t, slices.Index(order, vendor), slices.Index(order, "strava"), vendor)
+		assert.GreaterOrEqual(t, slices.Index(order, vendor), 0, vendor)
 	}
 }

@@ -52,6 +52,9 @@ type Deps struct {
 	// Xiaomi handles POST /v1/ingest/xiaomi (Mi Fitness exports). Nil leaves
 	// the route out.
 	Xiaomi connector.DeviceConnector
+	// ActivityFiles handles POST /v1/ingest/activity-files (FIT, GPX and
+	// TCX files). Nil leaves the route out.
+	ActivityFiles connector.DeviceConnector
 	// SelfReport handles POST /v1/users/{id}/self-reports. Nil leaves the
 	// route out.
 	SelfReport connector.DeviceConnector

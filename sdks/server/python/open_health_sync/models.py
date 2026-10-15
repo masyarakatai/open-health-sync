@@ -1551,6 +1551,12 @@ class IngestXiaomiResponse(TypedDict):
     duplicate: bool
 
 
+class IngestActivityFilesResponse(TypedDict):
+    # Raw object key.
+    key: str
+    duplicate: bool
+
+
 class ListAuditEventsResponse(TypedDict):
     data: List[AuditEvent]
     # Null on the last page.
@@ -1638,6 +1644,7 @@ __all__ = [
     "HRVSeries",
     "HRVSeriesPage",
     "HealthzResponse",
+    "IngestActivityFilesResponse",
     "IngestAppleHealthResponse",
     "IngestHealthConnectResponse",
     "IngestXiaomiResponse",

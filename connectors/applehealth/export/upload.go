@@ -47,6 +47,17 @@ func BatchID(exportDate string, xmlSize int64, opts Options) string {
 // upload scope. Retrying cannot help.
 var ErrAuth = errors.New("the server refused the token")
 
+// StatusError reports a part the server refused for good with a 4xx other
+// than 401, 403 and 429: the part itself is wrong (400, 413) or its key holds
+// other bytes (409). Retrying the same part cannot help.
+type StatusError struct {
+	Code   int    // the HTTP status
+	Detail string // the title and detail of the server's problem, if any
+	msg    string
+}
+
+func (e *StatusError) Error() string { return e.msg }
+
 // Uploader posts parts to POST /v1/ingest/apple-health.
 type Uploader struct {
 	// Endpoint is the full ingest URL.
@@ -190,8 +201,12 @@ func (u *Uploader) post(ctx context.Context, p Part, batch string, num int, body
 		return false, retryAfter(resp.Header.Get("Retry-After")), retryable{
 			fmt.Errorf("part %d: HTTP %d%s", p.Number, resp.StatusCode, problemDetail(msg))}
 	case resp.StatusCode == http.StatusConflict:
-		return false, 0, fmt.Errorf("part %d (%s, %s): HTTP 409, the server holds other bytes under batch %s part %d: "+
-			"run again with a new --batch", p.Number, p.Type, p.Day, batch, num)
+		return false, 0, &StatusError{Code: resp.StatusCode, Detail: strings.TrimPrefix(problemDetail(msg), ": "),
+			msg: fmt.Sprintf("part %d (%s, %s): HTTP 409, the server holds other bytes under batch %s part %d: "+
+				"run again with a new --batch", p.Number, p.Type, p.Day, batch, num)}
+	case resp.StatusCode >= 400 && resp.StatusCode < 500:
+		return false, 0, &StatusError{Code: resp.StatusCode, Detail: strings.TrimPrefix(problemDetail(msg), ": "),
+			msg: fmt.Sprintf("part %d (%s, %s): HTTP %d%s", p.Number, p.Type, p.Day, resp.StatusCode, problemDetail(msg))}
 	default:
 		return false, 0, fmt.Errorf("part %d (%s, %s): HTTP %d%s", p.Number, p.Type, p.Day, resp.StatusCode, problemDetail(msg))
 	}

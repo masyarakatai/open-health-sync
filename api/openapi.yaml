@@ -2264,6 +2264,85 @@ paths:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
 
+  /v1/ingest/activity-files:
+    post:
+      tags: [ingest]
+      operationId: ingestActivityFiles
+      summary: Upload one activity file (FIT, GPX or TCX)
+      description: |
+        One gzip NDJSON part (at most 64 MiB, never truncated) holding one activity file on one
+        line: `{"type":"fit","data":"<base64 of the file>"}`, `type` being `fit`, `gpx` or `tcx`
+        and equal to `X-OHS-Type`. The file is at most 20 MiB once decoded (the line format is in
+        docs/connectors/activity-files.md; `ohs import files` writes it). The part is refused
+        with 400, and nothing is stored, unless the file parses as an activity that starts at
+        most 48 hours from now: a FIT course, settings or monitoring file, a GPX route without
+        times or a file with a broken CRC is refused. Same headers, limits and answers as the
+        Apple Health upload.
+        Re-sending the same part is safe: the answer is 200 with `duplicate: true`. Other
+        bytes under a (day, batch, part) already stored are a 409, and so is a part sent while
+        this provider's data is being deleted for the user (nothing is kept; send it again
+        once the deletion job is done). Each instance processes a
+        bounded number of uploads at once; above it the answer is 503 with `Retry-After`.
+      security:
+        - userToken: [upload]
+      parameters:
+        - name: X-OHS-Type
+          in: header
+          required: true
+          description: Format of the file in the part.
+          schema: { type: string, enum: [fit, gpx, tcx] }
+        - name: X-OHS-Day
+          in: header
+          required: true
+          description: UTC day the activity starts (`ohs import files` sends it; the server does not check it).
+          schema: { type: string, format: date }
+        - name: X-OHS-Batch
+          in: header
+          required: true
+          description: "`ohs import files` sends `af1-` and the first 32 hex digits of the file's SHA-256."
+          schema: { type: string, maxLength: 128 }
+        - name: X-OHS-Part
+          in: header
+          required: true
+          schema: { type: integer, minimum: 0, maximum: 1000000 }
+      requestBody:
+        required: true
+        content:
+          application/gzip:
+            schema: { type: string, contentEncoding: binary }
+          application/octet-stream:
+            schema: { type: string, contentEncoding: binary }
+      responses:
+        "200":
+          description: Stored (or already stored) and queued for processing.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [key, duplicate]
+                properties:
+                  key: { type: string, description: Raw object key. }
+                  duplicate: { type: boolean }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "410":
+          description: The user started being deleted while this upload was stored (its token was accepted just before); nothing is kept.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "413": { $ref: "#/components/responses/TooLarge" }
+        "503":
+          description: Too many uploads in progress on this instance.
+          headers:
+            Retry-After:
+              schema: { type: integer }
+              description: Seconds to wait before retrying.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
   /connect:
     get:
       tags: [connections]
