@@ -51,6 +51,13 @@ docker pull ghcr.io/soma-intelligence/open-health-sync:0.1.0
 
 </div>
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/demo/demo-dark.gif">
+  <img src="docs/demo/demo-light.gif" width="100%" alt="Terminal recording of the quickstart. docker compose up starts ohs and Postgres; ohs seed --demo writes 90 days of synthetic data from Oura, WHOOP, Withings, Fitbit, Polar and Apple Health, 44144 rows. The daily endpoint returns one day with 8132 steps from apple_health, a resting heart rate of 53 and a sleep score of 62 from oura, and the source of every figure. One heart rate reading of 70 bpm comes back from /samples, as a FHIR R4 Observation with LOINC 8867-4 and UCUM /min, and as an Open mHealth heart-rate data point in beats/min. tools/list on the MCP endpoint lists sixteen read-only tools.">
+</picture>
+
+<sub>The quickstart, recorded on v0.1.0 with synthetic data: start the stack, load 90 days from six devices, then read one day of the merged view, one heart rate reading as REST, FHIR R4 and Open mHealth, and the MCP tools. Nothing is mocked; <a href="docs/demo/README.md">the tape</a> renders it again.</sub>
+
 Open Health Sync (`ohs`) is a self-hosted ingestion and normalization layer for health data. It
 pulls from providers, accepts uploads from phones, stores each payload verbatim, maps it to one
 canonical model with one set of units, and serves it over a REST API and a read-only MCP server.
