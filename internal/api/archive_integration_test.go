@@ -111,6 +111,7 @@ func TestUserArchive(t *testing.T) {
 		"canonical/workout-routes.ndjson":   3,
 		"canonical/nutrition.ndjson":        1,
 		"canonical/daily.ndjson":            2,
+		"canonical/ecg.ndjson":              0,
 	}
 	for name, n := range want {
 		require.Contains(t, files, name)

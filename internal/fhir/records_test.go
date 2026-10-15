@@ -85,12 +85,13 @@ func dailySummary() read.DailySummary {
 
 func recordCases() map[string]read.ObservationRecord {
 	sys, dia := bpPair()
-	sl, w, d := sleepSession(), workout(), dailySummary()
+	sl, w, d, e := sleepSession(), workout(), dailySummary(), ecgRecording()
 	return map[string]read.ObservationRecord{
 		"observation-vital-blood-pressure-panel": {Kind: read.KindQuantity, Sample: &sys, Partner: &dia},
 		"observation-sleep-session":              {Kind: read.KindSleep, Sleep: &sl},
 		"observation-workout":                    {Kind: read.KindWorkout, Workout: &w},
 		"observation-daily-summary":              {Kind: read.KindDaily, Daily: &d},
+		"observation-ecg-recording":              {Kind: read.KindECG, ECG: &e},
 	}
 }
 
@@ -107,12 +108,13 @@ func TestGoldenRecords(t *testing.T) {
 func TestGoldenMixedSearchSet(t *testing.T) {
 	sys, dia := bpPair()
 	single := sample(1020, "blood_pressure_diastolic", 79, "mmHg", "8462-4", "mm[Hg]")
-	sl, w, d := sleepSession(), workout(), dailySummary()
+	sl, w, d, e := sleepSession(), workout(), dailySummary(), ecgRecording()
 	recs := []read.ObservationRecord{
 		{Kind: read.KindSleep, Sleep: &sl},
 		{Kind: read.KindQuantity, Sample: &sys, Partner: &dia},
 		{Kind: read.KindQuantity, Sample: &single},
 		{Kind: read.KindWorkout, Workout: &w},
+		{Kind: read.KindECG, ECG: &e},
 		{Kind: read.KindDaily, Daily: &d},
 	}
 	var obs []Observation
@@ -120,7 +122,7 @@ func TestGoldenMixedSearchSet(t *testing.T) {
 		obs = append(obs, FromRecord(testUser, r))
 	}
 	base := "http://localhost:8080/v1/users/" + testUser.String() + "/fhir"
-	golden(t, "bundle-searchset-mixed", SearchSet(base, base+"/Observation?limit=5", base+"/Observation?limit=5&cursor=abc", obs))
+	golden(t, "bundle-searchset-mixed", SearchSet(base, base+"/Observation?limit=6", base+"/Observation?limit=6&cursor=abc", obs))
 }
 
 func TestBloodPressurePanel(t *testing.T) {
@@ -191,13 +193,14 @@ func TestDailySummaryLocalDay(t *testing.T) {
 
 func TestRecordIDs(t *testing.T) {
 	sys, dia := bpPair()
-	sl, w, d := sleepSession(), workout(), dailySummary()
+	sl, w, d, e := sleepSession(), workout(), dailySummary(), ecgRecording()
 	for want, r := range map[string]read.ObservationRecord{
 		"qs-1003":      {Kind: read.KindQuantity, Sample: &sys},
 		"bp-1003":      {Kind: read.KindQuantity, Sample: &sys, Partner: &dia},
 		"sleep-7007":   {Kind: read.KindSleep, Sleep: &sl},
 		"workout-8008": {Kind: read.KindWorkout, Workout: &w},
 		"daily-9009":   {Kind: read.KindDaily, Daily: &d},
+		"ecg-11011":    {Kind: read.KindECG, ECG: &e},
 	} {
 		assert.Equal(t, want, RecordID(r))
 		assert.Equal(t, want, FromRecord(testUser, r).ID)
@@ -207,7 +210,7 @@ func TestRecordIDs(t *testing.T) {
 		assert.Equal(t, r.Partner != nil, panel, want)
 		assert.Positive(t, id)
 	}
-	for _, bad := range []string{"", "1", "bp-", "bp-x", "sleep-0", "workout--2", "daily-+3", "qs-1-2", "xx-1", "sleep-99999999999999999999"} {
+	for _, bad := range []string{"", "1", "bp-", "bp-x", "sleep-0", "ecg-", "ecg-0", "ecg--1", "workout--2", "daily-+3", "qs-1-2", "xx-1", "sleep-99999999999999999999"} {
 		_, _, _, ok := ParseID(bad)
 		assert.False(t, ok, bad)
 	}

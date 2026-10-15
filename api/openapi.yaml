@@ -20,7 +20,7 @@ info:
     `start` and `end` take an RFC 3339 time or a `YYYY-MM-DD` date (midnight UTC).
 
     **FHIR.** `GET /v1/users/{id}/fhir/Observation` serves the same quantity samples, blood
-    pressure readings, sleep sessions, workouts and daily summaries as FHIR R4 Observations
+    pressure readings, sleep sessions, workouts, daily summaries and ECG recordings as FHIR R4 Observations
     (`application/fhir+json`), the user as a Patient, the devices the records came from as
     Devices, who produced each Observation as its Provenance, and all of them in one paged
     Bundle with `GET /v1/users/{id}/fhir/Patient/{id}/$everything`; see docs/fhir.md.
@@ -1336,6 +1336,60 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /v1/users/{id}/ecg:
+    parameters:
+      - $ref: "#/components/parameters/UserID"
+    get:
+      tags: [read]
+      operationId: listECGRecordings
+      summary: ECG recordings, metadata only
+      description: |
+        The user's ECG recordings (Apple Watch, Withings) by start time, then id, without their
+        voltage samples: read one recording for those. `classification` is the label the recording
+        device gave, in its maker's vocabulary, passed through as recorded: Open Health Sync does
+        not compute or check it. `start` and `end` bound `start_date`. See docs/api.md.
+      parameters:
+        - $ref: "#/components/parameters/Start"
+        - $ref: "#/components/parameters/End"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: One page, by start_date.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ECGRecordingPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/users/{id}/ecg/{ecg_id}:
+    parameters:
+      - $ref: "#/components/parameters/UserID"
+      - name: ecg_id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      tags: [read]
+      operationId: getECGRecording
+      summary: One ECG recording with its voltage samples
+      description: |
+        One recording and its stored voltage samples, in offset order, as two parallel arrays:
+        `offsets_s` (seconds from `start_date`) and `voltages_uv` (microvolts), single lead. At
+        most 100000 samples are returned (a recording holds about 15360); `truncated` is true when
+        more are stored. A recording that is not the user's, or a user of another tenant, is a 404.
+      responses:
+        "200":
+          description: The recording.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ECGRecordingDetail" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /v1/users/{id}/source-priorities:
     parameters:
       - $ref: "#/components/parameters/UserID"
@@ -1711,11 +1765,13 @@ paths:
         The user's records as one FHIR R4 (4.0.1) `searchset` Bundle of Observations,
         `Content-Type: application/fhir+json`: quantity samples (`qs-` ids), blood pressure
         panels pairing a systolic and a diastolic sample (`bp-`), sleep sessions (`sleep-`),
-        workouts (`workout-`) and daily summaries (`daily-`), merged in time order (a
-        sample's start, a bedtime, a workout's start, a day at midnight UTC), then by kind
-        and id. Paged like every list: the Bundle's `next` link carries the cursor, and
-        there is no `next` link on the last page; `total` is left out. A blood pressure pair
-        is never split across pages, and its two samples are not listed on their own.
+        workouts (`workout-`), daily summaries (`daily-`) and ECG recordings with their
+        voltage samples (`ecg-`), merged in time order (a sample's start, a bedtime, a
+        workout's start, a day at midnight UTC, a recording's start), then by kind and id.
+        Paged like every list: the Bundle's `next` link carries the cursor, and there is no
+        `next` link on the last page; `total` is left out. A blood pressure pair is never
+        split across pages, and its two samples are not listed on their own. A page holds at
+        most 100 ECG recordings: one that reaches them ends there, with a `next` link.
         Vital signs meet the R4 vital signs profiles they claim in `meta.profile`. The
         mapping (codes, units, categories, provenance and limits) is in docs/fhir.md. In the
         merged view (the default) a record another source covers better is left out, and a
@@ -1735,11 +1791,12 @@ paths:
           description: |
             A FHIR token `system|code` matched against `Observation.code`: a LOINC code
             (`http://loinc.org|8867-4`; 85354-9, 8480-6 and 8462-4 find the blood pressure
-            panels, 93832-4 the sleep sessions, 55411-3 the workouts), a quantity type
+            panels, 93832-4 the sleep sessions, 55411-3 the workouts, 11524-6 the ECG
+            recordings), a quantity type
             (`https://github.com/soma-intelligence/open-health-sync/fhir/CodeSystem/quantity-type|heart_rate`,
             like `type`), or a record type
             (`https://github.com/soma-intelligence/open-health-sync/fhir/CodeSystem/record-type|`
-            `blood_pressure`, `sleep_session`, `workout` or `daily_summary`). One value; other
+            `blood_pressure`, `sleep_session`, `workout`, `daily_summary` or `ecg_recording`). One value; other
             systems are a 400. A code no Observation carries is an empty Bundle.
           schema: { type: string, examples: ["http://loinc.org|8867-4"] }
         - name: category
@@ -1775,8 +1832,8 @@ paths:
         required: true
         description: |
           The Observation id, as the Bundle gives it: `qs-`, `bp-` (the systolic sample's
-          id), `sleep-`, `workout-` or `daily-`, then the stored row id.
-        schema: { type: string, examples: [qs-1234, bp-1235, sleep-77] }
+          id), `sleep-`, `workout-`, `daily-` or `ecg-`, then the stored row id.
+        schema: { type: string, examples: [qs-1234, bp-1235, sleep-77, ecg-12] }
     get:
       tags: [fhir]
       operationId: readFHIRObservation
@@ -2020,7 +2077,7 @@ paths:
         description: The list to export. Another name is a 404.
         schema:
           type: string
-          enum: [samples, category-samples, sleep, workouts, nutrition, daily]
+          enum: [samples, category-samples, sleep, workouts, nutrition, daily, ecg]
     get:
       tags: [exports]
       operationId: exportDataset
@@ -2029,7 +2086,8 @@ paths:
         Every record of one list in `[start, end)`, as one file streamed in a single response
         (`Content-Disposition: attachment`). The columns are the members of the list's JSON
         records, in the same order and with the same names and values: times in UTC, a missing
-        value empty (CSV) or null (Parquet), `metadata` (and the daily `sources`) as JSON text. `samples` holds every
+        value empty (CSV) or null (Parquet), `metadata` (and the daily `sources`) as JSON text. `ecg` holds the
+        recordings' metadata, not their voltage samples (in the archive and the FHIR Observation). `samples` holds every
         quantity type unless `type` names one. The file is not paged: `cursor` and `limit` are
         a 400. A failure once the file has started cuts the connection, so a truncated file
         never looks complete. See docs/exports.md.
@@ -2075,7 +2133,8 @@ paths:
         `user.json` (the user and its provider connections, never a token),
         `canonical/<list>.ndjson` (every record of samples, category-samples, sleep,
         sleep-phases, workouts, workout-routes, nutrition and daily, the same JSON as the list
-        items, one per line), `fhir/bundle.json` (a FHIR R4 `collection` Bundle of every
+        items, one per line, and ecg, each ECG recording with its voltage samples as
+        `GET /v1/users/{id}/ecg/{ecg_id}` returns it), `fhir/bundle.json` (a FHIR R4 `collection` Bundle of every
         Observation), `omh/data-points.ndjson` (the Open mHealth data points) and `raw/...`
         (every raw payload of the user, byte for byte, under its path below the user). A
         tenant key reads any user of the tenant; a user token with scope `read` reads only its
@@ -3855,6 +3914,65 @@ components:
           items: { $ref: "#/components/schemas/MenstrualFlowDay" }
           description: The period's flow days in order; a gap day without flow is absent.
 
+    ECGRecording:
+      allOf:
+        - $ref: "#/components/schemas/Provenance"
+        - type: object
+          required: [id, start_date, end_date, classification, classification_value, symptoms_status,
+            average_heart_rate, sampling_frequency_hz, number_of_measurements, metadata]
+          properties:
+            id: { type: integer, format: int64 }
+            start_date: { type: string, format: date-time }
+            end_date: { type: [string, "null"], format: date-time }
+            classification:
+              type: [string, "null"]
+              description: |
+                The label the recording device gave, in its maker's vocabulary, passed through as
+                recorded. Apple Health: not_set, sinus_rhythm, atrial_fibrillation,
+                inconclusive_low_heart_rate, inconclusive_high_heart_rate, inconclusive_poor_reading,
+                inconclusive_other, unrecognized. Withings: negative, positive, inconclusive. Null
+                when the stored value is none of these.
+              examples: [sinus_rhythm]
+            classification_value:
+              type: integer
+              description: The stored value the label comes from.
+            symptoms_status:
+              type: [string, "null"]
+              description: Whether the person recorded symptoms with the recording (not_set, none, present).
+            average_heart_rate: { type: [number, "null"], description: "Beats per minute, as the device reported it." }
+            sampling_frequency_hz: { type: number, description: "Samples per second; 0 when the provider gives none." }
+            number_of_measurements: { type: integer, description: The sample count the device reported. }
+            metadata: { $ref: "#/components/schemas/Metadata" }
+
+    ECGSamples:
+      type: object
+      required: [count, truncated, offsets_s, voltages_uv]
+      properties:
+        count: { type: integer, description: Samples returned. }
+        truncated: { type: boolean, description: More samples are stored than the 100000 returned. }
+        offsets_s:
+          type: array
+          items: { type: number }
+          description: Seconds from start_date, in order.
+        voltages_uv:
+          type: array
+          items: { type: number }
+          description: Microvolts, single lead, one per offset.
+
+    ECGRecordingDetail:
+      allOf:
+        - $ref: "#/components/schemas/ECGRecording"
+        - type: object
+          required: [samples]
+          properties:
+            samples: { $ref: "#/components/schemas/ECGSamples" }
+
+    ECGRecordingPage:
+      allOf:
+        - $ref: "#/components/schemas/PageBase"
+        - properties:
+            data: { type: array, items: { $ref: "#/components/schemas/ECGRecording" } }
+
     Coverage:
       type: object
       required: [pending_jobs, parked_jobs, rejected_records, days, truncated]
@@ -4577,7 +4695,7 @@ components:
       type: object
       description: |
         A FHIR R4 Observation made from one quantity sample, a blood pressure pair, a sleep
-        session, a workout or a daily summary (docs/fhir.md).
+        session, a workout, a daily summary or an ECG recording (docs/fhir.md).
       required: [resourceType, id, status, code, subject]
       properties:
         resourceType: { type: string, const: Observation }
@@ -4634,8 +4752,8 @@ components:
           type: array
           minItems: 1
           description: |
-            The two values of a blood pressure panel, or a sleep session's, workout's or daily
-            summary's other fields; a field without a value is left out.
+            The two values of a blood pressure panel, or a sleep session's, workout's, daily
+            summary's or ECG recording's other fields; a field without a value is left out.
           items:
             type: object
             required: [code]
@@ -4643,7 +4761,21 @@ components:
               code: { $ref: "#/components/schemas/FHIRCodeableConcept" }
               valueQuantity: { $ref: "#/components/schemas/FHIRQuantity" }
               valueCodeableConcept: { $ref: "#/components/schemas/FHIRCodeableConcept" }
+              valueSampledData: { $ref: "#/components/schemas/FHIRSampledData" }
               dataAbsentReason: { $ref: "#/components/schemas/FHIRCodeableConcept" }
+    FHIRSampledData:
+      type: object
+      description: |
+        An ECG recording's voltage samples: `data` holds the values, separated by spaces, each
+        `origin + factor * value` in microvolts (factor is absent, so 1), `period` milliseconds
+        apart; `E` marks a value that is not a finite number.
+      required: [origin, period, dimensions, data]
+      properties:
+        origin: { $ref: "#/components/schemas/FHIRQuantity" }
+        period: { type: number, description: Milliseconds between two samples. }
+        factor: { type: number }
+        dimensions: { type: integer, const: 1 }
+        data: { type: string }
     FHIRQuantity:
       type: object
       properties:

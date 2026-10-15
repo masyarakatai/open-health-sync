@@ -3,8 +3,8 @@
 // Package fhir maps normalized records to FHIR R4 (4.0.1) JSON resources. It
 // holds only the few resource shapes the API serves, written with the
 // standard library: a quantity sample, a blood pressure pair, a sleep
-// session, a workout or a daily summary becomes an Observation, and a page of
-// them a searchset Bundle; the user is a Patient, the devices the records
+// session, a workout, a daily summary or an ECG recording becomes an
+// Observation, and a page of them a searchset Bundle; the user is a Patient, the devices the records
 // came from Devices, and who produced each Observation its Provenance. The
 // mapping is described in docs/fhir.md; the
 // golden files under testdata are what the HL7 validator checks

@@ -142,6 +142,8 @@ func RecordDevice(r read.ObservationRecord) read.Device {
 		return read.ProvenanceDevice(r.Workout.Provenance)
 	case read.KindDaily:
 		return read.Device{Provider: r.Daily.Provider, Source: deref(r.Daily.Source)}
+	case read.KindECG:
+		return read.ProvenanceDevice(r.ECG.Provenance)
 	}
 	return read.Device{}
 }

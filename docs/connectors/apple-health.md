@@ -80,8 +80,10 @@ Other line kinds are recognized by their discriminator field:
 | `heartbeats` | beat to beat RR intervals (see below) |
 | `latitude` and `longitude` | workout route points |
 
-ECG recordings, ECG voltage samples and heartbeat intervals are stored, but no read route serves
-them yet (planned). Clinical record and FHIR resource lines are accepted and dropped on purpose.
+ECG recordings and their voltage samples are served by `GET /v1/users/{id}/ecg` and as FHIR
+Observations ([api.md](../api.md#ecg-recordings)); heartbeat intervals by
+`GET /v1/users/{id}/rr-intervals` and `/hrv`. Clinical record and FHIR resource lines are
+accepted and dropped on purpose.
 
 ### Heartbeat series
 

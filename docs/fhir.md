@@ -3,7 +3,8 @@
 Open Health Sync serves a user's records as [FHIR R4](https://hl7.org/fhir/R4/) (4.0.1)
 Observations, so a FHIR client, an EHR integration or a research pipeline can read them without
 learning the REST JSON shapes: quantity samples (heart rate, steps, weight, SpO2...), blood
-pressure readings, sleep sessions, workouts and daily summaries. The user is served as a
+pressure readings, sleep sessions, workouts, daily summaries and ECG recordings with their
+waveform. The user is served as a
 [Patient](#patient), the devices the records came from as [Devices](#devices), and who produced
 each Observation as its [Provenance](#provenance); [`$everything`](#everything) pages through all
 of them in one Bundle. The output is checked against the specification with the official HL7
@@ -39,7 +40,7 @@ OperationOutcome).
 
 The search returns every kind of record in one list, so a client gets everything with one paged
 search. Observations come in time order, then by kind (quantity sample, sleep session, workout,
-daily summary), then by id:
+daily summary, ECG recording), then by id:
 
 | Record | Its time in the list |
 |---|---|
@@ -47,12 +48,13 @@ daily summary), then by id:
 | sleep session | bedtime start |
 | workout | start |
 | daily summary | the day at midnight UTC (the Observation itself covers the local day) |
+| ECG recording | start |
 
 The cursor in the `next` link is the last Observation's time, kind and id, so a page never
 skips or repeats one even when records of different kinds share a time. A REST list cursor is
 not a valid FHIR cursor (400). The merged list is read in two steps: one query takes the ids of
-the page from the four tables (each branch ordered and limited on its own index, then merged),
-a second reads those rows.
+the page from the five tables (each branch ordered and limited on its own index, then merged),
+a second reads those rows (and the samples of the page's ECG recordings).
 
 The search takes these parameters, all optional. They combine: an Observation is listed when it
 matches every one given.
@@ -76,8 +78,9 @@ for a filtered one: use `start` and `end` where FHIR has `date`, and `limit` whe
 | `http://loinc.org\|85354-9`, `\|8480-6`, `\|8462-4` | the blood pressure panels (R4 allows the codes of the two halves only as the panel's components) |
 | `http://loinc.org\|93832-4` | the sleep sessions |
 | `http://loinc.org\|55411-3` | the workouts |
+| `http://loinc.org\|11524-6` | the ECG recordings |
 | `.../CodeSystem/quantity-type\|heart_rate` | the same as `type=heart_rate` |
-| `.../CodeSystem/record-type\|blood_pressure` | the blood pressure panels; `sleep_session`, `workout` and `daily_summary` likewise |
+| `.../CodeSystem/record-type\|blood_pressure` | the blood pressure panels; `sleep_session`, `workout`, `daily_summary` and `ecg_recording` likewise |
 
 | `category` | Finds |
 |---|---|
@@ -85,6 +88,8 @@ for a filtered one: use `start` and `end` where FHIR has `date`, and `limit` whe
 | `laboratory` | blood glucose and blood alcohol samples |
 | `activity` | the activity quantity samples, the workouts and the daily summaries |
 | `survey` | the [self reports](self-reports.md) |
+
+ECG recordings carry no category, so a `category` search never lists them.
 
 The Bundle has a `self` link and, unless this is the last page, a `next` link that carries the
 cursor: follow `next` until there is none. `total` is left out (the API never counts). Links
@@ -329,6 +334,39 @@ Observation per day rather than per metric keeps one id per row and one place in
 A `code` search matches `Observation.code` only, so `code=http://loinc.org|41950-7` does not
 find daily summaries; use `code=.../CodeSystem/record-type|daily_summary`.
 
+### ECG recordings
+
+One ECG recording (Apple Watch through Apple Health, Withings) is one Observation holding its
+waveform. It is the device's recording passed through: Open Health Sync computes nothing from
+the signal, and the classification is the one the recording device made, in its maker's
+vocabulary.
+
+| Observation | From the recording |
+|---|---|
+| `id` | `ecg-` and the row id |
+| `code` | LOINC 11524-6 (EKG study), then the record type `ecg_recording`; `text` `ECG recording` |
+| `category` | none: the HL7 observation categories have no code that fits a consumer recording without a choice of ours (`procedure`, `exam`) |
+| `effectivePeriod` | `start_date` to `end_date` (`effectiveDateTime` when there is no end) |
+| `component` | the waveform, then each other field that has a value; no `value[x]` on the Observation itself |
+
+| Component | Code | Value |
+|---|---|---|
+| `voltage` | MDC 131328 (`MDC_ECG_ELEC_POTL`, system `urn:iso:std:iso:11073:10101`); `text` `ECG voltage, single lead` | `valueSampledData`: `origin` 0 `uV`, `period` 1000 / sampling frequency (milliseconds; from the first two offsets when the frequency is unknown), `dimensions` 1, `data` the voltages in offset order, in microvolts, rounded to 0.001, separated by a space, `E` for a value that is not a finite number |
+| `average_heart_rate` | LOINC 8867-4 | `/min` |
+| `device_classification` | component code system only; `text` `classification by the recording device` | `valueCodeableConcept`: Apple Health in `.../CodeSystem/healthkit-ecg-classification` (`sinus_rhythm`, `atrial_fibrillation`, `inconclusive_low_heart_rate`, `inconclusive_high_heart_rate`, `inconclusive_poor_reading`, `inconclusive_other`, `unrecognized`), Withings in `.../CodeSystem/ecg-afib-classification` (`negative`, `positive`, `inconclusive`). Left out when not set or unknown |
+| `symptoms_status` | component code system only | `none` or `present` in `.../CodeSystem/ecg-symptoms-status`; left out when not set |
+
+No lead is named: the stored rows do not say which lead was recorded (HealthKit describes the
+Apple Watch lead as similar to lead I; the Withings fields stored name none). A recording's
+samples are capped at 100000 like the [REST read](api.md#ecg-recordings), and a search page
+holds at most 100 ECG Observations: a page that reaches 100 ends there, with a `next` link.
+
+The codes were checked on 2026-10-14: LOINC 11524-6 on loinc.org (active, class CARD.PROC,
+scale Doc); MDC 131328 in the R4 example
+[observation-example-sample-data](https://hl7.org/fhir/R4/observation-example-sample-data.html)
+and the Point-of-Care Device IG's ECG sample array example. LOINC has no code for the raw
+signal.
+
 ### Units
 
 `valueQuantity.code` is UCUM. For a quantity sample it is the catalog's UCUM unit when the type
@@ -367,7 +405,8 @@ holds only what it does store:
 A Device is one device the user's records came from, as their provenance names it. Its
 identity is five stored fields: the provider, the source (`source_slug`), and the device fields
 of the record: `device_id`, and for a quantity sample `device_model` and `product_type` (sleep
-sessions and workouts keep `device_id` only; daily summaries keep none). A record with no
+sessions, workouts and ECG recordings keep `device_id` only; daily summaries keep none; the
+ECG import leaves `device_id` empty today, so ECG Observations name no Device). A record with no
 device id, model or product type names no Device. Two records with the same five fields name
 the same Device, whatever their kind.
 
@@ -383,7 +422,7 @@ the same Device, whatever their kind.
 
 The id is computed from the record's own fields, so an Observation references its Device with
 no extra query. `GET /fhir/Device` reads the five fields of the user's quantity samples, sleep
-sessions and workouts whose time is in `[start, end)` (both optional, as for Observations), each
+sessions, workouts and ECG recordings whose time is in `[start, end)` (both optional, as for Observations), each
 device once, in one page with no `next` link: a user has a handful of devices. It reads the
 `(tenant_id, user_id, time)` index of each table, so a window reads only the chunks it covers;
 with no window it reads the device fields of every record of the user once, which on years of
@@ -450,9 +489,11 @@ are identifiers, documented here; nothing is served at them.
 | URI | Used for |
 |---|---|
 | `.../CodeSystem/quantity-type` | `code.coding`: the canonical quantity names of [data-model.md](data-model.md) |
-| `.../CodeSystem/record-type` | `code.coding`: `blood_pressure`, `sleep_session`, `workout`, `daily_summary` |
+| `.../CodeSystem/record-type` | `code.coding`: `blood_pressure`, `sleep_session`, `workout`, `daily_summary`, `ecg_recording` |
 | `.../CodeSystem/observation-component` | `component.code.coding`: the REST field a component comes from (`deep_sleep_seconds`, `distance_m`...) |
-| `.../CodeSystem/ecg-afib-classification` | `valueCodeableConcept` of an ECG's atrial fibrillation classification: `negative`, `positive`, `inconclusive` |
+| `.../CodeSystem/ecg-afib-classification` | `valueCodeableConcept` of a Withings ECG's atrial fibrillation classification, as the device gave it: `negative`, `positive`, `inconclusive` |
+| `.../CodeSystem/healthkit-ecg-classification` | `valueCodeableConcept` of an Apple Health ECG's classification, HealthKit's names: `sinus_rhythm`, `atrial_fibrillation`, `inconclusive_low_heart_rate`, `inconclusive_high_heart_rate`, `inconclusive_poor_reading`, `inconclusive_other`, `unrecognized` |
+| `.../CodeSystem/ecg-symptoms-status` | whether symptoms were recorded with an ECG: `none`, `present` |
 | `.../CodeSystem/workout-activity` | a workout's activity type: the canonical activity names (`running`, `cycling`...) |
 | `.../CodeSystem/source` | `meta.tag`: the vendor that produced the record |
 | `.../provider/{provider}` | `meta.source`: the provider the record came through |
@@ -469,7 +510,7 @@ Each mapping case has a golden file in [internal/fhir/testdata](../internal/fhir
 profiled vital sign of each kind, resting heart rate, an unpaired systolic sample, a blood
 pressure panel, an interval, a laboratory value, a type without LOINC code, a type and unit
 outside the catalog, a NaN value, a sleep session, a workout, a daily summary on a daylight
-saving day, searchset Bundles (vital signs, every kind of record, empty), a Patient with and
+saving day, an ECG recording with its waveform, searchset Bundles (vital signs, every kind of record, empty), a Patient with and
 without identifier, a Device with every field and one with a model only, the Provenance of a
 sample, of a blood pressure panel and of a daily summary (no device), the Device and Provenance
 searchsets, a first and a last `$everything` page, and the CapabilityStatement. `go test

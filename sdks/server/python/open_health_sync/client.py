@@ -35,6 +35,9 @@ from .models import (
     DeleteProviderDataResponse,
     DeleteUserResponse,
     DeletionJob,
+    ECGRecording,
+    ECGRecordingDetail,
+    ECGRecordingPage,
     FHIRBundle,
     FHIRCapabilityStatement,
     FHIRDevice,
@@ -1535,6 +1538,74 @@ class OpenHealthSync:
             )
         )
 
+    def list_ecg_recordings(
+        self,
+        user_id: str,
+        *,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+        cursor: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> ECGRecordingPage:
+        """ECG recordings, metadata only.
+
+        ``GET /v1/users/{id}/ecg``
+
+        The user's ECG recordings (Apple Watch, Withings) by start time, then id, without their
+        voltage samples: read one recording for those. `classification` is the label the recording
+        device gave, in its maker's vocabulary, passed through as recorded: Open Health Sync does
+        not compute or check it. `start` and `end` bound `start_date`. See docs/api.md.
+
+        Args:
+            start: Inclusive lower bound, RFC 3339 or YYYY-MM-DD.
+            end: Exclusive upper bound, RFC 3339 or YYYY-MM-DD. Must not be before start.
+            cursor: The next_cursor of the previous page.
+        """
+        return self._request(
+            "GET",
+            f"/v1/users/{_path(user_id)}/ecg",
+            query={
+                "start": start,
+                "end": end,
+                "cursor": cursor,
+                "limit": limit,
+            },
+        )
+
+    def iter_ecg_recordings(
+        self,
+        user_id: str,
+        *,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> Iterator[ECGRecording]:
+        """Every item of :meth:`list_ecg_recordings`, page after page, following ``next_cursor``."""
+        return paginate(
+            lambda cursor: self.list_ecg_recordings(
+                user_id,
+                start=start,
+                end=end,
+                cursor=cursor,
+                limit=limit,
+            )
+        )
+
+    def get_ecg_recording(self, user_id: str, ecg_id: int) -> ECGRecordingDetail:
+        """One ECG recording with its voltage samples.
+
+        ``GET /v1/users/{id}/ecg/{ecg_id}``
+
+        One recording and its stored voltage samples, in offset order, as two parallel arrays:
+        `offsets_s` (seconds from `start_date`) and `voltages_uv` (microvolts), single lead. At
+        most 100000 samples are returned (a recording holds about 15360); `truncated` is true when
+        more are stored. A recording that is not the user's, or a user of another tenant, is a 404.
+        """
+        return self._request(
+            "GET",
+            f"/v1/users/{_path(user_id)}/ecg/{_path(ecg_id)}",
+        )
+
     def get_source_priorities(self, user_id: str) -> SourcePriorities:
         """The order of sources the merged view ranks by.
 
@@ -1877,11 +1948,13 @@ class OpenHealthSync:
         The user's records as one FHIR R4 (4.0.1) `searchset` Bundle of Observations,
         `Content-Type: application/fhir+json`: quantity samples (`qs-` ids), blood pressure
         panels pairing a systolic and a diastolic sample (`bp-`), sleep sessions (`sleep-`),
-        workouts (`workout-`) and daily summaries (`daily-`), merged in time order (a
-        sample's start, a bedtime, a workout's start, a day at midnight UTC), then by kind
-        and id. Paged like every list: the Bundle's `next` link carries the cursor, and
-        there is no `next` link on the last page; `total` is left out. A blood pressure pair
-        is never split across pages, and its two samples are not listed on their own.
+        workouts (`workout-`), daily summaries (`daily-`) and ECG recordings with their
+        voltage samples (`ecg-`), merged in time order (a sample's start, a bedtime, a
+        workout's start, a day at midnight UTC, a recording's start), then by kind and id.
+        Paged like every list: the Bundle's `next` link carries the cursor, and there is no
+        `next` link on the last page; `total` is left out. A blood pressure pair is never
+        split across pages, and its two samples are not listed on their own. A page holds at
+        most 100 ECG recordings: one that reaches them ends there, with a `next` link.
         Vital signs meet the R4 vital signs profiles they claim in `meta.profile`. The
         mapping (codes, units, categories, provenance and limits) is in docs/fhir.md. In the
         merged view (the default) a record another source covers better is left out, and a
@@ -1895,11 +1968,12 @@ class OpenHealthSync:
                 outside the quantity type catalog is a 400 (unless this user has samples of it).
             code: A FHIR token `system|code` matched against `Observation.code`: a LOINC code
                 (`http://loinc.org|8867-4`; 85354-9, 8480-6 and 8462-4 find the blood pressure
-                panels, 93832-4 the sleep sessions, 55411-3 the workouts), a quantity type
+                panels, 93832-4 the sleep sessions, 55411-3 the workouts, 11524-6 the ECG
+                recordings), a quantity type
                 (`https://github.com/soma-intelligence/open-health-sync/fhir/CodeSystem/quantity-type|heart_rate`,
                 like `type`), or a record type
                 (`https://github.com/soma-intelligence/open-health-sync/fhir/CodeSystem/record-type|`
-                `blood_pressure`, `sleep_session`, `workout` or `daily_summary`). One value; other
+                `blood_pressure`, `sleep_session`, `workout`, `daily_summary` or `ecg_recording`). One value; other
                 systems are a 400. A code no Observation carries is an empty Bundle.
             category: An HL7 observation category code, bare or as
                 `http://terminology.hl7.org/CodeSystem/observation-category|code`: `vital-signs`,
@@ -2180,7 +2254,7 @@ class OpenHealthSync:
     def export_dataset(
         self,
         user_id: str,
-        dataset: Literal["samples", "category-samples", "sleep", "workouts", "nutrition", "daily"],
+        dataset: Literal["samples", "category-samples", "sleep", "workouts", "nutrition", "daily", "ecg"],
         *,
         format: Optional[Literal["csv", "parquet"]] = None,
         type: Optional[str] = None,
@@ -2194,7 +2268,8 @@ class OpenHealthSync:
         Every record of one list in `[start, end)`, as one file streamed in a single response
         (`Content-Disposition: attachment`). The columns are the members of the list's JSON
         records, in the same order and with the same names and values: times in UTC, a missing
-        value empty (CSV) or null (Parquet), `metadata` (and the daily `sources`) as JSON text. `samples` holds every
+        value empty (CSV) or null (Parquet), `metadata` (and the daily `sources`) as JSON text. `ecg` holds the
+        recordings' metadata, not their voltage samples (in the archive and the FHIR Observation). `samples` holds every
         quantity type unless `type` names one. The file is not paged: `cursor` and `limit` are
         a 400. A failure once the file has started cuts the connection, so a truncated file
         never looks complete. See docs/exports.md.
@@ -2228,7 +2303,8 @@ class OpenHealthSync:
         `user.json` (the user and its provider connections, never a token),
         `canonical/<list>.ndjson` (every record of samples, category-samples, sleep,
         sleep-phases, workouts, workout-routes, nutrition and daily, the same JSON as the list
-        items, one per line), `fhir/bundle.json` (a FHIR R4 `collection` Bundle of every
+        items, one per line, and ecg, each ECG recording with its voltage samples as
+        `GET /v1/users/{id}/ecg/{ecg_id}` returns it), `fhir/bundle.json` (a FHIR R4 `collection` Bundle of every
         Observation), `omh/data-points.ndjson` (the Open mHealth data points) and `raw/...`
         (every raw payload of the user, byte for byte, under its path below the user). A
         tenant key reads any user of the tenant; a user token with scope `read` reads only its
