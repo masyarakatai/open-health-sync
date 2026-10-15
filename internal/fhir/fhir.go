@@ -51,12 +51,14 @@ const (
 	CategoryVitalSigns = "vital-signs"
 	CategoryActivity   = "activity"
 	CategoryLaboratory = "laboratory"
+	CategorySurvey     = "survey"
 )
 
 var categoryDisplay = map[string]string{
 	CategoryVitalSigns: "Vital Signs",
 	CategoryActivity:   "Activity",
 	CategoryLaboratory: "Laboratory",
+	CategorySurvey:     "Survey",
 }
 
 // Coding is a FHIR Coding.
@@ -121,7 +123,9 @@ type Observation struct {
 	EffectiveDateTime string            `json:"effectiveDateTime,omitempty"`
 	EffectivePeriod   *Period           `json:"effectivePeriod,omitempty"`
 	Issued            string            `json:"issued,omitempty"`
-	ValueQuantity     *Quantity         `json:"valueQuantity,omitempty"`
+	// Performer is the person, on an answer they gave about themselves.
+	Performer     []Reference `json:"performer,omitempty"`
+	ValueQuantity *Quantity   `json:"valueQuantity,omitempty"`
 	// ValueCodeableConcept is the value of a classification.
 	ValueCodeableConcept *CodeableConcept `json:"valueCodeableConcept,omitempty"`
 	DataAbsentReason     *CodeableConcept `json:"dataAbsentReason,omitempty"`
@@ -183,6 +187,10 @@ func FromQuantitySample(user uuid.UUID, s read.CodedSample) Observation {
 			Coding: []Coding{{System: ObservationCategory, Code: cat, Display: categoryDisplay[cat]}},
 			Text:   categoryDisplay[cat],
 		}}
+		if cat == CategorySurvey {
+			// A self report: the person gave the answer.
+			o.Performer = []Reference{o.Subject}
+		}
 	}
 
 	start := instant(s.StartDate)

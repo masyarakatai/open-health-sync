@@ -37,6 +37,10 @@ TimeTagKind = Literal["illness", "injury", "travel", "jet_lag", "vaccination", "
 
 TimeTagTime = str
 
+# The scale of each kind: feeling, mood, stress, energy, sleep_quality and
+# muscle_soreness from 1 to 5; exertion and pain from 0 to 10 (docs/self-reports.md).
+SelfReportKind = Literal["feeling", "mood", "stress", "energy", "sleep_quality", "muscle_soreness", "exertion", "pain"]
+
 
 class SetupStatus(TypedDict):
     # True while the instance has no tenant and POST /v1/setup can create one.
@@ -867,6 +871,51 @@ class TimeTag(TypedDict):
     updated_at: str
 
 
+class CreateSelfReportsRequest(TypedDict):
+    reports: List[SelfReportInput]
+
+
+class _SelfReportInputRequired(TypedDict):
+    # The scale of each kind: feeling, mood, stress, energy, sleep_quality and
+    # muscle_soreness from 1 to 5; exertion and pain from 0 to 10 (docs/self-reports.md).
+    kind: SelfReportKind
+    # A whole number on the kind's scale.
+    value: int
+    # When the rating applies, between 1900 and 2200.
+    start_at: str
+
+
+class SelfReportInput(_SelfReportInputRequired, total=False):
+    # Your id of the report. Sending it again replaces the stored value. Absent, the
+    # server gives one (a retry then records the report twice, unless it carries the
+    # same Idempotency-Key).
+    id: str
+    # After `start_at`, for a rating of a period (a training session). Absent or null for an instant.
+    end_at: Optional[str]
+    # The IANA time zone the person was in. Empty or null is none.
+    timezone: Optional[str]
+
+
+class SelfReport(TypedDict):
+    id: str
+    # The scale of each kind: feeling, mood, stress, energy, sleep_quality and
+    # muscle_soreness from 1 to 5; exertion and pain from 0 to 10 (docs/self-reports.md).
+    kind: SelfReportKind
+    # The quantity type it is stored as, `reported_<kind>`.
+    type: str
+    value: int
+    start_at: str
+    end_at: Optional[str]
+    timezone: Optional[str]
+
+
+class SelfReportsResponse(TypedDict):
+    # The reports as stored, in request order, each with its id.
+    reports: List[SelfReport]
+    # true when these exact reports had already been received.
+    duplicate: bool
+
+
 class _CreateTimeTagRequestRequired(TypedDict):
     # The controlled vocabulary of time tags; see docs/time-tags.md.
     kind: TimeTagKind
@@ -1198,6 +1247,8 @@ class FHIRObservation(_FHIRObservationRequired, total=False):
     effectivePeriod: FHIRObservationEffectivePeriod
     # When the record was ingested (the later of a panel's two samples).
     issued: str
+    # The person, on a self report (category survey); absent otherwise.
+    performer: List[FHIRReference]
     valueQuantity: FHIRQuantity
     # Instead of valueQuantity for a classification (ecg_afib_classification).
     valueCodeableConcept: FHIRObservationValueCodeableConcept
@@ -1436,6 +1487,7 @@ __all__ = [
     "ConsentSource",
     "Coverage",
     "CoverageDay",
+    "CreateSelfReportsRequest",
     "CreateTimeTagRequest",
     "CreateUserRequest",
     "CreateWebhookRequest",
@@ -1528,6 +1580,10 @@ __all__ = [
     "SamplePage",
     "SampleStats",
     "SampleStatsBucket",
+    "SelfReport",
+    "SelfReportInput",
+    "SelfReportKind",
+    "SelfReportsResponse",
     "SetConsentRequest",
     "SetupRequest",
     "SetupResult",

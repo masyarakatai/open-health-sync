@@ -173,6 +173,57 @@ func (h *uploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
+// Part is one upload part a route builds itself instead of receiving it:
+// the self report route turns a JSON body into one.
+type Part struct {
+	Tenant, User uuid.UUID
+	// Type, Day, Batch and Part are what the four upload headers carry.
+	Type  string
+	Day   time.Time
+	Batch string
+	Part  int
+	// Body is the gzip bytes, stored verbatim.
+	Body []byte
+}
+
+// Errors of StorePart.
+var (
+	// ErrUserGone means the user is being deleted (the upload route's 410).
+	ErrUserGone = errInactive
+	// ErrErasing means this provider's data is being deleted for the user.
+	ErrErasing = errErasing
+	// ErrKeyTaken means (day, batch, part) already holds other bytes.
+	ErrKeyTaken = errors.New("collect: the part's key already holds other bytes")
+)
+
+// StorePart stores p exactly as the upload route stores an upload: the
+// connector checks every line, the bytes go to the raw store, and the
+// raw_objects row and its ETL job are inserted in one transaction. The same
+// bytes sent again are a duplicate. A part the connector refuses is an
+// error naming the line (the caller should have checked its input first).
+func StorePart(ctx context.Context, d UploadDeps, p Part) (UploadResponse, error) {
+	if d.Pool == nil || d.Raw == nil || d.Device == nil {
+		return UploadResponse{}, errors.New("collect: StorePart needs Pool, Raw and Device")
+	}
+	h := &uploadHandler{d: d, provider: d.Device.Slug()}
+	q := uploadReq{tenant: p.Tenant, user: p.User, dataType: p.Type, day: p.Day, batch: p.Batch, part: p.Part}
+	if !safeSegment(q.dataType) || !safeSegment(q.batch) || q.part < 0 || q.part > maxPart {
+		return UploadResponse{}, errors.New("collect: StorePart: invalid type, batch or part")
+	}
+	meta := connector.UploadMeta{TenantID: q.tenant, UserID: q.user, Type: q.dataType, Day: q.day, Batch: q.batch, Part: q.part}
+	if status, msg := h.validate(meta, p.Body); status != 0 {
+		return UploadResponse{}, fmt.Errorf("collect: StorePart: %s", msg)
+	}
+	resp, status, err := h.store(ctx, q, p.Body)
+	if err != nil {
+		return UploadResponse{}, err
+	}
+	if status == http.StatusConflict {
+		return UploadResponse{}, ErrKeyTaken
+	}
+	return resp, nil
+}
+
 // parseHeaders validates the four key headers. The message names the header.
 func parseHeaders(hd http.Header) (uploadReq, string) {
 	var q uploadReq
