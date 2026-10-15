@@ -1,0 +1,51 @@
+{
+  "resourceType": "Observation",
+  "id": "qs-8009",
+  "meta": {
+    "source": "https://github.com/soma-intelligence/open-health-sync/fhir/provider/self_report",
+    "tag": [
+      {
+        "system": "https://github.com/soma-intelligence/open-health-sync/fhir/CodeSystem/source",
+        "code": "self_report"
+      }
+    ]
+  },
+  "status": "final",
+  "category": [
+    {
+      "coding": [
+        {
+          "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+          "code": "survey",
+          "display": "Survey"
+        }
+      ],
+      "text": "Survey"
+    }
+  ],
+  "code": {
+    "coding": [
+      {
+        "system": "https://github.com/soma-intelligence/open-health-sync/fhir/CodeSystem/quantity-type",
+        "code": "reported_feeling"
+      }
+    ],
+    "text": "reported feeling"
+  },
+  "subject": {
+    "reference": "Patient/3f0c2f8e-8b8a-4c55-9f5e-2b0f3a1d9c11"
+  },
+  "effectiveDateTime": "2026-03-01T08:00:00Z",
+  "issued": "2026-03-01T09:15:30.25Z",
+  "performer": [
+    {
+      "reference": "Patient/3f0c2f8e-8b8a-4c55-9f5e-2b0f3a1d9c11"
+    }
+  ],
+  "valueQuantity": {
+    "value": 4,
+    "unit": "score",
+    "system": "http://unitsofmeasure.org",
+    "code": "{score}"
+  }
+}

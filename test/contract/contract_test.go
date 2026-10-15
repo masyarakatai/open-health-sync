@@ -529,6 +529,35 @@ func TestQuickstartMatchesOpenAPI(t *testing.T) {
 	assert.Equal(t, 204, c.json("DELETE", u+"/tags/"+tag.ID, key, "").status)
 	assert.Equal(t, 404, c.json("GET", u+"/tags/"+tag.ID, key, "").status)
 
+	// Self reports: a rating (with a replay), the same from the user's own
+	// app (a duplicate), a refusal, then the rating read back as a sample and
+	// as a FHIR survey Observation once processed.
+	feeling := `{"reports":[{"id":"0192f1a2-0000-7000-8000-00000000c0de","kind":"feeling","value":4,
+		"start_at":"2026-01-10T07:30:00Z","timezone":"Europe/Paris"}]}`
+	for range 2 {
+		r = c.do("POST", u+"/self-reports", key, strings.NewReader(feeling),
+			map[string]string{"Content-Type": "application/json", "Idempotency-Key": "self-report-1"})
+		require.Equal(t, 202, r.status, "%s", r.body)
+	}
+	r = c.json("POST", u+"/self-reports", tok.Token, feeling)
+	require.Equal(t, 202, r.status, "%s", r.body)
+	assert.Contains(t, string(r.body), `"duplicate":true`)
+	assert.Equal(t, 400, c.json("POST", u+"/self-reports", key,
+		`{"reports":[{"kind":"feeling","value":9,"start_at":"2026-01-10T07:30:00Z"}]}`).status)
+	deadline = time.Now().Add(60 * time.Second)
+	for {
+		r = c.json("GET", u+"/samples?type=reported_feeling", key, "")
+		require.Equal(t, 200, r.status, "%s", r.body)
+		if strings.Contains(string(r.body), "0192f1a2-0000-7000-8000-00000000c0de") {
+			break
+		}
+		require.True(t, time.Now().Before(deadline), "self report not processed: %s", r.body)
+		time.Sleep(200 * time.Millisecond)
+	}
+	r = c.json("GET", u+"/fhir/Observation?category=survey", key, "")
+	require.Equal(t, 200, r.status, "%s", r.body)
+	assert.Contains(t, string(r.body), `"performer"`)
+
 	// Share links: make two, list and read them, then open one as its reader
 	// would (a wrong passcode, the file at a location, the file), revoke it,
 	// and the refusals. The public routes take four requests per address.

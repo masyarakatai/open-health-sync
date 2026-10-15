@@ -67,8 +67,9 @@ issued to a company for its own app, and a connector in this repository cannot s
 - An individual self-hosting for themselves or their family cannot get keys today, and could not
   before the pause either (business use only).
 
-Garmin owners who cannot get API access can still export activity files (FIT) from Garmin Connect
-by hand; an upload path for FIT files is a separate idea, not covered here.
+Garmin owners who cannot get API access can still export their activity files (FIT) from Garmin
+Connect, one activity or the whole account, and import them with `ohs import files`. That path
+uses no Garmin API: see [activity files](activity-files.md).
 
 ## Integration shape
 

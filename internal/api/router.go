@@ -52,6 +52,12 @@ type Deps struct {
 	// Xiaomi handles POST /v1/ingest/xiaomi (Mi Fitness exports). Nil leaves
 	// the route out.
 	Xiaomi connector.DeviceConnector
+	// ActivityFiles handles POST /v1/ingest/activity-files (FIT, GPX and
+	// TCX files). Nil leaves the route out.
+	ActivityFiles connector.DeviceConnector
+	// SelfReport handles POST /v1/users/{id}/self-reports. Nil leaves the
+	// route out.
+	SelfReport connector.DeviceConnector
 	// IngestLimit bounds uploads in flight (0 means DefaultIngestLimit).
 	IngestLimit int
 	// Metrics mounts GET /metrics (OHS_METRICS).
@@ -122,6 +128,7 @@ func NewRouter(d Deps) http.Handler {
 	s.mountDeletion(mux)
 	s.mountReads(mux)
 	s.mountTags(mux)
+	s.mountSelfReports(mux)
 	s.mountSourcePriorities(mux)
 	s.mountFHIR(mux)
 	s.mountOMH(mux)

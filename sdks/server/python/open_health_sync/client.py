@@ -23,6 +23,7 @@ from .models import (
     ConsentEvent,
     ConsentSource,
     Coverage,
+    CreateSelfReportsRequest,
     CreateShareRequest,
     CreateTimeTagRequest,
     CreateUserRequest,
@@ -47,6 +48,7 @@ from .models import (
     HRVSeries,
     HRVSeriesPage,
     HealthzResponse,
+    IngestActivityFilesResponse,
     IngestAppleHealthResponse,
     IngestHealthConnectResponse,
     IngestXiaomiResponse,
@@ -76,6 +78,7 @@ from .models import (
     Sample,
     SamplePage,
     SampleStats,
+    SelfReportsResponse,
     SetConsentRequest,
     SetupRequest,
     SetupResult,
@@ -1729,6 +1732,36 @@ class OpenHealthSync:
             expect="none",
         )
 
+    def create_self_reports(
+        self,
+        user_id: str,
+        body: CreateSelfReportsRequest,
+        *,
+        idempotency_key: Optional[str] = None,
+    ) -> SelfReportsResponse:
+        """Record the user's own ratings.
+
+        ``POST /v1/users/{id}/self-reports``
+
+        1 to 100 self reports: how the person feels, their mood, stress, energy, sleep
+        quality, muscle soreness, the effort of a session or pain, each a whole number on the
+        kind's scale (docs/self-reports.md). Each report is stored as a quantity sample of type
+        `reported_<kind>` from the source `self_report`, read back like any other sample
+        (`/samples`, `/samples/stats`, FHIR with category `survey`, exports). Sending a report
+        again with the same `id` replaces its value, also when `start_at` moved. The reports
+        go through the same processing as an upload, so the answer is 202. A tenant key records
+        reports for any user of the tenant; a user token with scope `upload` only for its own
+        user, and another user is a 404. Values are health data: never logged, never quoted in
+        an error. While the user's self reports are being deleted the answer is 409 and nothing
+        is kept.
+        """
+        return self._request(
+            "POST",
+            f"/v1/users/{_path(user_id)}/self-reports",
+            json_body=body,
+            idempotency_key=idempotency_key,
+        )
+
     def create_share(self, user_id: str, body: CreateShareRequest) -> CreatedShare:
         """Make a share link of the user's records.
 
@@ -1870,8 +1903,9 @@ class OpenHealthSync:
                 systems are a 400. A code no Observation carries is an empty Bundle.
             category: An HL7 observation category code, bare or as
                 `http://terminology.hl7.org/CodeSystem/observation-category|code`: `vital-signs`,
-                `laboratory` or `activity` (activity samples, workouts and daily summaries). One
-                value. Another code of that system is an empty Bundle; anything else is a 400.
+                `laboratory`, `activity` (activity samples, workouts and daily summaries) or `survey`
+                (self reports). One value. Another code of that system is an empty Bundle; anything
+                else is a 400.
             start: Inclusive lower bound, RFC 3339 or YYYY-MM-DD.
             end: Exclusive upper bound, RFC 3339 or YYYY-MM-DD. Must not be before start.
             view: `merged` (the default): when several sources recorded the same thing (a ring and a
@@ -2317,6 +2351,53 @@ class OpenHealthSync:
         return self._request(
             "POST",
             "/v1/ingest/xiaomi",
+            headers={
+                "X-OHS-Type": ohs_type,
+                "X-OHS-Day": ohs_day,
+                "X-OHS-Batch": ohs_batch,
+                "X-OHS-Part": ohs_part,
+            },
+            data=body,
+            content_type="application/gzip",
+        )
+
+    def ingest_activity_files(
+        self,
+        body: bytes,
+        *,
+        ohs_type: Literal["fit", "gpx", "tcx"],
+        ohs_day: str,
+        ohs_batch: str,
+        ohs_part: int,
+    ) -> IngestActivityFilesResponse:
+        """Upload one activity file (FIT, GPX or TCX).
+
+        ``POST /v1/ingest/activity-files``
+
+        One gzip NDJSON part (at most 64 MiB, never truncated) holding one activity file on one
+        line: `{"type":"fit","data":"<base64 of the file>"}`, `type` being `fit`, `gpx` or `tcx`
+        and equal to `X-OHS-Type`. The file is at most 20 MiB once decoded (the line format is in
+        docs/connectors/activity-files.md; `ohs import files` writes it). The part is refused
+        with 400, and nothing is stored, unless the file parses as an activity that starts at
+        most 48 hours from now: a FIT course, settings or monitoring file, a GPX route without
+        times or a file with a broken CRC is refused. Same headers, limits and answers as the
+        Apple Health upload.
+        Re-sending the same part is safe: the answer is 200 with `duplicate: true`. Other
+        bytes under a (day, batch, part) already stored are a 409, and so is a part sent while
+        this provider's data is being deleted for the user (nothing is kept; send it again
+        once the deletion job is done). Each instance processes a
+        bounded number of uploads at once; above it the answer is 503 with `Retry-After`.
+
+        Needs a user token (ohs_ut_) as the client's api_key.
+
+        Args:
+            ohs_type: Sent as the X-OHS-Type header. Format of the file in the part.
+            ohs_day: Sent as the X-OHS-Day header. UTC day the activity starts (`ohs import files` sends it; the server does not check it).
+            ohs_batch: Sent as the X-OHS-Batch header. `ohs import files` sends `af1-` and the first 32 hex digits of the file's SHA-256.
+        """
+        return self._request(
+            "POST",
+            "/v1/ingest/activity-files",
             headers={
                 "X-OHS-Type": ohs_type,
                 "X-OHS-Day": ohs_day,

@@ -14,7 +14,7 @@ chose. Open Health Sync does not show consent screens itself.
 
 | Category | What it covers |
 |---|---|
-| `activity` | Steps, distances, energy, floors, workouts, daily summaries, speed and power |
+| `activity` | Steps, distances, energy, floors, workouts, daily summaries, speed and power, reported exertion and muscle soreness |
 | `location` | Workout GPS routes |
 | `heart` | Heart rate, resting and walking heart rate, HRV, RR intervals, rhythm events |
 | `ecg` | Electrocardiograms and their voltage samples |
@@ -22,11 +22,11 @@ chose. Open Health Sync does not show consent screens itself.
 | `glucose` | Blood glucose (CGM included), insulin delivery |
 | `respiratory` | Respiratory rate, SpO2, VO2 max, lung function, inhaler use |
 | `body` | Weight, height, body composition, body and skin temperature |
-| `sleep` | Sleep sessions, phases and scores |
+| `sleep` | Sleep sessions, phases and scores, reported sleep quality |
 | `nutrition` | Food, drinks, water, caffeine |
 | `reproductive` | Menstrual cycle, ovulation, basal body temperature, sexual activity, pregnancy |
-| `mental` | Mindfulness, state of mind, mood, stress |
-| `other` | Anything no category above describes |
+| `mental` | Mindfulness, state of mind, mood, stress, reported feeling, mood, stress and energy |
+| `other` | Anything no category above describes, reported pain included |
 
 A record goes with its parent: route points are `location` but also go when `activity` is not
 granted (no workout, no route), and sleep phases go with their session. `GET /v1/users/{id}/consents`

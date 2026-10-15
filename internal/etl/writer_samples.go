@@ -29,6 +29,14 @@ func nullTime(t time.Time) any {
 	return t
 }
 
+// nullString turns the empty string into NULL for nullable text columns.
+func nullString(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
+}
+
 // sourceSlugOrProvider guarantees source_slug is never written empty. The
 // pipeline fills SourceSlug at the attribution choke point; this covers a
 // sample that reached the writer another way.

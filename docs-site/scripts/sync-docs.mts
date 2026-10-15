@@ -244,6 +244,13 @@ const sources: Record<string, Target[]> = {
       description: "Mark the periods that give context to the data: illness, travel, jet lag and more.",
     },
   ],
+  "docs/self-reports.md": [
+    {
+      page: "(guides)/guides/self-reports",
+      title: "Self reports",
+      description: "Record how a person feels, their mood, stress, energy, effort or pain next to their synced data.",
+    },
+  ],
   "docs/audit-log.md": [
     {
       page: "(guides)/guides/audit-log",
@@ -361,6 +368,7 @@ const icons: Record<string, string> = {
   "(guides)/guides/webhooks": "Webhook",
   "(guides)/guides/menstrual-cycles": "CalendarDays",
   "(guides)/guides/time-tags": "Tag",
+  "(guides)/guides/self-reports": "Smile",
   "(guides)/guides/share-links": "Share2",
   "(guides)/recipes/index": "Sparkles",
   "(guides)/recipes/sleep-report": "Moon",

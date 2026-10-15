@@ -2210,6 +2210,57 @@
       ]
     },
     {
+      "name": "self-reports",
+      "item": [
+        {
+          "name": "Record the user's own ratings",
+          "request": {
+            "method": "POST",
+            "description": "Record the user's own ratings.\n\n`POST /v1/users/{id}/self-reports`\n\n1 to 100 self reports: how the person feels, their mood, stress, energy, sleep\nquality, muscle soreness, the effort of a session or pain, each a whole number on the\nkind's scale (docs/self-reports.md). Each report is stored as a quantity sample of type\n`reported_<kind>` from the source `self_report`, read back like any other sample\n(`/samples`, `/samples/stats`, FHIR with category `survey`, exports). Sending a report\nagain with the same `id` replaces its value, also when `start_at` moved. The reports\ngo through the same processing as an upload, so the answer is 202. A tenant key records\nreports for any user of the tenant; a user token with scope `upload` only for its own\nuser, and another user is a 404. Values are health data: never logged, never quoted in\nan error. While the user's self reports are being deleted the answer is 409 and nothing\nis kept.",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "createSelfReports-0001",
+                "description": "Optional. A retry with the same key and the same request gets the first response back.",
+                "disabled": true
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/:id/self-reports",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                ":id",
+                "self-reports"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{userId}}"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reports\": [\n    {\n      \"end_at\": \"2026-01-01T00:00:00Z\",\n      \"id\": \"00000000-0000-0000-0000-000000000000\",\n      \"kind\": \"feeling\",\n      \"start_at\": \"2026-01-01T00:00:00Z\",\n      \"timezone\": \"example\",\n      \"value\": 0\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "shares",
       "item": [
         {
@@ -2394,7 +2445,7 @@
                 {
                   "key": "category",
                   "value": "vital-signs",
-                  "description": "An HL7 observation category code, bare or as\n`http://terminology.hl7.org/CodeSystem/observation-category|code`: `vital-signs`,\n`laboratory` or `activity` (activity samples, workouts and daily summaries). One\nvalue. Another code of that system is an empty Bundle; anything else is a 400.",
+                  "description": "An HL7 observation category code, bare or as\n`http://terminology.hl7.org/CodeSystem/observation-category|code`: `vital-signs`,\n`laboratory`, `activity` (activity samples, workouts and daily summaries) or `survey`\n(self reports). One value. Another code of that system is an empty Bundle; anything\nelse is a 400.",
                   "disabled": true
                 },
                 {
@@ -3067,6 +3118,65 @@
                 "v1",
                 "ingest",
                 "xiaomi"
+              ]
+            },
+            "body": {
+              "mode": "file",
+              "file": {
+                "src": ""
+              }
+            }
+          }
+        },
+        {
+          "name": "Upload one activity file (FIT, GPX or TCX)",
+          "request": {
+            "method": "POST",
+            "description": "Upload one activity file (FIT, GPX or TCX).\n\n`POST /v1/ingest/activity-files`\n\nOne gzip NDJSON part (at most 64 MiB, never truncated) holding one activity file on one\nline: `{\"type\":\"fit\",\"data\":\"<base64 of the file>\"}`, `type` being `fit`, `gpx` or `tcx`\nand equal to `X-OHS-Type`. The file is at most 20 MiB once decoded (the line format is in\ndocs/connectors/activity-files.md; `ohs import files` writes it). The part is refused\nwith 400, and nothing is stored, unless the file parses as an activity that starts at\nmost 48 hours from now: a FIT course, settings or monitoring file, a GPX route without\ntimes or a file with a broken CRC is refused. Same headers, limits and answers as the\nApple Health upload.\nRe-sending the same part is safe: the answer is 200 with `duplicate: true`. Other\nbytes under a (day, batch, part) already stored are a 409, and so is a part sent while\nthis provider's data is being deleted for the user (nothing is kept; send it again\nonce the deletion job is done). Each instance processes a\nbounded number of uploads at once; above it the answer is 503 with `Retry-After`.\n\nNeeds a user token (ohs_ut_) as the client's apiKey.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{userToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "X-OHS-Type",
+                "value": "fit",
+                "description": "Format of the file in the part."
+              },
+              {
+                "key": "X-OHS-Day",
+                "value": "2026-01-01",
+                "description": "UTC day the activity starts (`ohs import files` sends it; the server does not check it)."
+              },
+              {
+                "key": "X-OHS-Batch",
+                "value": "",
+                "description": "`ohs import files` sends `af1-` and the first 32 hex digits of the file's SHA-256."
+              },
+              {
+                "key": "X-OHS-Part",
+                "value": "0"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/gzip"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/ingest/activity-files",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "ingest",
+                "activity-files"
               ]
             },
             "body": {

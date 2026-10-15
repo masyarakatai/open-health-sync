@@ -5,6 +5,7 @@
 package all
 
 import (
+	_ "github.com/soma-intelligence/open-health-sync/connectors/activityfiles"
 	_ "github.com/soma-intelligence/open-health-sync/connectors/applehealth"
 	_ "github.com/soma-intelligence/open-health-sync/connectors/dexcom"
 	_ "github.com/soma-intelligence/open-health-sync/connectors/fitbit"
@@ -13,6 +14,7 @@ import (
 	_ "github.com/soma-intelligence/open-health-sync/connectors/omron"
 	_ "github.com/soma-intelligence/open-health-sync/connectors/oura"
 	_ "github.com/soma-intelligence/open-health-sync/connectors/polar"
+	_ "github.com/soma-intelligence/open-health-sync/connectors/selfreport"
 	_ "github.com/soma-intelligence/open-health-sync/connectors/strava"
 	_ "github.com/soma-intelligence/open-health-sync/connectors/suunto"
 	_ "github.com/soma-intelligence/open-health-sync/connectors/ultrahuman"

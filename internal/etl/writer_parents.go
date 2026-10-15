@@ -278,7 +278,7 @@ func (w *Writer) writeSleepPhases(ctx context.Context, tx TxLike, sc scope, sess
 // --- workouts -> route_points ---
 
 var workoutColumns = []string{
-	"tenant_id", "user_id", "provider", "source_slug", "external_id", "activity_type",
+	"tenant_id", "user_id", "provider", "source_slug", "device_id", "external_id", "activity_type",
 	"start_date", "end_date", "duration_s",
 	"active_energy_kcal", "distance_m", "avg_heart_rate",
 	"max_heart_rate", "avg_speed_mps", "elevation_gain_m",
@@ -338,7 +338,7 @@ func (w *Writer) writeWorkoutsWithRoutes(ctx context.Context, tx TxLike, sc scop
 			insert = workoutReplace
 		}
 		parentID, isNew, err := insertParentWithFallback(ctx, tx, insert, []any{
-			sc.tenant, sc.user, p, sourceSlugOrProvider("", p), wk.ExternalID, wk.ActivityType,
+			sc.tenant, sc.user, p, sourceSlugOrProvider(model.Slug(wk.SourceSlug), p), nullString(wk.DeviceID), wk.ExternalID, wk.ActivityType,
 			wk.StartDate, nullTime(wk.EndDate), wk.DurationS,
 			wk.ActiveEnergyKcal, wk.DistanceM, wk.AvgHeartRate,
 			wk.MaxHeartRate, wk.AvgSpeedMps, wk.ElevationGainM,

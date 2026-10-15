@@ -1,0 +1,61 @@
+{
+  "resourceType": "Observation",
+  "id": "qs-8008",
+  "meta": {
+    "source": "https://github.com/soma-intelligence/open-health-sync/fhir/provider/self_report",
+    "tag": [
+      {
+        "system": "https://github.com/soma-intelligence/open-health-sync/fhir/CodeSystem/source",
+        "code": "self_report"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "https://github.com/soma-intelligence/open-health-sync/fhir/provider/self_report/external-id",
+      "value": "0192f1a2-0000-7000-8000-00000000beef"
+    }
+  ],
+  "status": "final",
+  "category": [
+    {
+      "coding": [
+        {
+          "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+          "code": "survey",
+          "display": "Survey"
+        }
+      ],
+      "text": "Survey"
+    }
+  ],
+  "code": {
+    "coding": [
+      {
+        "system": "http://loinc.org",
+        "code": "72514-3"
+      },
+      {
+        "system": "https://github.com/soma-intelligence/open-health-sync/fhir/CodeSystem/quantity-type",
+        "code": "reported_pain"
+      }
+    ],
+    "text": "reported pain"
+  },
+  "subject": {
+    "reference": "Patient/3f0c2f8e-8b8a-4c55-9f5e-2b0f3a1d9c11"
+  },
+  "effectiveDateTime": "2026-03-01T08:00:00Z",
+  "issued": "2026-03-01T09:15:30.25Z",
+  "performer": [
+    {
+      "reference": "Patient/3f0c2f8e-8b8a-4c55-9f5e-2b0f3a1d9c11"
+    }
+  ],
+  "valueQuantity": {
+    "value": 3,
+    "unit": "score",
+    "system": "http://unitsofmeasure.org",
+    "code": "{score}"
+  }
+}

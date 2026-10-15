@@ -9,6 +9,17 @@ release may change the API, the configuration or the database schema.
 
 ### Added
 
+- Self reports: `POST /v1/users/{id}/self-reports` records a person's own ratings next to their
+  synced data: how they feel, mood, stress, energy, sleep quality and muscle soreness (1 to 5),
+  the effort of a session and pain (0 to 10). It takes a tenant key, or the user's own token
+  with scope `upload`, and honours `Idempotency-Key`. Each report becomes a quantity sample of
+  type `reported_<kind>` from the new `self_report` source, so it is read with `/samples`,
+  `/samples/stats`, the exports, the archive and the MCP tools, consented to and erased like any
+  other source. A report sent again with the same `id` replaces its value. In FHIR, self reports
+  are Observations with category `survey` and the person as `performer`; pain carries LOINC
+  72514-3. Migration 0036 adds the eight types to the catalog. See
+  [docs/self-reports.md](docs/self-reports.md).
+
 - Share links (SMART Health Links, HL7 FHIR IG "SMART Health Cards and Links" STU1): a person
   shares a time window of some data categories of their own records with whoever they choose.
   `POST /v1/users/{id}/shares` (tenant key) writes the records as a FHIR R4 Bundle, encrypts it
@@ -49,6 +60,17 @@ release may change the API, the configuration or the database schema.
   Zepp Life write to Health Connect now get the source slug `xiaomi`; those of the Zepp app
   (Amazfit) get `zepp`, and those of the RingConn app `ringconn`. No private Xiaomi API is
   used. See [docs/connectors/xiaomi.md](docs/connectors/xiaomi.md).
+- Activity files: `ohs import files <file|folder|zip>` imports FIT, GPX and TCX files (and their
+  `.gz` versions) through the new `POST /v1/ingest/activity-files` upload route, provider
+  `activity_files`, one file per part. It reads single files, folders and account exports with
+  zips inside zips: the Garmin account export, the Strava archive, the COROS bulk export, and
+  the files Wahoo, Zwift, Suunto and Polar let a user download. Each file gives workouts with
+  their GPS route, per-second heart rate, and cycling or running power. The source slug comes
+  from the file (FIT manufacturer, TCX or GPX creator: `garmin`, `coros`, `wahoo`, `zwift`...)
+  and the device from the FIT product. A file is uploaded once, keyed by its SHA-256, so a
+  re-run or an overlapping export sends nothing twice; `--dry-run` counts without uploading.
+  No vendor API is used. New dependency: `github.com/muktihari/fit` v0.28.4 (BSD-3-Clause), the
+  FIT decoder. See [docs/connectors/activity-files.md](docs/connectors/activity-files.md).
 - MCP prompts: the prompt library is now served by the MCP server (`prompts/list`,
   `prompts/get`). Twelve ready-made questions about a person's own training, sleep and recovery
   (morning check, taper check, after a break, a new habit, two devices side by side...), each
@@ -82,6 +104,13 @@ release may change the API, the configuration or the database schema.
 
 ### Changed
 
+- A canonical `Workout` can name its source and device (`SourceSlug`, `DeviceID`), written to
+  `workouts.source_slug` and `workouts.device_id` (columns that already existed). A connector
+  that leaves them empty gets the previous behavior: the provider as the source, no device.
+- The default workouts order of the merged view puts `garmin`, `coros`, `wahoo`, `suunto` and
+  `zwift` after `polar` and before `strava`: the original recording of a workout, which carries
+  its route and streams, wins over a summary copy of it. A user's own `source-priorities` still
+  take precedence.
 - Merged view reads are faster on a long history: a merged page's lookups of a better ranked
   record are bounded by the page's dates, a page with no end is read through growing windows
   (2, 16, 128 days), and these statements are planned for their parameters at every run (a

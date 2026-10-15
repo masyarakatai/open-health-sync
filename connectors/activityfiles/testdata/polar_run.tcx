@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TrainingCenterDatabase xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:ax="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+  <Activities>
+    <Activity Sport="Running">
+      <Id>2026-03-05T18:00:00.000Z</Id>
+      <Lap StartTime="2026-03-05T18:00:00.000Z">
+        <TotalTimeSeconds>4.0</TotalTimeSeconds>
+        <DistanceMeters>12.0</DistanceMeters>
+        <MaximumSpeed>3.2</MaximumSpeed>
+        <Calories>2</Calories>
+        <AverageHeartRateBpm><Value>150</Value></AverageHeartRateBpm>
+        <MaximumHeartRateBpm><Value>152</Value></MaximumHeartRateBpm>
+        <Intensity>Active</Intensity>
+        <TriggerMethod>Distance</TriggerMethod>
+        <Track>
+          <Trackpoint>
+            <Time>2026-03-05T18:00:00.000Z</Time>
+            <Position><LatitudeDegrees>45.8</LatitudeDegrees><LongitudeDegrees>6.8</LongitudeDegrees></Position>
+            <AltitudeMeters>800.0</AltitudeMeters>
+            <HeartRateBpm><Value>148</Value></HeartRateBpm>
+            <Extensions><ax:TPX><ax:Speed>3.0</ax:Speed><ax:Watts>260</ax:Watts></ax:TPX></Extensions>
+          </Trackpoint>
+          <Trackpoint>
+            <Time>2026-03-05T18:00:02.000Z</Time>
+            <Position><LatitudeDegrees>45.8001</LatitudeDegrees><LongitudeDegrees>6.8001</LongitudeDegrees></Position>
+            <AltitudeMeters>800.5</AltitudeMeters>
+            <HeartRateBpm><Value>152</Value></HeartRateBpm>
+            <Extensions><ax:TPX><ax:Speed>3.2</ax:Speed><ax:Watts>270</ax:Watts></ax:TPX></Extensions>
+          </Trackpoint>
+        </Track>
+      </Lap>
+      <Lap StartTime="2026-03-05T18:00:04.000Z">
+        <TotalTimeSeconds>4.0</TotalTimeSeconds>
+        <DistanceMeters>12.4</DistanceMeters>
+        <MaximumSpeed>3.3</MaximumSpeed>
+        <Calories>2</Calories>
+        <AverageHeartRateBpm><Value>154</Value></AverageHeartRateBpm>
+        <MaximumHeartRateBpm><Value>156</Value></MaximumHeartRateBpm>
+        <Intensity>Active</Intensity>
+        <TriggerMethod>Distance</TriggerMethod>
+        <Track>
+          <Trackpoint>
+            <Time>2026-03-05T18:00:04.000Z</Time>
+            <Position><LatitudeDegrees>45.8002</LatitudeDegrees><LongitudeDegrees>6.8002</LongitudeDegrees></Position>
+            <AltitudeMeters>801.0</AltitudeMeters>
+            <HeartRateBpm><Value>154</Value></HeartRateBpm>
+            <Extensions><ax:TPX><ax:Speed>3.1</ax:Speed><ax:Watts>265</ax:Watts></ax:TPX></Extensions>
+          </Trackpoint>
+          <Trackpoint>
+            <Time>2026-03-05T18:00:07.000Z</Time>
+            <HeartRateBpm><Value>156</Value></HeartRateBpm>
+          </Trackpoint>
+        </Track>
+      </Lap>
+      <Creator xsi:type="Device_t">
+        <Name>Polar Vantage V3</Name>
+        <UnitId>0</UnitId>
+        <ProductID>0</ProductID>
+      </Creator>
+    </Activity>
+  </Activities>
+  <Author xsi:type="Application_t">
+    <Name>Polar Flow</Name>
+  </Author>
+</TrainingCenterDatabase>

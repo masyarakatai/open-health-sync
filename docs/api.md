@@ -16,8 +16,8 @@ Every call carries `Authorization: Bearer <secret>`.
 
 | Secret | Looks like | Used by | Calls |
 |---|---|---|---|
-| Tenant API key | `ohs_sk_` + 43 characters | your server | tenant routes: users, tokens, connections, reads, time tags, share links |
-| User token | `ohs_ut_` + 43 characters | one end user's app | user routes: uploads (`upload`), reads over MCP and the user archive (`read`) |
+| Tenant API key | `ohs_sk_` + 43 characters | your server | tenant routes: users, tokens, connections, reads, time tags, self reports, share links |
+| User token | `ohs_ut_` + 43 characters | one end user's app | user routes: uploads and self reports (`upload`), reads over MCP and the user archive (`read`) |
 
 The first key comes from `ohs admin tenant create --name <name>` (or `OHS_BOOTSTRAP_TENANT`,
 which logs a key once on first start, or the browser [first-run setup](setup.md)). Both secrets are stored as SHA-256 hashes: a lost one
@@ -57,8 +57,8 @@ configuration. The response is `Cache-Control: no-store`; the token is shown onc
 - **Trace context.** When the operator has turned tracing on, a W3C `traceparent` header is
   honoured: the instance's span for the call joins your trace. Without tracing it is ignored,
   and nothing is added to the response either way. See [observability.md](observability.md).
-- **Idempotency.** Send `Idempotency-Key` (1 to 255 characters) on `POST /v1/users` or
-  `POST /v1/users/{id}/tags`. A retry with the same key and request within
+- **Idempotency.** Send `Idempotency-Key` (1 to 255 characters) on `POST /v1/users`,
+  `POST /v1/users/{id}/tags` or `POST /v1/users/{id}/self-reports`. A retry with the same key and request within
   24 hours gets the first response back with `Idempotent-Replayed: true`. The same key with a
   different request is a 422; a retry while the first call still runs is a 409. Other routes
   ignore the header (token minting would have to store the token, and each connect call mints a
@@ -172,7 +172,10 @@ scope. The contract (headers, size, idempotency) is in
 Android Health Connect records the same way; its line format is in
 [connectors/health-connect.md](connectors/health-connect.md). `POST /v1/ingest/xiaomi` takes the
 rows of a Mi Fitness data copy, as `ohs import mi-fitness` writes them
-([connectors/xiaomi.md](connectors/xiaomi.md)). The routes share the limit of uploads in flight.
+([connectors/xiaomi.md](connectors/xiaomi.md)). `POST /v1/ingest/activity-files` takes one FIT, GPX
+or TCX activity file per part, base64 on one line, as `ohs import files` sends them
+([connectors/activity-files.md](connectors/activity-files.md)). The routes share the limit of
+uploads in flight.
 
 ## Reading data
 
@@ -365,6 +368,23 @@ examples: [time-tags.md](time-tags.md).
 curl -s -X POST $OHS/v1/users/$USER_ID/tags -H "Authorization: Bearer $KEY" \
   -H 'Content-Type: application/json' -d '{"kind":"illness","label":"Flu","start_at":"2026-03-02"}'
 curl -s "$OHS/v1/users/$USER_ID/tags?start=2026-03-01&end=2026-04-01" -H "Authorization: Bearer $KEY"
+```
+
+## Self reports
+
+A self report is the person's own rating, a whole number on a fixed scale: `feeling`, `mood`,
+`stress`, `energy`, `sleep_quality` and `muscle_soreness` from 1 to 5, `exertion` and `pain` from
+0 to 10. `POST /v1/users/{id}/self-reports` records 1 to 100 of them (tenant key, or the user's
+own token with scope `upload`) and answers 202; each becomes a quantity sample of type
+`reported_<kind>` from the source `self_report`, read back with `/samples`, `/samples/stats`,
+FHIR (category `survey`) and the exports. A report sent again with the same `id` replaces its
+value. Scales, retries and corrections: [self-reports.md](self-reports.md).
+
+```sh
+curl -s -X POST $OHS/v1/users/$USER_ID/self-reports -H "Authorization: Bearer $KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"reports":[{"kind":"feeling","value":4,"start_at":"2026-03-01T07:30:00Z","timezone":"Europe/Paris"}]}'
+curl -s "$OHS/v1/users/$USER_ID/samples?type=reported_feeling" -H "Authorization: Bearer $KEY"
 ```
 
 ## Share links

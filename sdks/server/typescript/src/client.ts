@@ -14,6 +14,7 @@ import type {
   ConsentEvent,
   ConsentSource,
   Coverage,
+  CreateSelfReportsRequest,
   CreateShareRequest,
   CreateTimeTagRequest,
   CreateUserRequest,
@@ -38,6 +39,7 @@ import type {
   HRVSeries,
   HRVSeriesPage,
   HealthzResponse,
+  IngestActivityFilesResponse,
   IngestAppleHealthResponse,
   IngestHealthConnectResponse,
   IngestXiaomiResponse,
@@ -68,6 +70,7 @@ import type {
   Sample,
   SamplePage,
   SampleStats,
+  SelfReportsResponse,
   SetConsentRequest,
   SetupRequest,
   SetupResult,
@@ -501,8 +504,9 @@ export interface SearchFHIRObservationsParams {
   /**
    * An HL7 observation category code, bare or as
    * `http://terminology.hl7.org/CodeSystem/observation-category|code`: `vital-signs`,
-   * `laboratory` or `activity` (activity samples, workouts and daily summaries). One
-   * value. Another code of that system is an empty Bundle; anything else is a 400.
+   * `laboratory`, `activity` (activity samples, workouts and daily summaries) or `survey`
+   * (self reports). One value. Another code of that system is an empty Bundle; anything
+   * else is a 400.
    */
   category?: string;
   /** Inclusive lower bound, RFC 3339 or YYYY-MM-DD. */
@@ -635,6 +639,18 @@ export interface IngestXiaomiParams {
   /** Sent as the X-OHS-Day header. */
   ohsDay: string;
   /** Sent as the X-OHS-Batch header. */
+  ohsBatch: string;
+  /** Sent as the X-OHS-Part header. */
+  ohsPart: number;
+}
+
+/** Query and header parameters of {@link OpenHealthSync.ingestActivityFiles}. */
+export interface IngestActivityFilesParams {
+  /** Sent as the X-OHS-Type header. Format of the file in the part. */
+  ohsType: "fit" | "gpx" | "tcx";
+  /** Sent as the X-OHS-Day header. UTC day the activity starts (`ohs import files` sends it; the server does not check it). */
+  ohsDay: string;
+  /** Sent as the X-OHS-Batch header. `ohs import files` sends `af1-` and the first 32 hex digits of the file's SHA-256. */
   ohsBatch: string;
   /** Sent as the X-OHS-Part header. */
   ohsPart: number;
@@ -2036,6 +2052,37 @@ export class OpenHealthSync {
   }
 
   /**
+   * Record the user's own ratings.
+   *
+   * `POST /v1/users/{id}/self-reports`
+   *
+   * 1 to 100 self reports: how the person feels, their mood, stress, energy, sleep
+   * quality, muscle soreness, the effort of a session or pain, each a whole number on the
+   * kind's scale (docs/self-reports.md). Each report is stored as a quantity sample of type
+   * `reported_<kind>` from the source `self_report`, read back like any other sample
+   * (`/samples`, `/samples/stats`, FHIR with category `survey`, exports). Sending a report
+   * again with the same `id` replaces its value, also when `start_at` moved. The reports
+   * go through the same processing as an upload, so the answer is 202. A tenant key records
+   * reports for any user of the tenant; a user token with scope `upload` only for its own
+   * user, and another user is a 404. Values are health data: never logged, never quoted in
+   * an error. While the user's self reports are being deleted the answer is 409 and nothing
+   * is kept.
+   */
+  createSelfReports(
+    userId: string,
+    body: CreateSelfReportsRequest,
+    options?: IdempotentRequestOptions,
+  ): Promise<SelfReportsResponse> {
+    return this.#request<SelfReportsResponse>({
+      method: "POST",
+      path: `/v1/users/${encode(userId)}/self-reports`,
+      json: body,
+      expect: "json",
+      options,
+    });
+  }
+
+  /**
    * Make a share link of the user's records.
    *
    * `POST /v1/users/{id}/shares`
@@ -2577,6 +2624,48 @@ export class OpenHealthSync {
     return this.#request<IngestXiaomiResponse>({
       method: "POST",
       path: "/v1/ingest/xiaomi",
+      headers: {
+        "X-OHS-Type": params.ohsType,
+        "X-OHS-Day": params.ohsDay,
+        "X-OHS-Batch": params.ohsBatch,
+        "X-OHS-Part": params.ohsPart,
+      },
+      body,
+      contentType: "application/gzip",
+      expect: "json",
+      options,
+    });
+  }
+
+  /**
+   * Upload one activity file (FIT, GPX or TCX).
+   *
+   * `POST /v1/ingest/activity-files`
+   *
+   * One gzip NDJSON part (at most 64 MiB, never truncated) holding one activity file on one
+   * line: `{"type":"fit","data":"<base64 of the file>"}`, `type` being `fit`, `gpx` or `tcx`
+   * and equal to `X-OHS-Type`. The file is at most 20 MiB once decoded (the line format is in
+   * docs/connectors/activity-files.md; `ohs import files` writes it). The part is refused
+   * with 400, and nothing is stored, unless the file parses as an activity that starts at
+   * most 48 hours from now: a FIT course, settings or monitoring file, a GPX route without
+   * times or a file with a broken CRC is refused. Same headers, limits and answers as the
+   * Apple Health upload.
+   * Re-sending the same part is safe: the answer is 200 with `duplicate: true`. Other
+   * bytes under a (day, batch, part) already stored are a 409, and so is a part sent while
+   * this provider's data is being deleted for the user (nothing is kept; send it again
+   * once the deletion job is done). Each instance processes a
+   * bounded number of uploads at once; above it the answer is 503 with `Retry-After`.
+   *
+   * Needs a user token (ohs_ut_) as the client's apiKey.
+   */
+  ingestActivityFiles(
+    body: Uint8Array | ArrayBuffer | Blob,
+    params: IngestActivityFilesParams,
+    options?: RequestOptions,
+  ): Promise<IngestActivityFilesResponse> {
+    return this.#request<IngestActivityFilesResponse>({
+      method: "POST",
+      path: "/v1/ingest/activity-files",
       headers: {
         "X-OHS-Type": params.ohsType,
         "X-OHS-Day": params.ohsDay,

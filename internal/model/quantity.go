@@ -58,6 +58,18 @@ const (
 	QTStressHighTime   = "stress_high_time"
 	QTRecoveryHighTime = "recovery_high_time"
 
+	// A person's own ratings, recorded through the self report route: whole
+	// numbers on a fixed scale (SelfReportScales), unit "score". They are
+	// answers, not measurements, so no provider index shares their keys.
+	QTReportedFeeling        = "reported_feeling"
+	QTReportedMood           = "reported_mood"
+	QTReportedStress         = "reported_stress"
+	QTReportedEnergy         = "reported_energy"
+	QTReportedSleepQuality   = "reported_sleep_quality"
+	QTReportedMuscleSoreness = "reported_muscle_soreness"
+	QTReportedExertion       = "reported_exertion"
+	QTReportedPain           = "reported_pain"
+
 	// Intraday interval variants of the SUM-aggregated activity metrics.
 	// Withings ships both a daily activity total AND per-interval intraday
 	// values for the same day; if both landed under the canonical key,
@@ -70,6 +82,37 @@ const (
 	QTActiveEnergyIntraday  = "active_energy_burned_intraday"
 	QTDistanceWalkRunIntday = "distance_walking_running_intraday"
 )
+
+// Scale is the range of a self report rating: whole numbers from Min to Max.
+type Scale struct{ Min, Max int }
+
+// SelfReportScales are the self report quantity types and their scales, in
+// documentation order. A scale is part of the API: changing one is a breaking
+// change, adding a type is not.
+var SelfReportScales = []struct {
+	Type  string
+	Scale Scale
+}{
+	{QTReportedFeeling, Scale{1, 5}},
+	{QTReportedMood, Scale{1, 5}},
+	{QTReportedStress, Scale{1, 5}},
+	{QTReportedEnergy, Scale{1, 5}},
+	{QTReportedSleepQuality, Scale{1, 5}},
+	{QTReportedMuscleSoreness, Scale{1, 5}},
+	{QTReportedExertion, Scale{0, 10}},
+	{QTReportedPain, Scale{0, 10}},
+}
+
+// SelfReportScale returns the scale of a self report quantity type, and false
+// for any other type.
+func SelfReportScale(qt string) (Scale, bool) {
+	for _, s := range SelfReportScales {
+		if s.Type == qt {
+			return s.Scale, true
+		}
+	}
+	return Scale{}, false
+}
 
 // quantityTypeOverrides handles collector quantity_type values where a naive
 // camelCase -> snake_case conversion would diverge from the canonical

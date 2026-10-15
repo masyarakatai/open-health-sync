@@ -44,7 +44,7 @@ info:
     `request_id`, and the server logs carry it too.
 
     **Idempotency.** `Idempotency-Key` (1 to 255 characters) is honoured on
-    `POST /v1/users` and `POST /v1/users/{id}/tags`: a retry with the same key and the same request within 24 hours gets the first response back, with
+    `POST /v1/users`, `POST /v1/users/{id}/tags` and `POST /v1/users/{id}/self-reports`: a retry with the same key and the same request within 24 hours gets the first response back, with
     `Idempotent-Replayed: true`. The same key with another request is a 422; a retry while
     the first call still runs is a 409. Token minting ignores the header (replaying it would
     mean storing the token); device uploads are idempotent by their own headers.
@@ -63,6 +63,7 @@ tags:
   - name: consent
   - name: read
   - name: tags
+  - name: self-reports
   - name: shares
   - name: fhir
   - name: omh
@@ -1547,6 +1548,55 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /v1/users/{id}/self-reports:
+    parameters:
+      - $ref: "#/components/parameters/UserID"
+    post:
+      tags: [self-reports]
+      operationId: createSelfReports
+      summary: Record the user's own ratings
+      description: |
+        1 to 100 self reports: how the person feels, their mood, stress, energy, sleep
+        quality, muscle soreness, the effort of a session or pain, each a whole number on the
+        kind's scale (docs/self-reports.md). Each report is stored as a quantity sample of type
+        `reported_<kind>` from the source `self_report`, read back like any other sample
+        (`/samples`, `/samples/stats`, FHIR with category `survey`, exports). Sending a report
+        again with the same `id` replaces its value, also when `start_at` moved. The reports
+        go through the same processing as an upload, so the answer is 202. A tenant key records
+        reports for any user of the tenant; a user token with scope `upload` only for its own
+        user, and another user is a 404. Values are health data: never logged, never quoted in
+        an error. While the user's self reports are being deleted the answer is 409 and nothing
+        is kept.
+      security:
+        - tenantKey: []
+        - userToken: [upload]
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateSelfReportsRequest" }
+      responses:
+        "202":
+          description: Stored, and queued for processing.
+          headers:
+            Idempotent-Replayed: { $ref: "#/components/headers/IdempotentReplayed" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SelfReportsResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: The user's self reports are being deleted, or an idempotent request with this key is in progress.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "413": { $ref: "#/components/responses/TooLarge" }
+        "422": { $ref: "#/components/responses/IdempotencyMismatch" }
+
   /v1/users/{id}/shares:
     parameters:
       - $ref: "#/components/parameters/UserID"
@@ -1697,8 +1747,9 @@ paths:
           description: |
             An HL7 observation category code, bare or as
             `http://terminology.hl7.org/CodeSystem/observation-category|code`: `vital-signs`,
-            `laboratory` or `activity` (activity samples, workouts and daily summaries). One
-            value. Another code of that system is an empty Bundle; anything else is a 400.
+            `laboratory`, `activity` (activity samples, workouts and daily summaries) or `survey`
+            (self reports). One value. Another code of that system is an empty Bundle; anything
+            else is a 400.
           schema: { type: string, examples: [vital-signs] }
         - $ref: "#/components/parameters/Start"
         - $ref: "#/components/parameters/End"
@@ -2220,6 +2271,85 @@ paths:
         - name: X-OHS-Batch
           in: header
           required: true
+          schema: { type: string, maxLength: 128 }
+        - name: X-OHS-Part
+          in: header
+          required: true
+          schema: { type: integer, minimum: 0, maximum: 1000000 }
+      requestBody:
+        required: true
+        content:
+          application/gzip:
+            schema: { type: string, contentEncoding: binary }
+          application/octet-stream:
+            schema: { type: string, contentEncoding: binary }
+      responses:
+        "200":
+          description: Stored (or already stored) and queued for processing.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [key, duplicate]
+                properties:
+                  key: { type: string, description: Raw object key. }
+                  duplicate: { type: boolean }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "410":
+          description: The user started being deleted while this upload was stored (its token was accepted just before); nothing is kept.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "413": { $ref: "#/components/responses/TooLarge" }
+        "503":
+          description: Too many uploads in progress on this instance.
+          headers:
+            Retry-After:
+              schema: { type: integer }
+              description: Seconds to wait before retrying.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /v1/ingest/activity-files:
+    post:
+      tags: [ingest]
+      operationId: ingestActivityFiles
+      summary: Upload one activity file (FIT, GPX or TCX)
+      description: |
+        One gzip NDJSON part (at most 64 MiB, never truncated) holding one activity file on one
+        line: `{"type":"fit","data":"<base64 of the file>"}`, `type` being `fit`, `gpx` or `tcx`
+        and equal to `X-OHS-Type`. The file is at most 20 MiB once decoded (the line format is in
+        docs/connectors/activity-files.md; `ohs import files` writes it). The part is refused
+        with 400, and nothing is stored, unless the file parses as an activity that starts at
+        most 48 hours from now: a FIT course, settings or monitoring file, a GPX route without
+        times or a file with a broken CRC is refused. Same headers, limits and answers as the
+        Apple Health upload.
+        Re-sending the same part is safe: the answer is 200 with `duplicate: true`. Other
+        bytes under a (day, batch, part) already stored are a 409, and so is a part sent while
+        this provider's data is being deleted for the user (nothing is kept; send it again
+        once the deletion job is done). Each instance processes a
+        bounded number of uploads at once; above it the answer is 503 with `Retry-After`.
+      security:
+        - userToken: [upload]
+      parameters:
+        - name: X-OHS-Type
+          in: header
+          required: true
+          description: Format of the file in the part.
+          schema: { type: string, enum: [fit, gpx, tcx] }
+        - name: X-OHS-Day
+          in: header
+          required: true
+          description: UTC day the activity starts (`ohs import files` sends it; the server does not check it).
+          schema: { type: string, format: date }
+        - name: X-OHS-Batch
+          in: header
+          required: true
+          description: "`ohs import files` sends `af1-` and the first 32 hex digits of the file's SHA-256."
           schema: { type: string, maxLength: 128 }
         - name: X-OHS-Part
           in: header
@@ -3880,6 +4010,79 @@ components:
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 
+    SelfReportKind:
+      type: string
+      enum: [feeling, mood, stress, energy, sleep_quality, muscle_soreness, exertion, pain]
+      description: |
+        The scale of each kind: feeling, mood, stress, energy, sleep_quality and
+        muscle_soreness from 1 to 5; exertion and pain from 0 to 10 (docs/self-reports.md).
+
+    CreateSelfReportsRequest:
+      type: object
+      additionalProperties: false
+      required: [reports]
+      properties:
+        reports:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { $ref: "#/components/schemas/SelfReportInput" }
+
+    SelfReportInput:
+      type: object
+      additionalProperties: false
+      required: [kind, value, start_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: |
+            Your id of the report. Sending it again replaces the stored value. Absent, the
+            server gives one (a retry then records the report twice, unless it carries the
+            same Idempotency-Key).
+        kind: { $ref: "#/components/schemas/SelfReportKind" }
+        value:
+          type: integer
+          minimum: 0
+          maximum: 10
+          description: A whole number on the kind's scale.
+        start_at:
+          type: string
+          format: date-time
+          description: When the rating applies, between 1900 and 2200.
+        end_at:
+          type: [string, "null"]
+          format: date-time
+          description: After `start_at`, for a rating of a period (a training session). Absent or null for an instant.
+        timezone:
+          type: [string, "null"]
+          maxLength: 64
+          description: The IANA time zone the person was in. Empty or null is none.
+
+    SelfReport:
+      type: object
+      required: [id, kind, type, value, start_at, end_at, timezone]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { $ref: "#/components/schemas/SelfReportKind" }
+        type: { type: string, description: "The quantity type it is stored as, `reported_<kind>`.", examples: [reported_feeling] }
+        value: { type: integer }
+        start_at: { type: string, format: date-time }
+        end_at: { type: [string, "null"], format: date-time }
+        timezone: { type: [string, "null"] }
+
+    SelfReportsResponse:
+      type: object
+      required: [reports, duplicate]
+      properties:
+        reports:
+          type: array
+          description: The reports as stored, in request order, each with its id.
+          items: { $ref: "#/components/schemas/SelfReport" }
+        duplicate:
+          type: boolean
+          description: true when these exact reports had already been received.
+
     CreateTimeTagRequest:
       type: object
       additionalProperties: false
@@ -4417,6 +4620,10 @@ components:
           type: string
           format: date-time
           description: When the record was ingested (the later of a panel's two samples).
+        performer:
+          type: array
+          description: The person, on a self report (category survey); absent otherwise.
+          items: { $ref: "#/components/schemas/FHIRReference" }
         valueQuantity: { $ref: "#/components/schemas/FHIRQuantity" }
         valueCodeableConcept:
           allOf: [{ $ref: "#/components/schemas/FHIRCodeableConcept" }]
