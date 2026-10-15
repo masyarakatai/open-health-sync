@@ -23,6 +23,7 @@ from .models import (
     ConsentEvent,
     ConsentSource,
     Coverage,
+    CreateSelfReportsRequest,
     CreateTimeTagRequest,
     CreateUserRequest,
     CreateWebhookRequest,
@@ -77,6 +78,7 @@ from .models import (
     Sample,
     SamplePage,
     SampleStats,
+    SelfReportsResponse,
     SetConsentRequest,
     SetupRequest,
     SetupResult,
@@ -1795,6 +1797,36 @@ class OpenHealthSync:
             expect="none",
         )
 
+    def create_self_reports(
+        self,
+        user_id: str,
+        body: CreateSelfReportsRequest,
+        *,
+        idempotency_key: Optional[str] = None,
+    ) -> SelfReportsResponse:
+        """Record the user's own ratings.
+
+        ``POST /v1/users/{id}/self-reports``
+
+        1 to 100 self reports: how the person feels, their mood, stress, energy, sleep
+        quality, muscle soreness, the effort of a session or pain, each a whole number on the
+        kind's scale (docs/self-reports.md). Each report is stored as a quantity sample of type
+        `reported_<kind>` from the source `self_report`, read back like any other sample
+        (`/samples`, `/samples/stats`, FHIR with category `survey`, exports). Sending a report
+        again with the same `id` replaces its value, also when `start_at` moved. The reports
+        go through the same processing as an upload, so the answer is 202. A tenant key records
+        reports for any user of the tenant; a user token with scope `upload` only for its own
+        user, and another user is a 404. Values are health data: never logged, never quoted in
+        an error. While the user's self reports are being deleted the answer is 409 and nothing
+        is kept.
+        """
+        return self._request(
+            "POST",
+            f"/v1/users/{_path(user_id)}/self-reports",
+            json_body=body,
+            idempotency_key=idempotency_key,
+        )
+
     def search_fhir_observations(
         self,
         user_id: str,
@@ -1844,8 +1876,9 @@ class OpenHealthSync:
                 systems are a 400. A code no Observation carries is an empty Bundle.
             category: An HL7 observation category code, bare or as
                 `http://terminology.hl7.org/CodeSystem/observation-category|code`: `vital-signs`,
-                `laboratory` or `activity` (activity samples, workouts and daily summaries). One
-                value. Another code of that system is an empty Bundle; anything else is a 400.
+                `laboratory`, `activity` (activity samples, workouts and daily summaries) or `survey`
+                (self reports). One value. Another code of that system is an empty Bundle; anything
+                else is a 400.
             start: Inclusive lower bound, RFC 3339 or YYYY-MM-DD.
             end: Exclusive upper bound, RFC 3339 or YYYY-MM-DD. Must not be before start.
             view: `merged` (the default): when several sources recorded the same thing (a ring and a

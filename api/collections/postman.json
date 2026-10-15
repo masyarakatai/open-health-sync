@@ -2292,6 +2292,57 @@
       ]
     },
     {
+      "name": "self-reports",
+      "item": [
+        {
+          "name": "Record the user's own ratings",
+          "request": {
+            "method": "POST",
+            "description": "Record the user's own ratings.\n\n`POST /v1/users/{id}/self-reports`\n\n1 to 100 self reports: how the person feels, their mood, stress, energy, sleep\nquality, muscle soreness, the effort of a session or pain, each a whole number on the\nkind's scale (docs/self-reports.md). Each report is stored as a quantity sample of type\n`reported_<kind>` from the source `self_report`, read back like any other sample\n(`/samples`, `/samples/stats`, FHIR with category `survey`, exports). Sending a report\nagain with the same `id` replaces its value, also when `start_at` moved. The reports\ngo through the same processing as an upload, so the answer is 202. A tenant key records\nreports for any user of the tenant; a user token with scope `upload` only for its own\nuser, and another user is a 404. Values are health data: never logged, never quoted in\nan error. While the user's self reports are being deleted the answer is 409 and nothing\nis kept.",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "createSelfReports-0001",
+                "description": "Optional. A retry with the same key and the same request gets the first response back.",
+                "disabled": true
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/:id/self-reports",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                ":id",
+                "self-reports"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{userId}}"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reports\": [\n    {\n      \"end_at\": \"2026-01-01T00:00:00Z\",\n      \"id\": \"00000000-0000-0000-0000-000000000000\",\n      \"kind\": \"feeling\",\n      \"start_at\": \"2026-01-01T00:00:00Z\",\n      \"timezone\": \"example\",\n      \"value\": 0\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "fhir",
       "item": [
         {
@@ -2328,7 +2379,7 @@
                 {
                   "key": "category",
                   "value": "vital-signs",
-                  "description": "An HL7 observation category code, bare or as\n`http://terminology.hl7.org/CodeSystem/observation-category|code`: `vital-signs`,\n`laboratory` or `activity` (activity samples, workouts and daily summaries). One\nvalue. Another code of that system is an empty Bundle; anything else is a 400.",
+                  "description": "An HL7 observation category code, bare or as\n`http://terminology.hl7.org/CodeSystem/observation-category|code`: `vital-signs`,\n`laboratory`, `activity` (activity samples, workouts and daily summaries) or `survey`\n(self reports). One value. Another code of that system is an empty Bundle; anything\nelse is a 400.",
                   "disabled": true
                 },
                 {

@@ -9,6 +9,16 @@ release may change the API, the configuration or the database schema.
 
 ### Added
 
+- Self reports: `POST /v1/users/{id}/self-reports` records a person's own ratings next to their
+  synced data: how they feel, mood, stress, energy, sleep quality and muscle soreness (1 to 5),
+  the effort of a session and pain (0 to 10). It takes a tenant key, or the user's own token
+  with scope `upload`, and honours `Idempotency-Key`. Each report becomes a quantity sample of
+  type `reported_<kind>` from the new `self_report` source, so it is read with `/samples`,
+  `/samples/stats`, the exports, the archive and the MCP tools, consented to and erased like any
+  other source. A report sent again with the same `id` replaces its value. In FHIR, self reports
+  are Observations with category `survey` and the person as `performer`; pain carries LOINC
+  72514-3. Migration 0036 adds the eight types to the catalog. See
+  [docs/self-reports.md](docs/self-reports.md).
 - `GET /v1/users/{id}/samples/stats` and the MCP tool `get_sample_stats`: count, sum, mean,
   min and max of a quantity type per hour or per local day in any IANA time zone (`tz`), for
   ranges up to 10,000 intervals. By default (`view=merged`) each interval keeps the best

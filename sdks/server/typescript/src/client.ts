@@ -14,6 +14,7 @@ import type {
   ConsentEvent,
   ConsentSource,
   Coverage,
+  CreateSelfReportsRequest,
   CreateTimeTagRequest,
   CreateUserRequest,
   CreateWebhookRequest,
@@ -69,6 +70,7 @@ import type {
   Sample,
   SamplePage,
   SampleStats,
+  SelfReportsResponse,
   SetConsentRequest,
   SetupRequest,
   SetupResult,
@@ -504,8 +506,9 @@ export interface SearchFHIRObservationsParams {
   /**
    * An HL7 observation category code, bare or as
    * `http://terminology.hl7.org/CodeSystem/observation-category|code`: `vital-signs`,
-   * `laboratory` or `activity` (activity samples, workouts and daily summaries). One
-   * value. Another code of that system is an empty Bundle; anything else is a 400.
+   * `laboratory`, `activity` (activity samples, workouts and daily summaries) or `survey`
+   * (self reports). One value. Another code of that system is an empty Bundle; anything
+   * else is a 400.
    */
   category?: string;
   /** Inclusive lower bound, RFC 3339 or YYYY-MM-DD. */
@@ -2095,6 +2098,37 @@ export class OpenHealthSync {
       method: "DELETE",
       path: `/v1/users/${encode(userId)}/tags/${encode(tagId)}`,
       expect: "none",
+      options,
+    });
+  }
+
+  /**
+   * Record the user's own ratings.
+   *
+   * `POST /v1/users/{id}/self-reports`
+   *
+   * 1 to 100 self reports: how the person feels, their mood, stress, energy, sleep
+   * quality, muscle soreness, the effort of a session or pain, each a whole number on the
+   * kind's scale (docs/self-reports.md). Each report is stored as a quantity sample of type
+   * `reported_<kind>` from the source `self_report`, read back like any other sample
+   * (`/samples`, `/samples/stats`, FHIR with category `survey`, exports). Sending a report
+   * again with the same `id` replaces its value, also when `start_at` moved. The reports
+   * go through the same processing as an upload, so the answer is 202. A tenant key records
+   * reports for any user of the tenant; a user token with scope `upload` only for its own
+   * user, and another user is a 404. Values are health data: never logged, never quoted in
+   * an error. While the user's self reports are being deleted the answer is 409 and nothing
+   * is kept.
+   */
+  createSelfReports(
+    userId: string,
+    body: CreateSelfReportsRequest,
+    options?: IdempotentRequestOptions,
+  ): Promise<SelfReportsResponse> {
+    return this.#request<SelfReportsResponse>({
+      method: "POST",
+      path: `/v1/users/${encode(userId)}/self-reports`,
+      json: body,
+      expect: "json",
       options,
     });
   }

@@ -223,7 +223,10 @@ func TestTypesWithCategory(t *testing.T) {
 	assert.NotContains(t, vs, "step_count")
 	assert.Equal(t, []string{"blood_alcohol_content", "blood_glucose"}, TypesWithCategory(CategoryLaboratory))
 	assert.Contains(t, TypesWithCategory(CategoryActivity), "step_count")
-	assert.Empty(t, TypesWithCategory("survey"))
+	assert.Equal(t, []string{"reported_energy", "reported_exertion", "reported_feeling", "reported_mood",
+		"reported_muscle_soreness", "reported_pain", "reported_sleep_quality", "reported_stress"},
+		TypesWithCategory(CategorySurvey))
+	assert.Empty(t, TypesWithCategory("exam"))
 
 	assert.Equal(t, []string{"resting_heart_rate"}, TypesWithExtraLOINC("8867-4"))
 	assert.Equal(t, []string{"oxygen_saturation"}, TypesWithExtraLOINC("2708-6"))

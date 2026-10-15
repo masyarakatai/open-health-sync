@@ -87,6 +87,7 @@ for a filtered one: use `start` and `end` where FHIR has `date`, and `limit` whe
 | `vital-signs` | the vital sign quantity samples and the blood pressure panels |
 | `laboratory` | blood glucose and blood alcohol samples |
 | `activity` | the activity quantity samples, the workouts and the daily summaries |
+| `survey` | the [self reports](self-reports.md) |
 
 ECG recordings carry no category, so a `category` search never lists them.
 
@@ -198,6 +199,7 @@ It is left out when none of them describes the measurement, rather than set to a
 | `vital-signs` | `heart_rate`, `resting_heart_rate`, `respiratory_rate`, `oxygen_saturation`, `body_temperature`, `blood_pressure_systolic`, `blood_pressure_diastolic`, `body_mass`, `height`, `body_mass_index`, and the blood pressure panels |
 | `laboratory` | `blood_glucose`, `blood_alcohol_content` |
 | `activity` | steps, flights, distances, active energy, Apple exercise, move and stand time, push count, physical effort, walking and running speed, running and cycling power, running form metrics, strain and workout strain, and the other activity counts of the catalog (and their intraday variants); workouts; daily summaries |
+| `survey` | the [self reports](self-reports.md): `reported_feeling`, `reported_mood`, `reported_stress`, `reported_energy`, `reported_sleep_quality`, `reported_muscle_soreness`, `reported_exertion`, `reported_pain`; each also carries `performer`, the Patient, since the person made the observation |
 | none | everything else: body composition, heart rate variability, VO2 max, the other temperatures, readiness scores, audio exposure, respiratory function, insulin, falls, UV, electrodermal activity, vascular age, pulse wave velocity, names outside the catalog, and sleep sessions (no HL7 category describes sleep) |
 
 ### Glucose from a CGM
