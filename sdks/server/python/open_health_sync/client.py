@@ -23,9 +23,11 @@ from .models import (
     ConsentEvent,
     ConsentSource,
     Coverage,
+    CreateShareRequest,
     CreateTimeTagRequest,
     CreateUserRequest,
     CreateWebhookRequest,
+    CreatedShare,
     DailySummary,
     DailySummaryPage,
     DeleteConnectionResponse,
@@ -78,6 +80,9 @@ from .models import (
     SetupRequest,
     SetupResult,
     SetupStatus,
+    Share,
+    ShareDetail,
+    SharePage,
     SleepPhase,
     SleepPhasePage,
     SleepSession,
@@ -1721,6 +1726,101 @@ class OpenHealthSync:
         return self._request(
             "DELETE",
             f"/v1/users/{_path(user_id)}/tags/{_path(tag_id)}",
+            expect="none",
+        )
+
+    def create_share(self, user_id: str, body: CreateShareRequest) -> CreatedShare:
+        """Make a share link of the user's records.
+
+        ``POST /v1/users/{id}/shares``
+
+        A SMART Health Link (HL7 FHIR IG "SMART Health Cards and Links", STU1) that the person
+        gives to whoever they choose. The server reads the user's records of `categories` in
+        `[start, end)` (the merged view, as the FHIR routes serve them), writes them as one
+        FHIR R4 `collection` Bundle (a Patient with no identifier, the Observations, the
+        Devices), compresses it (DEFLATE) and encrypts it as a compact JWE (`alg` `dir`,
+        `enc` `A256GCM`) with a fresh random 256-bit key. It stores the ciphertext only. The
+        answer holds the link (`uri`) and the built-in viewer's link (`viewer_url`), each
+        carrying the key, this once: the server keeps neither and cannot show them again.
+
+        A category holds every metric the consent model files under it. Records of a source
+        whose consent refuses the category, or whose purge is pending, are left out. The
+        snapshot is fixed when it is made (no `L` flag): later records are not added. At most
+        50000 records; more is a 400. A sleep session's, a workout's or a daily summary's
+        figures of another category (a resting heart rate is `heart`) are kept only on the
+        terms of their own category. The records are read and the share stored in one
+        transaction that holds the user and their consent: a consent change or an erasure
+        that starts meanwhile waits, then revokes the share if it holds what they remove.
+
+        The route takes no `Idempotency-Key`: a stored response would keep the key. Sent with
+        `Cache-Control: no-store`. See docs/share-links.md.
+        """
+        return self._request(
+            "POST",
+            f"/v1/users/{_path(user_id)}/shares",
+            json_body=body,
+        )
+
+    def list_shares(
+        self,
+        user_id: str,
+        *,
+        cursor: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> SharePage:
+        """The user's share links.
+
+        ``GET /v1/users/{id}/shares``
+
+        Oldest first, every status. Never a link, a key or a passcode: the server does not
+        keep them.
+
+        Args:
+            cursor: The next_cursor of the previous page.
+        """
+        return self._request(
+            "GET",
+            f"/v1/users/{_path(user_id)}/shares",
+            query={
+                "cursor": cursor,
+                "limit": limit,
+            },
+        )
+
+    def iter_shares(self, user_id: str, *, limit: Optional[int] = None) -> Iterator[Share]:
+        """Every item of :meth:`list_shares`, page after page, following ``next_cursor``."""
+        return paginate(
+            lambda cursor: self.list_shares(
+                user_id,
+                cursor=cursor,
+                limit=limit,
+            )
+        )
+
+    def get_share(self, user_id: str, share_id: str) -> ShareDetail:
+        """One share link, with its latest accesses.
+
+        ``GET /v1/users/{id}/shares/{share_id}``
+
+        The share and its 50 latest manifest requests, newest first, each with the name the
+        reader gave and the outcome.
+        """
+        return self._request(
+            "GET",
+            f"/v1/users/{_path(user_id)}/shares/{_path(share_id)}",
+        )
+
+    def revoke_share(self, user_id: str, share_id: str) -> None:
+        """Revoke a share link.
+
+        ``DELETE /v1/users/{id}/shares/{share_id}``
+
+        The link stops working at once and its file is removed; the share stays listed as
+        `revoked` (reason `owner`). Revoking a share that is no longer active changes nothing.
+        """
+        return self._request(
+            "DELETE",
+            f"/v1/users/{_path(user_id)}/shares/{_path(share_id)}",
             expect="none",
         )
 

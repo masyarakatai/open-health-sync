@@ -9,6 +9,18 @@ release may change the API, the configuration or the database schema.
 
 ### Added
 
+- Share links (SMART Health Links, HL7 FHIR IG "SMART Health Cards and Links" STU1): a person
+  shares a time window of some data categories of their own records with whoever they choose.
+  `POST /v1/users/{id}/shares` (tenant key) writes the records as a FHIR R4 Bundle, encrypts it
+  as a JWE (`dir`, `A256GCM`, standard library only) with a fresh key, stores the ciphertext
+  only and answers the `shlink:/` link once. A link expires (at most 365 days), may need a
+  passcode (10 wrong tries disable it), is revoked with `DELETE`, by a consent change that
+  refuses a category it holds or by an erasure of a provider's data, and goes with the user.
+  The public `POST /shl/{manifest_id}` and `GET /shl/file/{ticket}` serve the reader, rate
+  limited per client address (`OHS_RATE_LIMIT_OAUTH`, `route_group="share"`); `/shl/view` is a
+  built-in viewer that decrypts in the browser. Every access is in the audit log (`share.access`,
+  actor `share_link`); webhooks `share.created`, `share.revoked`, `share.accessed`. Migration
+  0037. See [docs/share-links.md](docs/share-links.md).
 - `GET /v1/users/{id}/samples/stats` and the MCP tool `get_sample_stats`: count, sum, mean,
   min and max of a quantity type per hour or per local day in any IANA time zone (`tz`), for
   ranges up to 10,000 intervals. By default (`view=merged`) each interval keeps the best

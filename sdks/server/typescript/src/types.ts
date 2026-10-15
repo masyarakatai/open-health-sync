@@ -76,7 +76,8 @@ export interface AuditEvent {
    * data.read, data.export, data.write, user.create, user.read, user.delete,
    * user.erased, token.create, connection.read, connection.create,
    * connection.delete, connection.sync, webhook.read, webhook.write, audit.read, config.read,
-   * config.write, tenant.create, key.create, key.revoke (more may be added).
+   * config.write, tenant.create, key.create, key.revoke, share.create, share.read,
+   * share.revoke, share.access (more may be added).
    */
   action: string;
   /** The end user the action concerns. */
@@ -94,10 +95,11 @@ export interface AuditEvent {
 }
 
 export interface AuditEventActor {
-  type: "api_key" | "user_token" | "admin" | "system";
+  type: "api_key" | "user_token" | "admin" | "system" | "share_link";
   /**
    * The API key's id, the first 16 hex characters of a user token's SHA-256
-   * hash, or the command or worker for admin and system events.
+   * hash, the command or worker for admin and system events, or the share's id
+   * for a share link used by its reader.
    */
   id: string;
 }
@@ -157,8 +159,11 @@ export interface UserToken {
  * `tag.created`, `tag.updated`, `tag.deleted`: a time tag of the user was created, changed
  * or deleted through the API.
  * `consent.granted`, `consent.revoked`: a user granted or revoked data categories of a source.
+ * `share.created`: a share link of the user was made. `share.revoked`: a share link
+ * stopped before its expiry; `reason` says why. `share.accessed`: a share link's file was
+ * given to a reader. They name the share, never the link, its key, its label or the reader.
  */
-export type WebhookEventType = "data.written" | "data.deleted" | "data.erased" | "user.deleted" | "connection.needs_reauth" | "connection.broken" | "connection.restored" | "tag.created" | "tag.updated" | "tag.deleted" | "consent.granted" | "consent.revoked";
+export type WebhookEventType = "data.written" | "data.deleted" | "data.erased" | "user.deleted" | "connection.needs_reauth" | "connection.broken" | "connection.restored" | "tag.created" | "tag.updated" | "tag.deleted" | "consent.granted" | "consent.revoked" | "share.created" | "share.revoked" | "share.accessed";
 
 export interface CreateWebhookRequest {
   url: string;
@@ -304,8 +309,21 @@ export interface WebhookEventData {
   job_id?: string;
   /** tag.created, tag.updated and tag.deleted. */
   tag_id?: string;
-  /** connection.broken. */
-  reason?: "needs_reauth" | "missing_scope" | "failing" | "rate_limited";
+  /** consent.granted and consent.revoked, the categories that changed; share.created, the categories shared. */
+  categories?: ConsentCategoryName[];
+  /** share.created, share.revoked and share.accessed. */
+  share_id?: string;
+  /** share.created. */
+  expires_at?: string;
+  /** share.created. Whether the link needs a passcode. */
+  passcode?: boolean;
+  /**
+   * connection.broken: needs_reauth, missing_scope, failing or rate_limited.
+   * share.revoked: owner (revoked through the API), consent (a consent change refused
+   * a category it holds), provider_erased (the records of a provider it holds were
+   * erased) or passcode_attempts (too many wrong passcodes).
+   */
+  reason?: "needs_reauth" | "missing_scope" | "failing" | "rate_limited" | "owner" | "consent" | "provider_erased" | "passcode_attempts";
   /** connection.broken. */
   action?: "reconnect" | "wait";
   /** connection.broken, rate_limited. When pulls resume. */
@@ -864,6 +882,191 @@ export interface TimeTagPage {
   data: TimeTag[];
   /** Null on the last page. */
   next_cursor: string | null;
+}
+
+/**
+ * The consent categories a share link can hold: those with records in the FHIR view.
+ * location, ecg, nutrition, reproductive and mental are refused (400).
+ */
+export type ShareCategory = "activity" | "heart" | "blood_pressure" | "glucose" | "respiratory" | "body" | "sleep" | "other";
+
+/** A share link as its owner reads it. Never the link, its key or the passcode. */
+export interface Share {
+  id: string;
+  /** Shown to the reader; empty for none. */
+  label: string;
+  categories: ShareCategory[];
+  /** Inclusive start of the time window. */
+  start: string;
+  /** Exclusive end of the time window. */
+  end: string;
+  /** When the link stops working. */
+  expires_at: string;
+  /** Whether the link needs a passcode. */
+  passcode: boolean;
+  /** Wrong or missing passcodes so far; the 10th disables the link. */
+  passcode_failures: number;
+  /**
+   * `active`: the link works. `expired`: past `expires_at`. `revoked`: stopped before its
+   * expiry (see `revoked_reason`). `disabled`: too many wrong passcodes.
+   */
+  status: "active" | "expired" | "revoked" | "disabled";
+  revoked_at: string | null;
+  revoked_reason: "owner" | "consent" | "provider_erased" | "passcode_attempts" | null;
+  /** How many Observations the file holds. */
+  observations: number;
+  /** The size of the encrypted file when it was made. */
+  file_bytes: number;
+  /** How many manifest requests were served the file. */
+  accesses: number;
+  /** The latest of them. */
+  last_accessed_at: string | null;
+  created_at: string;
+}
+
+export interface ShareAccess {
+  at: string;
+  /** The name the reader gave, as given. */
+  recipient: string;
+  /**
+   * `served`: the manifest was answered. `wrong_passcode`: a wrong or missing passcode.
+   * `inactive`: the link no longer worked (listed once a day at most; the audit log
+   * has every one).
+   */
+  outcome: "served" | "wrong_passcode" | "inactive";
+}
+
+export interface ShareDetail {
+  id: string;
+  /** Shown to the reader; empty for none. */
+  label: string;
+  categories: ShareCategory[];
+  /** Inclusive start of the time window. */
+  start: string;
+  /** Exclusive end of the time window. */
+  end: string;
+  /** When the link stops working. */
+  expires_at: string;
+  /** Whether the link needs a passcode. */
+  passcode: boolean;
+  /** Wrong or missing passcodes so far; the 10th disables the link. */
+  passcode_failures: number;
+  /**
+   * `active`: the link works. `expired`: past `expires_at`. `revoked`: stopped before its
+   * expiry (see `revoked_reason`). `disabled`: too many wrong passcodes.
+   */
+  status: "active" | "expired" | "revoked" | "disabled";
+  revoked_at: string | null;
+  revoked_reason: "owner" | "consent" | "provider_erased" | "passcode_attempts" | null;
+  /** How many Observations the file holds. */
+  observations: number;
+  /** The size of the encrypted file when it was made. */
+  file_bytes: number;
+  /** How many manifest requests were served the file. */
+  accesses: number;
+  /** The latest of them. */
+  last_accessed_at: string | null;
+  created_at: string;
+  /** The 50 latest manifest requests, newest first. */
+  recent_accesses: ShareAccess[];
+}
+
+export interface SharePage {
+  data: Share[];
+  /** Null on the last page. */
+  next_cursor: string | null;
+}
+
+export interface CreateShareRequest {
+  categories: ShareCategory[];
+  /** Inclusive start of the window, RFC 3339 or YYYY-MM-DD. */
+  start: string;
+  /** Exclusive end of the window, after `start`. */
+  end: string;
+  /** When the link stops working, in the future and at most 365 days ahead. */
+  expires_at: string;
+  /**
+   * When set, the reader must give it. 6 to 64 characters, no control character. The
+   * server keeps a PBKDF2-SHA256 hash of it only.
+   */
+  passcode?: string | null;
+  /** Shown to the reader, for example who the link is for. One line. */
+  label?: string;
+}
+
+export interface CreatedShare {
+  id: string;
+  /** Shown to the reader; empty for none. */
+  label: string;
+  categories: ShareCategory[];
+  /** Inclusive start of the time window. */
+  start: string;
+  /** Exclusive end of the time window. */
+  end: string;
+  /** When the link stops working. */
+  expires_at: string;
+  /** Whether the link needs a passcode. */
+  passcode: boolean;
+  /** Wrong or missing passcodes so far; the 10th disables the link. */
+  passcode_failures: number;
+  /**
+   * `active`: the link works. `expired`: past `expires_at`. `revoked`: stopped before its
+   * expiry (see `revoked_reason`). `disabled`: too many wrong passcodes.
+   */
+  status: "active" | "expired" | "revoked" | "disabled";
+  revoked_at: string | null;
+  revoked_reason: "owner" | "consent" | "provider_erased" | "passcode_attempts" | null;
+  /** How many Observations the file holds. */
+  observations: number;
+  /** The size of the encrypted file when it was made. */
+  file_bytes: number;
+  /** How many manifest requests were served the file. */
+  accesses: number;
+  /** The latest of them. */
+  last_accessed_at: string | null;
+  created_at: string;
+  /**
+   * The link, `shlink:/` + the base64url payload (`url`, `key`, `exp`, `flag` `P`
+   * with a passcode, `label`). It carries the key: shown only this once.
+   */
+  uri: string;
+  /** The built-in viewer with the link in its fragment (`.../shl/view#shlink:/...`). */
+  viewer_url: string;
+}
+
+export interface ShareManifestRequest {
+  /** Who opens the link, as the reader names themselves; shown to the owner. */
+  recipient: string;
+  /** Required when the link's flag holds P. */
+  passcode?: string;
+  /** The longest file to embed; a longer one comes as a `location`. */
+  embeddedLengthMax?: number;
+}
+
+export interface ShareManifest {
+  /** A snapshot never changes. */
+  status: "finalized";
+  files: ShareManifestFile[];
+}
+
+export interface ShareManifestFile {
+  contentType: "application/fhir+json";
+  /** The file, a compact JWE. */
+  embedded?: string;
+  /** Where to GET the file, once, within 15 minutes. */
+  location?: string;
+  lastUpdated: string;
+}
+
+export interface PasscodeProblem {
+  type: string;
+  title: string;
+  status: number;
+  detail?: string;
+  /** The X-Request-Id of the response, to quote when reporting the error. */
+  request_id?: string;
+  /** Wrong passcodes the link still takes before it is disabled. */
+  remainingAttempts: number;
 }
 
 export interface FHIRCoding {

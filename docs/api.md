@@ -16,7 +16,7 @@ Every call carries `Authorization: Bearer <secret>`.
 
 | Secret | Looks like | Used by | Calls |
 |---|---|---|---|
-| Tenant API key | `ohs_sk_` + 43 characters | your server | tenant routes: users, tokens, connections, reads, time tags |
+| Tenant API key | `ohs_sk_` + 43 characters | your server | tenant routes: users, tokens, connections, reads, time tags, share links |
 | User token | `ohs_ut_` + 43 characters | one end user's app | user routes: uploads (`upload`), reads over MCP and the user archive (`read`) |
 
 The first key comes from `ohs admin tenant create --name <name>` (or `OHS_BOOTSTRAP_TENANT`,
@@ -367,6 +367,23 @@ curl -s -X POST $OHS/v1/users/$USER_ID/tags -H "Authorization: Bearer $KEY" \
 curl -s "$OHS/v1/users/$USER_ID/tags?start=2026-03-01&end=2026-04-01" -H "Authorization: Bearer $KEY"
 ```
 
+## Share links
+
+`POST /v1/users/{id}/shares` makes a SMART Health Link: a snapshot of the user's records of some
+categories (`heart`, `sleep`, `activity`...) in a time window, written as a FHIR R4 Bundle,
+encrypted with a fresh key and stored as ciphertext only. The answer holds the link (`uri`,
+`shlink:/...`) and the built-in viewer's link (`viewer_url`), once: the server keeps no key.
+`expires_at` is required, a `passcode` optional. `GET /v1/users/{id}/shares` lists the user's
+links (never a key or a link), `GET .../shares/{share_id}` adds who opened one, and `DELETE`
+revokes it. The reader's viewer calls the public `POST /shl/{manifest_id}` with no credential.
+Categories, the reader's side, revocation and limits: [share-links.md](share-links.md).
+
+```sh
+curl -s -X POST $OHS/v1/users/$USER_ID/shares -H "Authorization: Bearer $KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"categories":["heart","sleep"],"start":"2026-09-01","end":"2026-10-01","expires_at":"2026-10-21T00:00:00Z"}'
+```
+
 ## FHIR R4
 
 `GET /v1/users/{id}/fhir/Observation` serves the same quantity samples, blood pressure readings
@@ -426,7 +443,7 @@ curl -sOJ "$OHS/v1/users/$USER_ID/archive" -H "Authorization: Bearer $KEY"
 
 Rather than polling coverage, register an endpoint with `POST /v1/webhooks` and be told when a
 sync writes or deletes records, a user is erased, a connection needs the user to sign in
-again or a time tag changes. Requests are signed per Standard Webhooks and retried for about 28 hours. Events,
+again, a time tag changes or a share link is made, stopped or opened. Requests are signed per Standard Webhooks and retried for about 28 hours. Events,
 signature verification and the routes: [webhooks.md](webhooks.md).
 
 ## Audit log
@@ -456,6 +473,8 @@ grant are not stored, and a revoked category's stored records are deleted. Detai
 |---|---|
 | `GET /connect`, `GET /connect/{provider}`, `POST /connect/{provider}` | The [hosted connection page](connect-page.md), for the user's browser |
 | `GET /oauth/{provider}/callback` | OAuth redirect target you register with the provider |
+| `POST /shl/{manifest_id}`, `GET /shl/file/{ticket}` | A [share link](share-links.md)'s manifest and file, for the reader's viewer |
+| `GET /shl/view` | The built-in share link viewer |
 | `POST /inbound/{provider}` | Provider push notifications, verified with the provider's own scheme |
 | `GET /inbound/{provider}` | Notification URL check and subscription challenge |
 | `GET /healthz` | Liveness |
@@ -464,8 +483,8 @@ grant are not stored, and a revoked category's stored records are deleted. Detai
 | `GET /v1/setup`, `POST /v1/setup` | The browser [first-run setup](setup.md): creates the first tenant and its key with `OHS_SETUP_TOKEN`, once; only when that is set |
 | `GET /console` | Read-only admin console (HTML), only when `OHS_CONSOLE=true`; see [console.md](console.md) |
 
-The OAuth callback and the notification routes take no credential and are rate limited per
-client address (and the notification routes per provider): over a limit they answer 429 with a
+The OAuth callback, the notification routes and the share link manifest and file routes take
+no credential and are rate limited per client address (and the notification routes per provider): over a limit they answer 429 with a
 problem body and `Retry-After` in seconds, before any work. Limits and the reverse proxy
 setting are in [self-hosting.md](self-hosting.md#rate-limits).
 

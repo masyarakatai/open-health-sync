@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -28,6 +29,7 @@ import (
 	"github.com/soma-intelligence/open-health-sync/internal/app"
 	"github.com/soma-intelligence/open-health-sync/internal/config"
 	"github.com/soma-intelligence/open-health-sync/internal/db"
+	"github.com/soma-intelligence/open-health-sync/internal/shl"
 	"github.com/soma-intelligence/open-health-sync/internal/tenant"
 )
 
@@ -526,6 +528,73 @@ func TestQuickstartMatchesOpenAPI(t *testing.T) {
 	assert.Equal(t, 400, c.json("POST", u+"/tags", key, `{"kind":"travel","start_at":"2026-01-08","timezone":"Mars/Base"}`).status)
 	assert.Equal(t, 204, c.json("DELETE", u+"/tags/"+tag.ID, key, "").status)
 	assert.Equal(t, 404, c.json("GET", u+"/tags/"+tag.ID, key, "").status)
+
+	// Share links: make two, list and read them, then open one as its reader
+	// would (a wrong passcode, the file at a location, the file), revoke it,
+	// and the refusals. The public routes take four requests per address.
+	shares := u + "/shares"
+	expires := time.Now().Add(48 * time.Hour).UTC().Format(time.RFC3339)
+	r = c.json("POST", shares, key, `{"categories":["sleep","heart"],"start":"2026-01-01","end":"2026-02-01",
+		"expires_at":"`+expires+`","passcode":"invented-passcode","label":"Contract reader"}`)
+	require.Equal(t, 201, r.status, "%s", r.body)
+	var share struct {
+		ID           string `json:"id"`
+		URI          string `json:"uri"`
+		Observations int    `json:"observations"`
+	}
+	r.json(t, &share)
+	assert.Positive(t, share.Observations)
+	r = c.json("POST", shares, key, `{"categories":["activity"],"start":"2026-01-10","end":"2026-01-11","expires_at":"`+expires+`"}`)
+	require.Equal(t, 201, r.status, "%s", r.body)
+	assert.Equal(t, 400, c.json("POST", shares, key, `{"categories":["location"],"start":"2026-01-01","end":"2026-02-01","expires_at":"`+expires+`"}`).status)
+	assert.Equal(t, 400, c.json("POST", shares, key, `{"categories":["heart"],"start":"2026-01-01","end":"2026-02-01","expires_at":"2026-01-01"}`).status)
+	assert.Equal(t, 403, c.json("GET", shares, tok.Token, "").status)
+	r = c.json("GET", shares+"?limit=1", key, "")
+	require.Equal(t, 200, r.status, "%s", r.body)
+	r.json(t, &page)
+	require.NotNil(t, page.NextCursor)
+	assert.Equal(t, 200, c.json("GET", shares+"?limit=1&cursor="+*page.NextCursor, key, "").status)
+	assert.Equal(t, 400, c.json("GET", shares+"?cursor=nope", key, "").status)
+	assert.Equal(t, 404, c.json("GET", shares+"/00000000-0000-4000-8000-000000000000", key, "").status)
+
+	raw, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(share.URI, shl.Prefix))
+	require.NoError(t, err)
+	var payload shl.Payload
+	require.NoError(t, json.Unmarshal(raw, &payload))
+	require.NoError(t, payload.Validate())
+	assert.Equal(t, shl.FlagPasscode, payload.Flag)
+	manifest := strings.TrimPrefix(payload.URL, base)
+	require.True(t, strings.HasPrefix(manifest, "/shl/"), "the link's url %q under OHS_PUBLIC_URL", payload.URL)
+	assert.Equal(t, 204, c.do("OPTIONS", manifest, "", nil, map[string]string{
+		"Origin": "https://viewer.invalid", "Access-Control-Request-Method": "POST"}).status)
+	r = c.json("POST", manifest, "", `{"recipient":"Contract reader","passcode":"not-the-passcode"}`)
+	assert.Equal(t, 401, r.status, "%s", r.body)
+	assert.Contains(t, string(r.body), `"remainingAttempts":9`)
+	r = c.json("POST", manifest, "", `{"recipient":"Contract reader","passcode":"invented-passcode","embeddedLengthMax":0}`)
+	require.Equal(t, 200, r.status, "%s", r.body)
+	var mf struct {
+		Files []struct {
+			Location string `json:"location"`
+		} `json:"files"`
+	}
+	r.json(t, &mf)
+	require.Len(t, mf.Files, 1)
+	r = c.json("GET", strings.TrimPrefix(mf.Files[0].Location, base), "", "")
+	require.Equal(t, 200, r.status, "%s", r.body)
+	key32, err := shl.DecodeKey(payload.Key)
+	require.NoError(t, err)
+	plainFile, hdr, err := shl.Decrypt(key32, string(r.body), 64<<20)
+	require.NoError(t, err)
+	assert.Equal(t, shl.ContentFHIR, hdr.Cty)
+	assert.Contains(t, string(plainFile), `"resourceType":"Bundle"`)
+	assert.Equal(t, 200, c.json("GET", shares+"/"+share.ID, key, "").status)
+	assert.Equal(t, 204, c.json("DELETE", shares+"/"+share.ID, key, "").status)
+	assert.Equal(t, 204, c.json("DELETE", shares+"/"+share.ID, key, "").status, "revoking twice changes nothing")
+	assert.Equal(t, 404, c.json("POST", manifest, "", `{"recipient":"Contract reader","passcode":"invented-passcode"}`).status)
+	assert.Equal(t, 429, c.json("POST", manifest, "", `{"recipient":"Contract reader"}`).status, "over the share rate limit")
+	assert.Equal(t, 200, c.json("GET", "/shl/view", "", "").status)
+	assert.Equal(t, 200, c.json("GET", "/shl/view/view.mjs", "", "").status)
+	assert.Equal(t, 404, c.json("GET", "/shl/view/missing.js", "", "").status)
 
 	// Refusals are documented problems too.
 	assert.Equal(t, 401, c.json("GET", "/v1/users", "", "").status)

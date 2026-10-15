@@ -88,11 +88,24 @@ type Change struct {
 	Granted  bool
 }
 
+// Lock holds the user's consent lock until the transaction tx ends. Set
+// takes it, and so does whatever must read the consent and act on it
+// before a change lands (a share link being made): the row locks alone
+// would not order them, since a user's first consent for a source inserts
+// rows nobody could lock beforehand.
+func Lock(ctx context.Context, tx DB, tenant, user uuid.UUID) error {
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
+		"ohs.consent:"+tenant.String()+":"+user.String()); err != nil {
+		return fmt.Errorf("consent: lock: %w", err)
+	}
+	return nil
+}
+
 // Set makes granted the full list of categories the user allows from the
 // source: every other category is revoked. It records an event per change
 // with actor and evidence, queues a purge per newly revoked category, and
 // returns the changes. Run it in a transaction (with the webhook events it
-// announces).
+// announces): it holds the user's consent Lock until that ends.
 func Set(ctx context.Context, tx DB, tenant, user uuid.UUID, provider string, granted []string, actor, evidence string) ([]Change, error) {
 	want := map[string]bool{}
 	for _, c := range granted {
@@ -100,6 +113,9 @@ func Set(ctx context.Context, tx DB, tenant, user uuid.UUID, provider string, gr
 			return nil, fmt.Errorf("%w %q", ErrUnknownCategory, c)
 		}
 		want[c] = true
+	}
+	if err := Lock(ctx, tx, tenant, user); err != nil {
+		return nil, err
 	}
 	current := map[string]bool{}
 	rows, err := tx.Query(ctx, `

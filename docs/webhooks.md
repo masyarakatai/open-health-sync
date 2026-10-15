@@ -3,7 +3,8 @@
 Instead of polling `coverage`, your server can be told when something changes. Register an
 endpoint, and Open Health Sync posts a signed JSON event to it when a sync writes new or changed
 records, when a provider deletes records, when a user is erased, when a connection needs the
-user to sign in again, or when a time tag is created, changed or deleted.
+user to sign in again, when a time tag is created, changed or deleted, or when a share link is
+made, stopped or opened.
 
 Events are thin: they say what changed, for which user, from which provider and over which days,
 never a health value. Your server reads the data with the API it already uses. A leaked or
@@ -62,6 +63,9 @@ the REST routes.
 | `connection.broken` | A connection stopped syncing: grant refused, a permission missing, pulls failing, or a provider quota spent | `user_id`, `external_ref`, `provider`, `reason`, `action`, and `retry_at` or `last_error` ([details](sync-health.md)) |
 | `connection.restored` | A broken connection synced again, or the user connected again | `user_id`, `external_ref`, `provider`, `previous_reason`, `broken_since`, `broken_seconds` |
 | `tag.created`, `tag.updated`, `tag.deleted` | A [time tag](time-tags.md) of the user was created, changed or deleted through the API | `user_id`, `external_ref`, `tag_id` |
+| `share.created` | A [share link](share-links.md) of the user was made | `user_id`, `external_ref`, `share_id`, `categories`, `expires_at`, `passcode` (whether it has one) |
+| `share.revoked` | A share link stopped before its expiry | `user_id`, `external_ref`, `share_id`, `reason`: `owner`, `consent`, `provider_erased` or `passcode_attempts` |
+| `share.accessed` | A share link's file was served to a reader | `user_id`, `external_ref`, `share_id` (never the reader's name) |
 | `webhook.test` | You called the test route | `endpoint_id` |
 
 Events sent by the test route also carry `"test": true` at the top level, next to `type`. A real

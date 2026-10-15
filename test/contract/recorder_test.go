@@ -30,6 +30,11 @@ func init() {
 	openapi3filter.RegisterBodyDecoder("application/zip", openapi3filter.FileBodyDecoder)
 	// FHIR responses are JSON under their own media type.
 	openapi3filter.RegisterBodyDecoder("application/fhir+json", openapi3filter.JSONBodyDecoder)
+	// A share link's file is a compact JWE, and its viewer a page with its
+	// script and stylesheet: all text, validated as strings.
+	for _, ct := range []string{"application/jose", "text/html", "text/javascript", "text/css"} {
+		openapi3filter.RegisterBodyDecoder(ct, openapi3filter.PlainBodyDecoder)
+	}
 }
 
 // Call is one recorded exchange.

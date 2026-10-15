@@ -24,7 +24,10 @@ ConsentCategoryName = Literal["activity", "location", "heart", "ecg", "blood_pre
 # `tag.created`, `tag.updated`, `tag.deleted`: a time tag of the user was created, changed
 # or deleted through the API.
 # `consent.granted`, `consent.revoked`: a user granted or revoked data categories of a source.
-WebhookEventType = Literal["data.written", "data.deleted", "data.erased", "user.deleted", "connection.needs_reauth", "connection.broken", "connection.restored", "tag.created", "tag.updated", "tag.deleted", "consent.granted", "consent.revoked"]
+# `share.created`: a share link of the user was made. `share.revoked`: a share link
+# stopped before its expiry; `reason` says why. `share.accessed`: a share link's file was
+# given to a reader. They name the share, never the link, its key, its label or the reader.
+WebhookEventType = Literal["data.written", "data.deleted", "data.erased", "user.deleted", "connection.needs_reauth", "connection.broken", "connection.restored", "tag.created", "tag.updated", "tag.deleted", "consent.granted", "consent.revoked", "share.created", "share.revoked", "share.accessed"]
 
 # Provider fields kept as is, plus timezone (IANA name) when known.
 Metadata = Dict[str, Any]
@@ -36,6 +39,10 @@ SourceOrders = Dict[str, List[str]]
 TimeTagKind = Literal["illness", "injury", "travel", "jet_lag", "vaccination", "medication", "alcohol", "other"]
 
 TimeTagTime = str
+
+# The consent categories a share link can hold: those with records in the FHIR view.
+# location, ecg, nutrition, reproductive and mental are refused (400).
+ShareCategory = Literal["activity", "heart", "blood_pressure", "glucose", "respiratory", "body", "sleep", "other"]
 
 
 class SetupStatus(TypedDict):
@@ -113,7 +120,8 @@ class _AuditEventRequired(TypedDict):
     # data.read, data.export, data.write, user.create, user.read, user.delete,
     # user.erased, token.create, connection.read, connection.create,
     # connection.delete, connection.sync, webhook.read, webhook.write, audit.read, config.read,
-    # config.write, tenant.create, key.create, key.revoke (more may be added).
+    # config.write, tenant.create, key.create, key.revoke, share.create, share.read,
+    # share.revoke, share.access (more may be added).
     action: str
     # The end user the action concerns.
     user_id: Optional[str]
@@ -133,9 +141,10 @@ class AuditEvent(_AuditEventRequired, total=False):
 
 
 class AuditEventActor(TypedDict):
-    type: Literal["api_key", "user_token", "admin", "system"]
+    type: Literal["api_key", "user_token", "admin", "system", "share_link"]
     # The API key's id, the first 16 hex characters of a user token's SHA-256
-    # hash, or the command or worker for admin and system events.
+    # hash, the command or worker for admin and system events, or the share's id
+    # for a share link used by its reader.
     id: str
 
 
@@ -328,8 +337,19 @@ class WebhookEventData(TypedDict, total=False):
     job_id: str
     # tag.created, tag.updated and tag.deleted.
     tag_id: str
-    # connection.broken.
-    reason: Literal["needs_reauth", "missing_scope", "failing", "rate_limited"]
+    # consent.granted and consent.revoked, the categories that changed; share.created, the categories shared.
+    categories: List[ConsentCategoryName]
+    # share.created, share.revoked and share.accessed.
+    share_id: str
+    # share.created.
+    expires_at: str
+    # share.created. Whether the link needs a passcode.
+    passcode: bool
+    # connection.broken: needs_reauth, missing_scope, failing or rate_limited.
+    # share.revoked: owner (revoked through the API), consent (a consent change refused
+    # a category it holds), provider_erased (the records of a provider it holds were
+    # erased) or passcode_attempts (too many wrong passcodes).
+    reason: Literal["needs_reauth", "missing_scope", "failing", "rate_limited", "owner", "consent", "provider_erased", "passcode_attempts"]
     # connection.broken.
     action: Literal["reconnect", "wait"]
     # connection.broken, rate_limited. When pulls resume.
@@ -902,6 +922,186 @@ class TimeTagPage(TypedDict):
     next_cursor: Optional[str]
 
 
+class Share(TypedDict):
+    """A share link as its owner reads it. Never the link, its key or the passcode."""
+
+    id: str
+    # Shown to the reader; empty for none.
+    label: str
+    categories: List[ShareCategory]
+    # Inclusive start of the time window.
+    start: str
+    # Exclusive end of the time window.
+    end: str
+    # When the link stops working.
+    expires_at: str
+    # Whether the link needs a passcode.
+    passcode: bool
+    # Wrong or missing passcodes so far; the 10th disables the link.
+    passcode_failures: int
+    # `active`: the link works. `expired`: past `expires_at`. `revoked`: stopped before its
+    # expiry (see `revoked_reason`). `disabled`: too many wrong passcodes.
+    status: Literal["active", "expired", "revoked", "disabled"]
+    revoked_at: Optional[str]
+    revoked_reason: Optional[Literal["owner", "consent", "provider_erased", "passcode_attempts"]]
+    # How many Observations the file holds.
+    observations: int
+    # The size of the encrypted file when it was made.
+    file_bytes: int
+    # How many manifest requests were served the file.
+    accesses: int
+    # The latest of them.
+    last_accessed_at: Optional[str]
+    created_at: str
+
+
+class ShareAccess(TypedDict):
+    at: str
+    # The name the reader gave, as given.
+    recipient: str
+    # `served`: the manifest was answered. `wrong_passcode`: a wrong or missing passcode.
+    # `inactive`: the link no longer worked (listed once a day at most; the audit log
+    # has every one).
+    outcome: Literal["served", "wrong_passcode", "inactive"]
+
+
+class ShareDetail(TypedDict):
+    id: str
+    # Shown to the reader; empty for none.
+    label: str
+    categories: List[ShareCategory]
+    # Inclusive start of the time window.
+    start: str
+    # Exclusive end of the time window.
+    end: str
+    # When the link stops working.
+    expires_at: str
+    # Whether the link needs a passcode.
+    passcode: bool
+    # Wrong or missing passcodes so far; the 10th disables the link.
+    passcode_failures: int
+    # `active`: the link works. `expired`: past `expires_at`. `revoked`: stopped before its
+    # expiry (see `revoked_reason`). `disabled`: too many wrong passcodes.
+    status: Literal["active", "expired", "revoked", "disabled"]
+    revoked_at: Optional[str]
+    revoked_reason: Optional[Literal["owner", "consent", "provider_erased", "passcode_attempts"]]
+    # How many Observations the file holds.
+    observations: int
+    # The size of the encrypted file when it was made.
+    file_bytes: int
+    # How many manifest requests were served the file.
+    accesses: int
+    # The latest of them.
+    last_accessed_at: Optional[str]
+    created_at: str
+    # The 50 latest manifest requests, newest first.
+    recent_accesses: List[ShareAccess]
+
+
+class SharePage(TypedDict):
+    data: List[Share]
+    # Null on the last page.
+    next_cursor: Optional[str]
+
+
+class _CreateShareRequestRequired(TypedDict):
+    categories: List[ShareCategory]
+    # Inclusive start of the window, RFC 3339 or YYYY-MM-DD.
+    start: str
+    # Exclusive end of the window, after `start`.
+    end: str
+    # When the link stops working, in the future and at most 365 days ahead.
+    expires_at: str
+
+
+class CreateShareRequest(_CreateShareRequestRequired, total=False):
+    # When set, the reader must give it. 6 to 64 characters, no control character. The
+    # server keeps a PBKDF2-SHA256 hash of it only.
+    passcode: Optional[str]
+    # Shown to the reader, for example who the link is for. One line.
+    label: str
+
+
+class CreatedShare(TypedDict):
+    id: str
+    # Shown to the reader; empty for none.
+    label: str
+    categories: List[ShareCategory]
+    # Inclusive start of the time window.
+    start: str
+    # Exclusive end of the time window.
+    end: str
+    # When the link stops working.
+    expires_at: str
+    # Whether the link needs a passcode.
+    passcode: bool
+    # Wrong or missing passcodes so far; the 10th disables the link.
+    passcode_failures: int
+    # `active`: the link works. `expired`: past `expires_at`. `revoked`: stopped before its
+    # expiry (see `revoked_reason`). `disabled`: too many wrong passcodes.
+    status: Literal["active", "expired", "revoked", "disabled"]
+    revoked_at: Optional[str]
+    revoked_reason: Optional[Literal["owner", "consent", "provider_erased", "passcode_attempts"]]
+    # How many Observations the file holds.
+    observations: int
+    # The size of the encrypted file when it was made.
+    file_bytes: int
+    # How many manifest requests were served the file.
+    accesses: int
+    # The latest of them.
+    last_accessed_at: Optional[str]
+    created_at: str
+    # The link, `shlink:/` + the base64url payload (`url`, `key`, `exp`, `flag` `P`
+    # with a passcode, `label`). It carries the key: shown only this once.
+    uri: str
+    # The built-in viewer with the link in its fragment (`.../shl/view#shlink:/...`).
+    viewer_url: str
+
+
+class _ShareManifestRequestRequired(TypedDict):
+    # Who opens the link, as the reader names themselves; shown to the owner.
+    recipient: str
+
+
+class ShareManifestRequest(_ShareManifestRequestRequired, total=False):
+    # Required when the link's flag holds P.
+    passcode: str
+    # The longest file to embed; a longer one comes as a `location`.
+    embeddedLengthMax: int
+
+
+class ShareManifest(TypedDict):
+    # A snapshot never changes.
+    status: Literal["finalized"]
+    files: List[ShareManifestFile]
+
+
+class _ShareManifestFileRequired(TypedDict):
+    contentType: Literal["application/fhir+json"]
+    lastUpdated: str
+
+
+class ShareManifestFile(_ShareManifestFileRequired, total=False):
+    # The file, a compact JWE.
+    embedded: str
+    # Where to GET the file, once, within 15 minutes.
+    location: str
+
+
+class _PasscodeProblemRequired(TypedDict):
+    type: str
+    title: str
+    status: int
+    # Wrong passcodes the link still takes before it is disabled.
+    remainingAttempts: int
+
+
+class PasscodeProblem(_PasscodeProblemRequired, total=False):
+    detail: str
+    # The X-Request-Id of the response, to quote when reporting the error.
+    request_id: str
+
+
 class FHIRCoding(TypedDict, total=False):
     system: str
     code: str
@@ -1430,9 +1630,11 @@ __all__ = [
     "ConsentSource",
     "Coverage",
     "CoverageDay",
+    "CreateShareRequest",
     "CreateTimeTagRequest",
     "CreateUserRequest",
     "CreateWebhookRequest",
+    "CreatedShare",
     "DailySummary",
     "DailySummaryPage",
     "DeleteConnectionResponse",
@@ -1507,6 +1709,7 @@ __all__ = [
     "OMHDataPointHeaderSchemaId",
     "OMHDataPointPage",
     "PageBase",
+    "PasscodeProblem",
     "Problem",
     "Provenance",
     "Provider",
@@ -1525,6 +1728,14 @@ __all__ = [
     "SetupRequest",
     "SetupResult",
     "SetupStatus",
+    "Share",
+    "ShareAccess",
+    "ShareCategory",
+    "ShareDetail",
+    "ShareManifest",
+    "ShareManifestFile",
+    "ShareManifestRequest",
+    "SharePage",
     "SleepPhase",
     "SleepPhasePage",
     "SleepSession",

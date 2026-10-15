@@ -14,9 +14,11 @@ import type {
   ConsentEvent,
   ConsentSource,
   Coverage,
+  CreateShareRequest,
   CreateTimeTagRequest,
   CreateUserRequest,
   CreateWebhookRequest,
+  CreatedShare,
   DailySummary,
   DailySummaryPage,
   DeleteConnectionResponse,
@@ -70,6 +72,9 @@ import type {
   SetupRequest,
   SetupResult,
   SetupStatus,
+  Share,
+  ShareDetail,
+  SharePage,
   SleepPhase,
   SleepPhasePage,
   SleepSession,
@@ -462,6 +467,13 @@ export interface ListTimeTagsParams {
   start?: string;
   /** Exclusive upper bound, RFC 3339 or YYYY-MM-DD. Must not be before start. */
   end?: string;
+  /** The next_cursor of the previous page. */
+  cursor?: string;
+  limit?: number;
+}
+
+/** Query and header parameters of {@link OpenHealthSync.listShares}. */
+export interface ListSharesParams {
   /** The next_cursor of the previous page. */
   cursor?: string;
   limit?: number;
@@ -2018,6 +2030,114 @@ export class OpenHealthSync {
     return this.#request<void>({
       method: "DELETE",
       path: `/v1/users/${encode(userId)}/tags/${encode(tagId)}`,
+      expect: "none",
+      options,
+    });
+  }
+
+  /**
+   * Make a share link of the user's records.
+   *
+   * `POST /v1/users/{id}/shares`
+   *
+   * A SMART Health Link (HL7 FHIR IG "SMART Health Cards and Links", STU1) that the person
+   * gives to whoever they choose. The server reads the user's records of `categories` in
+   * `[start, end)` (the merged view, as the FHIR routes serve them), writes them as one
+   * FHIR R4 `collection` Bundle (a Patient with no identifier, the Observations, the
+   * Devices), compresses it (DEFLATE) and encrypts it as a compact JWE (`alg` `dir`,
+   * `enc` `A256GCM`) with a fresh random 256-bit key. It stores the ciphertext only. The
+   * answer holds the link (`uri`) and the built-in viewer's link (`viewer_url`), each
+   * carrying the key, this once: the server keeps neither and cannot show them again.
+   *
+   * A category holds every metric the consent model files under it. Records of a source
+   * whose consent refuses the category, or whose purge is pending, are left out. The
+   * snapshot is fixed when it is made (no `L` flag): later records are not added. At most
+   * 50000 records; more is a 400. A sleep session's, a workout's or a daily summary's
+   * figures of another category (a resting heart rate is `heart`) are kept only on the
+   * terms of their own category. The records are read and the share stored in one
+   * transaction that holds the user and their consent: a consent change or an erasure
+   * that starts meanwhile waits, then revokes the share if it holds what they remove.
+   *
+   * The route takes no `Idempotency-Key`: a stored response would keep the key. Sent with
+   * `Cache-Control: no-store`. See docs/share-links.md.
+   */
+  createShare(
+    userId: string,
+    body: CreateShareRequest,
+    options?: RequestOptions,
+  ): Promise<CreatedShare> {
+    return this.#request<CreatedShare>({
+      method: "POST",
+      path: `/v1/users/${encode(userId)}/shares`,
+      json: body,
+      expect: "json",
+      options,
+    });
+  }
+
+  /**
+   * The user's share links.
+   *
+   * `GET /v1/users/{id}/shares`
+   *
+   * Oldest first, every status. Never a link, a key or a passcode: the server does not
+   * keep them.
+   */
+  listShares(
+    userId: string,
+    params: ListSharesParams = {},
+    options?: RequestOptions,
+  ): Promise<SharePage> {
+    return this.#request<SharePage>({
+      method: "GET",
+      path: `/v1/users/${encode(userId)}/shares`,
+      query: {
+        cursor: params.cursor,
+        limit: params.limit,
+      },
+      expect: "json",
+      options,
+    });
+  }
+
+  /** Every item of {@link OpenHealthSync.listShares}, page after page, following `next_cursor`. */
+  iterShares(
+    userId: string,
+    params: Omit<ListSharesParams, "cursor"> = {},
+    options?: RequestOptions,
+  ): AsyncGenerator<Share> {
+    return paginate((cursor) => this.listShares(userId, { ...params, cursor }, options));
+  }
+
+  /**
+   * One share link, with its latest accesses.
+   *
+   * `GET /v1/users/{id}/shares/{share_id}`
+   *
+   * The share and its 50 latest manifest requests, newest first, each with the name the
+   * reader gave and the outcome.
+   */
+  getShare(userId: string, shareId: string, options?: RequestOptions): Promise<ShareDetail> {
+    return this.#request<ShareDetail>({
+      method: "GET",
+      path: `/v1/users/${encode(userId)}/shares/${encode(shareId)}`,
+      expect: "json",
+      options,
+    });
+  }
+
+  /**
+   * Revoke a share link.
+   *
+   * `DELETE /v1/users/{id}/shares/{share_id}`
+   *
+   * The link stops working at once and its file is removed; the share stays listed as
+   * `revoked` (reason `owner`). Revoking a share that is no longer active changes nothing.
+   */
+  revokeShare(userId: string, shareId: string, options?: RequestOptions): Promise<void> {
+    return this.#request<void>({
+      method: "DELETE",
+      path: `/v1/users/${encode(userId)}/shares/${encode(shareId)}`,
       expect: "none",
       options,
     });

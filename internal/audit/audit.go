@@ -34,6 +34,9 @@ const (
 	Admin ActorType = "admin"
 	// System is the instance itself (the deletion worker, for example).
 	System ActorType = "system"
+	// ShareLink is a share link, used by whoever holds it; the actor id is
+	// the share's id.
+	ShareLink ActorType = "share_link"
 )
 
 // Actions. An API request is classified by Classify; the others are
@@ -61,6 +64,12 @@ const (
 	TenantCreate     = "tenant.create"
 	KeyCreate        = "key.create"
 	KeyRevoke        = "key.revoke"
+	ShareCreate      = "share.create"
+	ShareRead        = "share.read"
+	ShareRevoke      = "share.revoke"
+	// ShareAccess is a manifest request on a known share link, or a file
+	// download; detail has the share id and the outcome.
+	ShareAccess = "share.access"
 )
 
 // Event is one entry to record.
@@ -175,6 +184,14 @@ func Classify(method, pattern string) string {
 			return ConsentRead
 		}
 		return ConsentWrite
+	case strings.HasPrefix(path, userPrefix+"/shares"):
+		switch method {
+		case "POST":
+			return ShareCreate
+		case "DELETE":
+			return ShareRevoke
+		}
+		return ShareRead
 	case strings.HasPrefix(path, userPrefix+"/exports/") || path == userPrefix+"/archive":
 		return DataExport
 	case strings.HasPrefix(path, userPrefix+"/"):

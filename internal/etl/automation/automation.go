@@ -4,8 +4,9 @@
 // reports what the pipeline lost or stalled on, the orphan scanner that queues
 // raw objects nobody queued, the drainer that replays raw objects whose records
 // failed, the retention job that prunes old data when the operator sets
-// OHS_RETENTION_DAYS, and the audit job that prunes audit events older than
-// OHS_AUDIT_RETENTION_DAYS.
+// OHS_RETENTION_DAYS, the audit job that prunes audit events older than
+// OHS_AUDIT_RETENTION_DAYS, and the shares job that removes the encrypted
+// file of every expired share link.
 //
 // Sleep phase canonicalisation is not ported. In the source it was a one-off
 // boot-time rewrite of rows written before the mappers normalised labels. Here
@@ -23,6 +24,7 @@ import (
 
 	"github.com/soma-intelligence/open-health-sync/internal/audit"
 	"github.com/soma-intelligence/open-health-sync/internal/rawstore"
+	"github.com/soma-intelligence/open-health-sync/internal/shl"
 	"github.com/soma-intelligence/open-health-sync/internal/tenant"
 )
 
@@ -35,6 +37,7 @@ const (
 	DefaultRetentionEvery   = 24 * time.Hour
 	DefaultIdempotencyEvery = time.Hour
 	DefaultAuditPruneEvery  = 24 * time.Hour
+	DefaultSharesEvery      = time.Hour
 
 	defaultRunTimeout  = 5 * time.Minute
 	defaultLongTimeout = time.Hour
@@ -43,7 +46,7 @@ const (
 
 // Intervals sets how often each job runs. A zero value means the default.
 type Intervals struct {
-	Reconcile, Orphans, Drain, Files, Retention, Idempotency, AuditPrune time.Duration
+	Reconcile, Orphans, Drain, Files, Retention, Idempotency, AuditPrune, Shares time.Duration
 }
 
 // Deps is everything Start needs.
@@ -140,6 +143,13 @@ func newScheduler(deps Deps) (*Scheduler, error) {
 		n, err := idem.PurgeIdempotency(ctx)
 		if err == nil && n > 0 {
 			slog.InfoContext(ctx, "idempotency keys purged", "rows", n)
+		}
+		return err
+	}))
+	s.Add("shares", or(deps.Intervals.Shares, DefaultSharesEvery), timeout, counted(func(ctx context.Context) error {
+		n, err := shl.PurgeExpired(ctx, deps.Pool)
+		if n > 0 {
+			slog.InfoContext(ctx, "expired share link files removed", "shares", n)
 		}
 		return err
 	}))

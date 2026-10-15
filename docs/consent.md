@@ -90,6 +90,13 @@ nothing. The audit log records each call as `consent.read` or `consent.write`
 A first consent announces its grants only: the categories it leaves out were never granted.
 See [webhooks.md](webhooks.md) for signatures and retries.
 
+## Share links
+
+A consent change that refuses a category of a source revokes, in the same transaction, every
+[share link](share-links.md) of the user holding that source's records of that category
+(`share.revoked`, reason `consent`). A new share link leaves out the records of a refused
+category, and of one whose purge is still pending.
+
 ## Erasure
 
 Consent, its history and queued purges belong to the user: they are deleted with the user

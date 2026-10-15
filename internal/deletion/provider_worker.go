@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/soma-intelligence/open-health-sync/internal/queue"
+	"github.com/soma-intelligence/open-health-sync/internal/shl"
 	"github.com/soma-intelligence/open-health-sync/internal/webhook"
 )
 
@@ -29,7 +30,9 @@ import (
 //     a provider table (sleep phases, route points, track summaries, ECG
 //     voltages) and are deleted with the parent's rows;
 //   - a kept table, listed in keptTables: its rows are the user's own, not
-//     any provider's (time tags, the order of sources), and stay;
+//     any provider's (time tags, the order of sources, share links and
+//     their access history), and stay; a share link that holds records of
+//     the provider is revoked instead (its file removed);
 //   - anything else is an error, so a new table cannot be left out silently.
 //
 // Daily summaries are per provider: a derived row sums one provider's own
@@ -52,6 +55,8 @@ var childTables = map[string]childOf{
 var keptTables = map[string]bool{
 	"ohs_data.time_tags":         true,
 	"ohs_sync.source_priorities": true,
+	"ohs_sync.shares":            true,
+	"ohs_sync.share_accesses":    true,
 }
 
 // providerFilter narrows the delete of some provider tables. A connection is
@@ -231,6 +236,11 @@ func (w *Worker) runProvider(ctx context.Context, j job, provider string) (bool,
 				return false, fmt.Errorf("delete from %s: %w", t, err)
 			}
 			rows += tag.RowsAffected()
+		}
+		// A share link holding records of the provider would serve what was
+		// just erased: it is revoked and its file removed.
+		if _, err := shl.RevokeProvider(ctx, tx, j.tenant, j.user, provider); err != nil {
+			return false, err
 		}
 		user := j.user
 		if _, err := webhook.Enqueue(ctx, tx, webhook.Event{

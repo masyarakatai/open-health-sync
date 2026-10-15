@@ -81,6 +81,11 @@
       "description": "The session id."
     },
     {
+      "key": "shareId",
+      "value": "",
+      "description": "The `id` of a share link of this user."
+    },
+    {
       "key": "tagId",
       "value": "",
       "description": "The `id` of a time tag of this user."
@@ -2197,6 +2202,154 @@
                   "key": "tag_id",
                   "value": "{{tagId}}",
                   "description": "The `id` of a time tag of this user."
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "shares",
+      "item": [
+        {
+          "name": "Make a share link of the user's records",
+          "request": {
+            "method": "POST",
+            "description": "Make a share link of the user's records.\n\n`POST /v1/users/{id}/shares`\n\nA SMART Health Link (HL7 FHIR IG \"SMART Health Cards and Links\", STU1) that the person\ngives to whoever they choose. The server reads the user's records of `categories` in\n`[start, end)` (the merged view, as the FHIR routes serve them), writes them as one\nFHIR R4 `collection` Bundle (a Patient with no identifier, the Observations, the\nDevices), compresses it (DEFLATE) and encrypts it as a compact JWE (`alg` `dir`,\n`enc` `A256GCM`) with a fresh random 256-bit key. It stores the ciphertext only. The\nanswer holds the link (`uri`) and the built-in viewer's link (`viewer_url`), each\ncarrying the key, this once: the server keeps neither and cannot show them again.\n\nA category holds every metric the consent model files under it. Records of a source\nwhose consent refuses the category, or whose purge is pending, are left out. The\nsnapshot is fixed when it is made (no `L` flag): later records are not added. At most\n50000 records; more is a 400. A sleep session's, a workout's or a daily summary's\nfigures of another category (a resting heart rate is `heart`) are kept only on the\nterms of their own category. The records are read and the share stored in one\ntransaction that holds the user and their consent: a consent change or an erasure\nthat starts meanwhile waits, then revokes the share if it holds what they remove.\n\nThe route takes no `Idempotency-Key`: a stored response would keep the key. Sent with\n`Cache-Control: no-store`. See docs/share-links.md.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/:id/shares",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                ":id",
+                "shares"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{userId}}"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"categories\": [\n    \"activity\"\n  ],\n  \"end\": \"2026-01-01T00:00:00Z\",\n  \"expires_at\": \"2026-01-01T00:00:00Z\",\n  \"label\": \"example\",\n  \"passcode\": \"example\",\n  \"start\": \"2026-01-01T00:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "The user's share links",
+          "request": {
+            "method": "GET",
+            "description": "The user's share links.\n\n`GET /v1/users/{id}/shares`\n\nOldest first, every status. Never a link, a key or a passcode: the server does not\nkeep them.",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/:id/shares",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                ":id",
+                "shares"
+              ],
+              "query": [
+                {
+                  "key": "cursor",
+                  "value": "",
+                  "description": "The next_cursor of the previous page.",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "100",
+                  "disabled": true
+                }
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{userId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "One share link, with its latest accesses",
+          "request": {
+            "method": "GET",
+            "description": "One share link, with its latest accesses.\n\n`GET /v1/users/{id}/shares/{share_id}`\n\nThe share and its 50 latest manifest requests, newest first, each with the name the\nreader gave and the outcome.",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/:id/shares/:share_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                ":id",
+                "shares",
+                ":share_id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{userId}}"
+                },
+                {
+                  "key": "share_id",
+                  "value": "{{shareId}}",
+                  "description": "The `id` of a share link of this user."
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Revoke a share link",
+          "request": {
+            "method": "DELETE",
+            "description": "Revoke a share link.\n\n`DELETE /v1/users/{id}/shares/{share_id}`\n\nThe link stops working at once and its file is removed; the share stays listed as\n`revoked` (reason `owner`). Revoking a share that is no longer active changes nothing.",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/:id/shares/:share_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                ":id",
+                "shares",
+                ":share_id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{userId}}"
+                },
+                {
+                  "key": "share_id",
+                  "value": "{{shareId}}",
+                  "description": "The `id` of a share link of this user."
                 }
               ]
             }

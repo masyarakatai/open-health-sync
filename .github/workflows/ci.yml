@@ -21,7 +21,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Console script helpers (node --test, no dependency)
+      - name: Console and share viewer script helpers (node --test, no dependency)
         run: make test-js
       - name: Fuzz the Apple Health upload parser
         run: go test ./connectors/applehealth/ -run '^$' -fuzz FuzzParseUpload -fuzztime=30s

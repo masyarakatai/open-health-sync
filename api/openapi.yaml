@@ -31,6 +31,11 @@ info:
     time window as a single CSV or Parquet file, and `GET /v1/users/{id}/archive` everything
     held about one user as a single zip file (data portability); see docs/exports.md.
 
+    **Share links.** `POST /v1/users/{id}/shares` makes a SMART Health Link: an encrypted
+    snapshot of the user's records that the person gives to whoever they choose. The
+    reader's viewer calls the public `POST /shl/{manifest_id}` with no credential; see
+    docs/share-links.md.
+
     **Errors** are RFC 9457 `application/problem+json`. A user, workout or sleep session
     of another tenant is a 404, never a 403.
 
@@ -58,6 +63,7 @@ tags:
   - name: consent
   - name: read
   - name: tags
+  - name: shares
   - name: fhir
   - name: omh
   - name: exports
@@ -1541,6 +1547,109 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /v1/users/{id}/shares:
+    parameters:
+      - $ref: "#/components/parameters/UserID"
+    post:
+      tags: [shares]
+      operationId: createShare
+      summary: Make a share link of the user's records
+      description: |
+        A SMART Health Link (HL7 FHIR IG "SMART Health Cards and Links", STU1) that the person
+        gives to whoever they choose. The server reads the user's records of `categories` in
+        `[start, end)` (the merged view, as the FHIR routes serve them), writes them as one
+        FHIR R4 `collection` Bundle (a Patient with no identifier, the Observations, the
+        Devices), compresses it (DEFLATE) and encrypts it as a compact JWE (`alg` `dir`,
+        `enc` `A256GCM`) with a fresh random 256-bit key. It stores the ciphertext only. The
+        answer holds the link (`uri`) and the built-in viewer's link (`viewer_url`), each
+        carrying the key, this once: the server keeps neither and cannot show them again.
+
+        A category holds every metric the consent model files under it. Records of a source
+        whose consent refuses the category, or whose purge is pending, are left out. The
+        snapshot is fixed when it is made (no `L` flag): later records are not added. At most
+        50000 records; more is a 400. A sleep session's, a workout's or a daily summary's
+        figures of another category (a resting heart rate is `heart`) are kept only on the
+        terms of their own category. The records are read and the share stored in one
+        transaction that holds the user and their consent: a consent change or an erasure
+        that starts meanwhile waits, then revokes the share if it holds what they remove.
+
+        The route takes no `Idempotency-Key`: a stored response would keep the key. Sent with
+        `Cache-Control: no-store`. See docs/share-links.md.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateShareRequest" }
+      responses:
+        "201":
+          description: "The share and its link, shown only this once. Sent with `Cache-Control: no-store`."
+          headers:
+            Location:
+              schema: { type: string }
+              description: /v1/users/{id}/shares/{share_id}
+            Cache-Control: { schema: { type: string, const: no-store } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreatedShare" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "413": { $ref: "#/components/responses/TooLarge" }
+    get:
+      tags: [shares]
+      operationId: listShares
+      summary: The user's share links
+      description: |
+        Oldest first, every status. Never a link, a key or a passcode: the server does not
+        keep them.
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: One page, by created_at.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SharePage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/users/{id}/shares/{share_id}:
+    parameters:
+      - $ref: "#/components/parameters/UserID"
+      - $ref: "#/components/parameters/ShareID"
+    get:
+      tags: [shares]
+      operationId: getShare
+      summary: One share link, with its latest accesses
+      description: |
+        The share and its 50 latest manifest requests, newest first, each with the name the
+        reader gave and the outcome.
+      responses:
+        "200":
+          description: The share.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShareDetail" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [shares]
+      operationId: revokeShare
+      summary: Revoke a share link
+      description: |
+        The link stops working at once and its file is removed; the share stays listed as
+        `revoked` (reason `owner`). Revoking a share that is no longer active changes nothing.
+      responses:
+        "204": { description: "Revoked, or no longer active." }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /v1/users/{id}/fhir/Observation:
     parameters:
       - $ref: "#/components/parameters/UserID"
@@ -2299,6 +2408,152 @@ paths:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
 
+  /shl/{manifest_id}:
+    parameters:
+      - $ref: "#/components/parameters/ManifestID"
+    post:
+      tags: [shares]
+      operationId: shareManifest
+      summary: Manifest request of a share link (SMART Health Links)
+      security: []
+      description: |
+        The `url` of a share link's payload, called by the reader's viewer (the built-in one at
+        `/shl/view` or any other that implements SMART Health Links) with no credential: the
+        manifest id is the secret. Any origin may call it (`Access-Control-Allow-Origin: *`).
+        Every request on a known link is recorded in the audit log (`share.access`, actor
+        `share_link`).
+
+        The answer holds the one file of the share, `application/fhir+json` encrypted as a
+        JWE: `embedded` when it fits `embeddedLengthMax` (or no limit was sent), else a
+        `location` that serves it once, within 15 minutes. A link that is unknown, revoked,
+        disabled or past its expiry is a 404, and the cases cannot be told apart. A wrong or
+        missing passcode is a 401 with `remainingAttempts`; the 10th wrong passcode disables
+        the link for good. A link busy past 2 seconds is a 503 with `Retry-After`. Unknown
+        members of the body are ignored. Rate limited per client address
+        (`OHS_RATE_LIMIT_OAUTH`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShareManifestRequest" }
+      responses:
+        "200":
+          description: The manifest.
+          headers:
+            Access-Control-Allow-Origin: { schema: { type: string, const: "*" } }
+            Cache-Control: { schema: { type: string, const: no-store } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShareManifest" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401":
+          description: The passcode is wrong or missing.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/PasscodeProblem" }
+        "404": { $ref: "#/components/responses/ShareInactive" }
+        "413": { $ref: "#/components/responses/TooLarge" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ShareBusy" }
+    options:
+      tags: [shares]
+      operationId: shareManifestPreflight
+      summary: CORS preflight of a manifest request
+      security: []
+      description: Lets a viewer on any origin post a manifest request with a JSON body.
+      responses:
+        "204":
+          description: Allowed.
+          headers:
+            Access-Control-Allow-Origin: { schema: { type: string, const: "*" } }
+            Access-Control-Allow-Methods: { schema: { type: string, const: POST } }
+            Access-Control-Allow-Headers: { schema: { type: string, const: Content-Type } }
+            Access-Control-Max-Age: { schema: { type: string } }
+
+  /shl/file/{ticket}:
+    parameters:
+      - name: ticket
+        in: path
+        required: true
+        description: The last path segment of a manifest's `location`.
+        schema: { type: string }
+    get:
+      tags: [shares]
+      operationId: shareFile
+      summary: The file at a manifest's location, once
+      security: []
+      description: |
+        Serves the encrypted file (a compact JWE) of a manifest's `location` once, within 15
+        minutes of the manifest request. A used or expired location, or one of a share that
+        stopped since, is a 404. HEAD is refused (405), so a link checker never uses the
+        location up. Rate limited with the manifest route. Recorded in the audit log
+        (`share.access`, outcome `file`).
+      responses:
+        "200":
+          description: The JWE.
+          headers:
+            Access-Control-Allow-Origin: { schema: { type: string, const: "*" } }
+            Cache-Control: { schema: { type: string, const: no-store } }
+          content:
+            application/jose:
+              schema: { type: string }
+        "404": { $ref: "#/components/responses/ShareInactive" }
+        "405":
+          description: A method other than GET.
+          headers:
+            Allow: { schema: { type: string, const: GET } }
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ShareBusy" }
+
+  /shl/view:
+    get:
+      tags: [shares]
+      operationId: shareViewer
+      summary: The built-in share link viewer
+      security: []
+      description: |
+        A page that opens a share link given in its address fragment
+        (`/shl/view#shlink:/...`), so the key never reaches a server. It asks the reader's name
+        (and the passcode when the link needs one), sends the manifest request to this
+        instance, decrypts the file in the browser (WebCrypto) and shows one table per metric
+        with its unit, time and source. It shows the records as recorded, with no
+        interpretation. Its own script and stylesheet only (`/shl/view/view.mjs`,
+        `/shl/view/view.css`), under a Content-Security-Policy that allows nothing else.
+      responses:
+        "200":
+          description: The page.
+          content:
+            text/html:
+              schema: { type: string }
+
+  /shl/view/{asset}:
+    get:
+      tags: [shares]
+      operationId: shareViewerAsset
+      summary: The viewer's script or stylesheet
+      security: []
+      parameters:
+        - name: asset
+          in: path
+          required: true
+          schema: { type: string, enum: [view.mjs, view.css] }
+      responses:
+        "200":
+          description: The file.
+          content:
+            text/javascript:
+              schema: { type: string }
+            text/css:
+              schema: { type: string }
+        "404":
+          description: No such file.
+          content:
+            text/plain:
+              schema: { type: string }
+
   /mcp:
     post:
       tags: [mcp]
@@ -2565,6 +2820,20 @@ components:
       required: true
       description: The `id` of a time tag of this user.
       schema: { type: string, format: uuid }
+    ShareID:
+      name: share_id
+      in: path
+      required: true
+      description: The `id` of a share link of this user.
+      schema: { type: string, format: uuid }
+    ManifestID:
+      name: manifest_id
+      in: path
+      required: true
+      description: |
+        The last path segment of a share link's `url`: 43 base64url characters (32 random
+        bytes). The server keeps only its SHA-256 hash.
+      schema: { type: string }
     Provider:
       name: provider
       in: path
@@ -2682,6 +2951,26 @@ components:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
 
+    ShareInactive:
+      description: |
+        The share link is unknown, revoked, disabled, past its expiry, or this location was
+        used already; the cases are not told apart.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    ShareBusy:
+      description: |
+        The share link or its user stayed locked past 2 seconds (a burst of requests on the
+        link, or the user being erased); nothing was recorded.
+      headers:
+        Access-Control-Allow-Origin: { schema: { type: string, const: "*" } }
+        Retry-After:
+          schema: { type: integer, minimum: 1 }
+          description: Seconds to wait before retrying.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+
   schemas:
     SetupStatus:
       type: object
@@ -2776,19 +3065,21 @@ components:
           properties:
             type:
               type: string
-              enum: [api_key, user_token, admin, system]
+              enum: [api_key, user_token, admin, system, share_link]
             id:
               type: string
               description: |
                 The API key's id, the first 16 hex characters of a user token's SHA-256
-                hash, or the command or worker for admin and system events.
+                hash, the command or worker for admin and system events, or the share's id
+                for a share link used by its reader.
         action:
           type: string
           description: |
             data.read, data.export, data.write, user.create, user.read, user.delete,
             user.erased, token.create, connection.read, connection.create,
             connection.delete, connection.sync, webhook.read, webhook.write, audit.read, config.read,
-            config.write, tenant.create, key.create, key.revoke (more may be added).
+            config.write, tenant.create, key.create, key.revoke, share.create, share.read,
+            share.revoke, share.access (more may be added).
         user_id: { type: [string, "null"], format: uuid, description: "The end user the action concerns." }
         method: { type: string, description: "The HTTP method, absent outside a request." }
         route: { type: string, description: "The route pattern, absent outside a request." }
@@ -2868,7 +3159,7 @@ components:
 
     WebhookEventType:
       type: string
-      enum: [data.written, data.deleted, data.erased, user.deleted, connection.needs_reauth, connection.broken, connection.restored, tag.created, tag.updated, tag.deleted, consent.granted, consent.revoked]
+      enum: [data.written, data.deleted, data.erased, user.deleted, connection.needs_reauth, connection.broken, connection.restored, tag.created, tag.updated, tag.deleted, consent.granted, consent.revoked, share.created, share.revoked, share.accessed]
       description: |
         `data.written`: a sync wrote new or changed records. `data.deleted`: records the
         provider deleted were removed. `data.erased`: everything a user held from one provider
@@ -2880,6 +3171,9 @@ components:
         `tag.created`, `tag.updated`, `tag.deleted`: a time tag of the user was created, changed
         or deleted through the API.
         `consent.granted`, `consent.revoked`: a user granted or revoked data categories of a source.
+        `share.created`: a share link of the user was made. `share.revoked`: a share link
+        stopped before its expiry; `reason` says why. `share.accessed`: a share link's file was
+        given to a reader. They name the share, never the link, its key, its label or the reader.
 
     CreateWebhookRequest:
       type: object
@@ -3042,10 +3336,21 @@ components:
             records_deleted: { type: integer, description: data.deleted. }
             job_id: { type: string, format: uuid, description: "data.erased. The deletion job that finished." }
             tag_id: { type: string, format: uuid, description: "tag.created, tag.updated and tag.deleted." }
+            categories:
+              type: array
+              items: { $ref: "#/components/schemas/ConsentCategoryName" }
+              description: consent.granted and consent.revoked, the categories that changed; share.created, the categories shared.
+            share_id: { type: string, format: uuid, description: "share.created, share.revoked and share.accessed." }
+            expires_at: { type: string, format: date-time, description: share.created. }
+            passcode: { type: boolean, description: "share.created. Whether the link needs a passcode." }
             reason:
               type: string
-              enum: [needs_reauth, missing_scope, failing, rate_limited]
-              description: connection.broken.
+              enum: [needs_reauth, missing_scope, failing, rate_limited, owner, consent, provider_erased, passcode_attempts]
+              description: |
+                connection.broken: needs_reauth, missing_scope, failing or rate_limited.
+                share.revoked: owner (revoked through the API), consent (a consent change refused
+                a category it holds), provider_erased (the records of a provider it holds were
+                erased) or passcode_attempts (too many wrong passcodes).
             action: { type: string, enum: [reconnect, wait], description: connection.broken. }
             retry_at: { type: string, format: date-time, description: "connection.broken, rate_limited. When pulls resume." }
             last_error: { type: string, description: "connection.broken, failing. The provider error, made safe to show." }
@@ -3623,6 +3928,173 @@ components:
         - $ref: "#/components/schemas/PageBase"
         - properties:
             data: { type: array, items: { $ref: "#/components/schemas/TimeTag" } }
+
+    ShareCategory:
+      type: string
+      enum: [activity, heart, blood_pressure, glucose, respiratory, body, sleep, other]
+      description: |
+        The consent categories a share link can hold: those with records in the FHIR view.
+        location, ecg, nutrition, reproductive and mental are refused (400).
+
+    Share:
+      type: object
+      description: A share link as its owner reads it. Never the link, its key or the passcode.
+      required: [id, label, categories, start, end, expires_at, passcode, passcode_failures, status, revoked_at, revoked_reason, observations, file_bytes, accesses, last_accessed_at, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        label: { type: string, maxLength: 80, description: "Shown to the reader; empty for none." }
+        categories:
+          type: array
+          items: { $ref: "#/components/schemas/ShareCategory" }
+        start: { type: string, format: date-time, description: "Inclusive start of the time window." }
+        end: { type: string, format: date-time, description: "Exclusive end of the time window." }
+        expires_at: { type: string, format: date-time, description: "When the link stops working." }
+        passcode: { type: boolean, description: "Whether the link needs a passcode." }
+        passcode_failures:
+          type: integer
+          description: Wrong or missing passcodes so far; the 10th disables the link.
+        status:
+          type: string
+          enum: [active, expired, revoked, disabled]
+          description: |
+            `active`: the link works. `expired`: past `expires_at`. `revoked`: stopped before its
+            expiry (see `revoked_reason`). `disabled`: too many wrong passcodes.
+        revoked_at: { type: [string, "null"], format: date-time }
+        revoked_reason:
+          type: [string, "null"]
+          enum: [owner, consent, provider_erased, passcode_attempts, null]
+        observations: { type: integer, description: "How many Observations the file holds." }
+        file_bytes: { type: integer, description: "The size of the encrypted file when it was made." }
+        accesses: { type: integer, description: "How many manifest requests were served the file." }
+        last_accessed_at: { type: [string, "null"], format: date-time, description: "The latest of them." }
+        created_at: { type: string, format: date-time }
+
+    ShareAccess:
+      type: object
+      required: [at, recipient, outcome]
+      properties:
+        at: { type: string, format: date-time }
+        recipient: { type: string, description: "The name the reader gave, as given." }
+        outcome:
+          type: string
+          enum: [served, wrong_passcode, inactive]
+          description: |
+            `served`: the manifest was answered. `wrong_passcode`: a wrong or missing passcode.
+            `inactive`: the link no longer worked (listed once a day at most; the audit log
+            has every one).
+
+    ShareDetail:
+      allOf:
+        - $ref: "#/components/schemas/Share"
+        - type: object
+          required: [recent_accesses]
+          properties:
+            recent_accesses:
+              type: array
+              description: The 50 latest manifest requests, newest first.
+              items: { $ref: "#/components/schemas/ShareAccess" }
+
+    SharePage:
+      allOf:
+        - $ref: "#/components/schemas/PageBase"
+        - properties:
+            data: { type: array, items: { $ref: "#/components/schemas/Share" } }
+
+    CreateShareRequest:
+      type: object
+      additionalProperties: false
+      required: [categories, start, end, expires_at]
+      properties:
+        categories:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/ShareCategory" }
+        start:
+          description: Inclusive start of the window, RFC 3339 or YYYY-MM-DD.
+          oneOf:
+            - { type: string, format: date-time }
+            - { type: string, format: date }
+        end:
+          description: Exclusive end of the window, after `start`.
+          oneOf:
+            - { type: string, format: date-time }
+            - { type: string, format: date }
+        expires_at:
+          description: When the link stops working, in the future and at most 365 days ahead.
+          oneOf:
+            - { type: string, format: date-time }
+            - { type: string, format: date }
+        passcode:
+          type: [string, "null"]
+          minLength: 6
+          maxLength: 64
+          description: |
+            When set, the reader must give it. 6 to 64 characters, no control character. The
+            server keeps a PBKDF2-SHA256 hash of it only.
+        label:
+          type: string
+          maxLength: 80
+          description: Shown to the reader, for example who the link is for. One line.
+
+    CreatedShare:
+      allOf:
+        - $ref: "#/components/schemas/Share"
+        - type: object
+          required: [uri, viewer_url]
+          properties:
+            uri:
+              type: string
+              description: |
+                The link, `shlink:/` + the base64url payload (`url`, `key`, `exp`, `flag` `P`
+                with a passcode, `label`). It carries the key: shown only this once.
+            viewer_url:
+              type: string
+              description: The built-in viewer with the link in its fragment (`.../shl/view#shlink:/...`).
+
+    ShareManifestRequest:
+      type: object
+      required: [recipient]
+      properties:
+        recipient:
+          type: string
+          minLength: 1
+          maxLength: 256
+          description: Who opens the link, as the reader names themselves; shown to the owner.
+        passcode: { type: string, description: "Required when the link's flag holds P." }
+        embeddedLengthMax:
+          type: integer
+          minimum: 0
+          description: The longest file to embed; a longer one comes as a `location`.
+
+    ShareManifest:
+      type: object
+      required: [status, files]
+      properties:
+        status:
+          type: string
+          const: finalized
+          description: A snapshot never changes.
+        files:
+          type: array
+          items:
+            type: object
+            required: [contentType, lastUpdated]
+            properties:
+              contentType: { type: string, const: application/fhir+json }
+              embedded: { type: string, description: "The file, a compact JWE." }
+              location: { type: string, format: uri, description: "Where to GET the file, once, within 15 minutes." }
+              lastUpdated: { type: string, format: date-time }
+
+    PasscodeProblem:
+      allOf:
+        - $ref: "#/components/schemas/Problem"
+        - type: object
+          required: [remainingAttempts]
+          properties:
+            remainingAttempts:
+              type: integer
+              minimum: 0
+              description: Wrong passcodes the link still takes before it is disabled.
 
     FHIRCoding:
       type: object

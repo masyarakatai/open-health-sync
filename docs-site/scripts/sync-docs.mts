@@ -258,6 +258,13 @@ const sources: Record<string, Target[]> = {
       description: "Per user, per source and per data category: what is stored, revocation and its purge.",
     },
   ],
+  "docs/share-links.md": [
+    {
+      page: "(guides)/guides/share-links",
+      title: "Share links",
+      description: "Let a person share a window of their own data through an encrypted, expiring SMART Health Link.",
+    },
+  ],
   "docs/server-sdks.md": [
     {
       page: "(guides)/guides/server-sdks",
@@ -354,6 +361,7 @@ const icons: Record<string, string> = {
   "(guides)/guides/webhooks": "Webhook",
   "(guides)/guides/menstrual-cycles": "CalendarDays",
   "(guides)/guides/time-tags": "Tag",
+  "(guides)/guides/share-links": "Share2",
   "(guides)/recipes/index": "Sparkles",
   "(guides)/recipes/sleep-report": "Moon",
   "(guides)/recipes/heart-trend": "HeartPulse",
