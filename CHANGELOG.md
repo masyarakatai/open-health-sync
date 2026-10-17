@@ -159,6 +159,11 @@ release may change the API, the configuration or the database schema.
   notifications were deletions.
 - MCP `get_coverage` without `start` reports the last 30 days. On years of Apple Health history
   it answered with over a megabyte of JSON, more than an agent can read.
+- `GET /v1/users/{id}/connections` and the MCP tool `list_connections` return `created_at`,
+  `initial_backfill_at`, `scopes` and `updated_at`, as `api/openapi.yaml` documents. Only
+  `connected_at` was sent, so the Swift and Kotlin SDKs could not decode the list and the
+  console showed `-` for when a source was connected and when its backfill started.
+  `connected_at` stays, with the same value as `created_at`.
 
 ## [0.1.0] - 2026-10-13
 
