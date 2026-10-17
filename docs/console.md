@@ -155,8 +155,9 @@ The routes behind the page are `GET /v1/admin/providers`, `GET`, `PATCH` and `DE
 
 ## Look and feel
 
-Light and dark follow the system setting. Below 860 px wide the sidebar becomes a top bar. The
-console shares its type, frame and glass panels with the [hosted connection page](connect-page.md):
-the sign-in, the setup page, the overview's pipeline and the top of each provider sit in the same
-frame, drawn from gradients and SVG noise with nothing loaded from elsewhere, and the figures that
-matter are large display numerals.
+Light and dark follow the system setting. The console shares its type, frame and glass panels
+with the [hosted connection page](connect-page.md): the sidebar, the sign-in, the setup page, the
+overview's pipeline and the top of each provider sit in the same frame, drawn from gradients and
+SVG noise with nothing loaded from elsewhere, and the figures that matter are large display
+numerals. Below 860 px wide the sidebar folds into a bar with a menu button; the menu opens over
+the page and closes on a link, a tap outside it or Escape.

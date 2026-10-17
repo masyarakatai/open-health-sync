@@ -38,6 +38,7 @@
   <symbol id="i-database" viewBox="0 0 16 16"><ellipse cx="8" cy="3.5" rx="5.5" ry="1.9"/><path d="M2.5 3.5v9c0 1 2.5 1.9 5.5 1.9s5.5-.9 5.5-1.9v-9M2.5 8c0 1 2.5 1.9 5.5 1.9s5.5-.9 5.5-1.9"/></symbol>
   <symbol id="i-lock" viewBox="0 0 16 16"><rect x="3" y="7" width="10" height="7.25" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></symbol>
   <symbol id="i-x" viewBox="0 0 16 16"><path d="m4 4 8 8M12 4l-8 8"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 16 16"><path d="M2.25 5h11.5M2.25 11h11.5"/></symbol>
   <symbol id="i-play" viewBox="0 0 16 16"><path d="M4.5 2.75v10.5L13 8z"/></symbol>
   <symbol id="i-link" viewBox="0 0 16 16"><path d="M6.75 9.25a3 3 0 0 0 4.25 0l2.25-2.25a3 3 0 0 0-4.25-4.25L8 3.75M9.25 6.75a3 3 0 0 0-4.25 0L2.75 9a3 3 0 0 0 4.25 4.25L8 12.25"/></symbol>
   <!-- The frame's scene, as on the connect page: noise for the foliage, the
@@ -73,29 +74,41 @@
 </svg>
 <div class="app">
   <aside id="sidebar" class="sidebar" hidden>
-   <div class="sidebar-inner">
-    <a class="brand" href="#/overview"><span class="logo"><svg class="icon" aria-hidden="true"><use href="#i-pulse"/></svg></span>Open Health Sync</a>
-    <div class="workspace">
-      <span id="tenant-mark" class="mark"></span>
-      <div class="workspace-text">
-        <div id="tenant" class="workspace-name"></div>
-        <div id="tenant-role" class="workspace-role"></div>
-      </div>
+   <div class="sidebar-inner frame rail">
+    <div class="scene" aria-hidden="true">
+      <div class="base"></div>
+      <svg class="foliage" focusable="false"><rect width="100%" height="100%" filter="url(#scene-foliage)"/></svg>
+      <div class="sheen p1"></div>
+      <svg class="grain" focusable="false"><rect width="100%" height="100%" filter="url(#scene-grain)"/></svg>
+      <div class="shade"></div>
     </div>
-    <nav id="nav" class="nav" aria-label="Console">
-      <div class="nav-group">Pipeline</div>
-      <a href="#/overview"><svg class="icon" aria-hidden="true"><use href="#i-overview"/></svg>Overview</a>
-      <a href="#/providers"><svg class="icon" aria-hidden="true"><use href="#i-plug"/></svg>Providers</a>
-      <a href="#/users"><svg class="icon" aria-hidden="true"><use href="#i-users"/></svg>Users</a>
-      <a href="#/jobs"><svg class="icon" aria-hidden="true"><use href="#i-layers"/></svg>Jobs</a>
-      <a href="#/webhooks"><svg class="icon" aria-hidden="true"><use href="#i-send"/></svg>Webhooks</a>
-      <div class="nav-group">Access</div>
-      <a href="#/keys"><svg class="icon" aria-hidden="true"><use href="#i-key"/></svg>API keys</a>
-      <a href="#/audit"><svg class="icon" aria-hidden="true"><use href="#i-scroll"/></svg>Audit log</a>
-    </nav>
-    <div class="sidebar-foot">
-      <span id="mode" class="pill" hidden>Read only</span>
-      <button id="signout" class="ghost" type="button"><svg class="icon" aria-hidden="true"><use href="#i-signout"/></svg>Sign out</button>
+    <div class="rail-top">
+      <a class="brand" href="#/overview"><span class="logo"><svg class="icon" aria-hidden="true"><use href="#i-pulse"/></svg></span>Open Health Sync</a>
+      <button id="menu" class="menu-toggle icon-only" type="button" aria-expanded="false" aria-controls="sidebar-menu" aria-label="Open the menu"><svg class="icon i-open" aria-hidden="true"><use href="#i-menu"/></svg><svg class="icon i-close" aria-hidden="true"><use href="#i-x"/></svg></button>
+    </div>
+    <div id="sidebar-menu" class="sidebar-menu">
+      <div class="workspace">
+        <span id="tenant-mark" class="mark"></span>
+        <div class="workspace-text">
+          <div id="tenant" class="workspace-name"></div>
+          <div id="tenant-role" class="workspace-role"></div>
+        </div>
+      </div>
+      <nav id="nav" class="nav" aria-label="Console">
+        <div class="nav-group">Pipeline</div>
+        <a href="#/overview"><svg class="icon" aria-hidden="true"><use href="#i-overview"/></svg>Overview</a>
+        <a href="#/providers"><svg class="icon" aria-hidden="true"><use href="#i-plug"/></svg>Providers</a>
+        <a href="#/users"><svg class="icon" aria-hidden="true"><use href="#i-users"/></svg>Users</a>
+        <a href="#/jobs"><svg class="icon" aria-hidden="true"><use href="#i-layers"/></svg>Jobs</a>
+        <a href="#/webhooks"><svg class="icon" aria-hidden="true"><use href="#i-send"/></svg>Webhooks</a>
+        <div class="nav-group">Access</div>
+        <a href="#/keys"><svg class="icon" aria-hidden="true"><use href="#i-key"/></svg>API keys</a>
+        <a href="#/audit"><svg class="icon" aria-hidden="true"><use href="#i-scroll"/></svg>Audit log</a>
+      </nav>
+      <div class="sidebar-foot">
+        <span id="mode" class="pill" hidden>Read only</span>
+        <button id="signout" class="ghost" type="button"><svg class="icon" aria-hidden="true"><use href="#i-signout"/></svg>Sign out</button>
+      </div>
     </div>
    </div>
   </aside>

@@ -374,10 +374,10 @@ export function pipelineStages(p) {
       role: "Pulls from each provider",
       cls: worst(sync.failed_24h > 0 ? "bad" : "ok", sync.retrying > 0 || paused > 0 || sync.rate_limited > 0 ? "warn" : "ok"),
       figures: [
-        { label: "Runs succeeded, 24 h", value: formatCount(sync.succeeded_24h) },
+        { label: "Runs succeeded, 24\u00a0h", value: formatCount(sync.succeeded_24h) },
         { label: "Queued", value: formatCount((sync.queued || 0) + (sync.retrying || 0) + (sync.rate_limited || 0)) },
         { label: "Running", value: formatCount(sync.running) },
-        { label: "Failed, 24 h", value: formatCount(sync.failed_24h), cls: sync.failed_24h > 0 ? "bad" : null, href: "#/jobs" },
+        { label: "Failed, 24\u00a0h", value: formatCount(sync.failed_24h), cls: sync.failed_24h > 0 ? "bad" : null, href: "#/jobs" },
       ],
     },
     {
@@ -398,8 +398,8 @@ export function pipelineStages(p) {
       role: "The raw archive, kept for replay",
       cls: "ok",
       figures: [
-        { label: "Raw data, 24 h", value: formatBytes(store.raw_bytes_24h) },
-        { label: "Raw objects, 24 h", value: formatCount(store.raw_objects_24h) },
+        { label: "Raw data, 24\u00a0h", value: formatBytes(store.raw_bytes_24h) },
+        { label: "Raw objects, 24\u00a0h", value: formatCount(store.raw_objects_24h) },
       ],
     },
     {

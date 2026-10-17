@@ -331,6 +331,7 @@ function main() {
   const tenantRole = document.getElementById("tenant-role");
   const tenantMark = document.getElementById("tenant-mark");
   const modeLabel = document.getElementById("mode");
+  const menu = document.getElementById("menu");
   const form = document.getElementById("signin-form");
   const keyInput = document.getElementById("key");
   const signinError = document.getElementById("signin-error");
@@ -570,6 +571,7 @@ function main() {
     tenant = null;
     signin.hidden = false;
     sidebar.hidden = true;
+    setMenu(false);
     view.hidden = true;
     view.replaceChildren();
     signinError.textContent = message || "";
@@ -631,6 +633,23 @@ function main() {
   });
   signout.addEventListener("click", signOut);
   window.addEventListener("hashchange", () => render());
+
+  // On a phone the sidebar is a bar with a menu button. The menu closes on
+  // a link, on the dimmed page around it and on Escape.
+  function setMenu(open) {
+    sidebar.classList.toggle("open", open);
+    menu.setAttribute("aria-expanded", String(open));
+    menu.setAttribute("aria-label", open ? "Close the menu" : "Open the menu");
+  }
+  menu.addEventListener("click", () => setMenu(!sidebar.classList.contains("open")));
+  sidebar.addEventListener("click", (ev) => {
+    if (ev.target === sidebar || ev.target.closest("a")) setMenu(false);
+  });
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Escape" || !sidebar.classList.contains("open")) return;
+    setMenu(false);
+    menu.focus();
+  });
 
   function go(hash) {
     if (window.location.hash === hash) render();
