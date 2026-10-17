@@ -2452,6 +2452,87 @@ paths:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
 
+  /v1/ingest/bluetooth:
+    post:
+      tags: [ingest]
+      operationId: ingestBluetooth
+      summary: Upload one part of Bluetooth device values
+      description: |
+        One gzip NDJSON part (at most 64 MiB, never truncated), one characteristic value a
+        standard Bluetooth health device sent per line: `{"at": "<RFC 3339 arrival time with
+        offset>", "char": "2a37", "value": "<hex>", "session": "<id of the connection>",
+        "device": {"name", "manufacturer", "model", "firmware"}, "device_user": <index>}`
+        (`device` and `device_user` optional; the line format is in docs/connectors/bluetooth.md;
+        `ohs-bridge` and the Swift and Kotlin SDKs write it). The server decodes heart rate with
+        RR intervals, blood pressure, weight, body composition, glucose, temperature and pulse
+        oximetry; other characteristics are stored and not mapped. The part is refused with
+        400, and nothing is stored, when a line breaks the format; a value that does not decode
+        is a failed record of its line only. Same headers, limits and answers as the Apple
+        Health upload.
+        Re-sending the same part is safe: the answer is 200 with `duplicate: true`. Other
+        bytes under a (day, batch, part) already stored are a 409, and so is a part sent while
+        this provider's data is being deleted for the user (nothing is kept; send it again
+        once the deletion job is done). Each instance processes a
+        bounded number of uploads at once; above it the answer is 503 with `Retry-After`.
+      security:
+        - userToken: [upload]
+      parameters:
+        - name: X-OHS-Type
+          in: header
+          required: true
+          description: Always `gatt`.
+          schema: { type: string, enum: [gatt] }
+        - name: X-OHS-Day
+          in: header
+          required: true
+          description: UTC day of the part's first line (the server does not check it).
+          schema: { type: string, format: date }
+        - name: X-OHS-Batch
+          in: header
+          required: true
+          schema: { type: string, maxLength: 128 }
+        - name: X-OHS-Part
+          in: header
+          required: true
+          schema: { type: integer, minimum: 0, maximum: 1000000 }
+      requestBody:
+        required: true
+        content:
+          application/gzip:
+            schema: { type: string, contentEncoding: binary }
+          application/octet-stream:
+            schema: { type: string, contentEncoding: binary }
+      responses:
+        "200":
+          description: Stored (or already stored) and queued for processing.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [key, duplicate]
+                properties:
+                  key: { type: string, description: Raw object key. }
+                  duplicate: { type: boolean }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "410":
+          description: The user started being deleted while this upload was stored (its token was accepted just before); nothing is kept.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "413": { $ref: "#/components/responses/TooLarge" }
+        "503":
+          description: Too many uploads in progress on this instance.
+          headers:
+            Retry-After:
+              schema: { type: integer }
+              description: Seconds to wait before retrying.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
   /connect:
     get:
       tags: [connections]

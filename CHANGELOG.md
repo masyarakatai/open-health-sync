@@ -9,6 +9,30 @@ release may change the API, the configuration or the database schema.
 
 ### Added
 
+- Bluetooth devices: heart rate straps, blood pressure cuffs, scales, glucose meters,
+  thermometers and pulse oximeters that implement the standard Bluetooth SIG health profiles
+  send their readings straight to the server, with no vendor account and no phone. The new
+  `POST /v1/ingest/bluetooth` upload route (provider `bluetooth`, user token with scope
+  `upload`) stores each characteristic value as the bytes the device sent, with the time it
+  arrived, and the ETL decodes it: heart rate and RR intervals, blood pressure with pulse, mean
+  arterial pressure and the cuff's status flags, weight, BMI and height, body composition, blood
+  glucose (control solution left out), body temperature and SpO2. Device clocks are used when
+  they hold a plausible time (metadata `clock`), shared devices are filtered by user index, and
+  the source slug comes from the manufacturer (`polar`, `omron`, `and`...). Blood pressure in
+  kPa is converted to mmHg. No migration, no new Go dependency. See
+  [docs/connectors/bluetooth.md](docs/connectors/bluetooth.md).
+- `ohs-bridge`, a desktop bridge written in Rust (`bridge/`), for macOS, Linux (Raspberry Pi
+  included) and Windows: it scans for standard Bluetooth health devices, connects and
+  reconnects, sets their clock, asks glucose meters for new records, spools every value on
+  disk and uploads it in parts that survive a crash or a network loss. `ohs-bridge files`
+  uploads new FIT files from a folder, such as a watch mounted over USB, through the activity
+  files route. `ohs-bridge watch` shows heart rate, RR and battery live, and `--status-file`
+  keeps a one-line status for menu bar tools. See [docs/bridge.md](docs/bridge.md).
+- Swift and Kotlin SDKs: `BluetoothRecorder` builds the Bluetooth upload parts and
+  `uploadBluetoothPart` sends them; the Swift package gets an `OpenHealthSyncBluetooth`
+  product (CoreBluetooth) that does the scanning and subscriptions on iOS and macOS, and the
+  Android example app shows the same with `BluetoothGatt`.
+
 - Self reports: `POST /v1/users/{id}/self-reports` records a person's own ratings next to their
   synced data: how they feel, mood, stress, energy, sleep quality and muscle soreness (1 to 5),
   the effort of a session and pain (0 to 10). It takes a tenant key, or the user's own token

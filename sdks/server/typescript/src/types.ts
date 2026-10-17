@@ -1668,6 +1668,12 @@ export interface IngestActivityFilesResponse {
   duplicate: boolean;
 }
 
+export interface IngestBluetoothResponse {
+  /** Raw object key. */
+  key: string;
+  duplicate: boolean;
+}
+
 export interface ListAuditEventsResponse {
   data: AuditEvent[];
   /** Null on the last page. */

@@ -44,6 +44,7 @@ import type {
   HealthzResponse,
   IngestActivityFilesResponse,
   IngestAppleHealthResponse,
+  IngestBluetoothResponse,
   IngestHealthConnectResponse,
   IngestXiaomiResponse,
   ListAuditEventsResponse,
@@ -666,6 +667,18 @@ export interface IngestActivityFilesParams {
   /** Sent as the X-OHS-Day header. UTC day the activity starts (`ohs import files` sends it; the server does not check it). */
   ohsDay: string;
   /** Sent as the X-OHS-Batch header. `ohs import files` sends `af1-` and the first 32 hex digits of the file's SHA-256. */
+  ohsBatch: string;
+  /** Sent as the X-OHS-Part header. */
+  ohsPart: number;
+}
+
+/** Query and header parameters of {@link OpenHealthSync.ingestBluetooth}. */
+export interface IngestBluetoothParams {
+  /** Sent as the X-OHS-Type header. Always `gatt`. */
+  ohsType: "gatt";
+  /** Sent as the X-OHS-Day header. UTC day of the part's first line (the server does not check it). */
+  ohsDay: string;
+  /** Sent as the X-OHS-Batch header. */
   ohsBatch: string;
   /** Sent as the X-OHS-Part header. */
   ohsPart: number;
@@ -2746,6 +2759,51 @@ export class OpenHealthSync {
     return this.#request<IngestActivityFilesResponse>({
       method: "POST",
       path: "/v1/ingest/activity-files",
+      headers: {
+        "X-OHS-Type": params.ohsType,
+        "X-OHS-Day": params.ohsDay,
+        "X-OHS-Batch": params.ohsBatch,
+        "X-OHS-Part": params.ohsPart,
+      },
+      body,
+      contentType: "application/gzip",
+      expect: "json",
+      options,
+    });
+  }
+
+  /**
+   * Upload one part of Bluetooth device values.
+   *
+   * `POST /v1/ingest/bluetooth`
+   *
+   * One gzip NDJSON part (at most 64 MiB, never truncated), one characteristic value a
+   * standard Bluetooth health device sent per line: `{"at": "<RFC 3339 arrival time with
+   * offset>", "char": "2a37", "value": "<hex>", "session": "<id of the connection>",
+   * "device": {"name", "manufacturer", "model", "firmware"}, "device_user": <index>}`
+   * (`device` and `device_user` optional; the line format is in docs/connectors/bluetooth.md;
+   * `ohs-bridge` and the Swift and Kotlin SDKs write it). The server decodes heart rate with
+   * RR intervals, blood pressure, weight, body composition, glucose, temperature and pulse
+   * oximetry; other characteristics are stored and not mapped. The part is refused with
+   * 400, and nothing is stored, when a line breaks the format; a value that does not decode
+   * is a failed record of its line only. Same headers, limits and answers as the Apple
+   * Health upload.
+   * Re-sending the same part is safe: the answer is 200 with `duplicate: true`. Other
+   * bytes under a (day, batch, part) already stored are a 409, and so is a part sent while
+   * this provider's data is being deleted for the user (nothing is kept; send it again
+   * once the deletion job is done). Each instance processes a
+   * bounded number of uploads at once; above it the answer is 503 with `Retry-After`.
+   *
+   * Needs a user token (ohs_ut_) as the client's apiKey.
+   */
+  ingestBluetooth(
+    body: Uint8Array | ArrayBuffer | Blob,
+    params: IngestBluetoothParams,
+    options?: RequestOptions,
+  ): Promise<IngestBluetoothResponse> {
+    return this.#request<IngestBluetoothResponse>({
+      method: "POST",
+      path: "/v1/ingest/bluetooth",
       headers: {
         "X-OHS-Type": params.ohsType,
         "X-OHS-Day": params.ohsDay,
