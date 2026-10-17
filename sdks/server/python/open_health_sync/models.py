@@ -678,6 +678,7 @@ class _NutritionLogRequired(TypedDict):
 
 class NutritionLog(_NutritionLogRequired, total=False):
     end_date: Optional[str]
+    # breakfast, lunch, dinner or snack.
     meal_type: Optional[str]
     energy_kcal: Optional[float]
     protein_g: Optional[float]
@@ -686,7 +687,8 @@ class NutritionLog(_NutritionLogRequired, total=False):
     fiber_g: Optional[float]
     sugar_g: Optional[float]
     sodium_mg: Optional[float]
-    # Extended nutrients by name.
+    # Extended nutrients by name (caffeine, vitamin_d, water...), each in its
+    # nutrient's unit (docs/api.md lists them).
     nutrients: Optional[Dict[str, Any]]
     external_id: Optional[str]
 

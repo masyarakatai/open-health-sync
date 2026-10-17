@@ -13,9 +13,17 @@ import "strings"
 // metric goes here and in the quantity_codes seed migration, nowhere else.
 const (
 	// Activity / energy.
-	QTStepCount              = "step_count"
-	QTActiveEnergyBurned     = "active_energy_burned" // withings "active_energy" aligns here
-	QTBasalEnergyBurned      = "basal_energy_burned"
+	QTStepCount          = "step_count"
+	QTActiveEnergyBurned = "active_energy_burned" // withings "active_energy" aligns here
+	QTBasalEnergyBurned  = "basal_energy_burned"
+	// total_energy_burned is a source's own total of the energy burned over
+	// an interval, basal and active together (Health Connect
+	// TotalCaloriesBurned). A day's total_kcal is its sum when a source sends it.
+	QTTotalEnergyBurned = "total_energy_burned"
+	// basal_metabolic_rate is a rate in kilocalories per day, an estimate a
+	// smart scale or an app makes (Health Connect BasalMetabolicRate). It is
+	// not an energy and is never summed: basal_energy_burned is.
+	QTBasalMetabolicRate     = "basal_metabolic_rate"
 	QTDistanceWalkingRunning = "distance_walking_running" // oura/withings distance aligns here
 	QTFlightsClimbed         = "flights_climbed"
 

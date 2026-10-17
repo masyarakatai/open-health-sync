@@ -396,6 +396,28 @@ their samples. The same recordings are FHIR Observations with the waveform as `S
 summarizes one without its samples, and `exports/ecg` and the user archive hold them
 ([exports.md](exports.md)).
 
+### Nutrition logs
+
+`GET /v1/users/{id}/nutrition` lists food and drink entries, from Apple Health (dietary samples
+and food entries) and Health Connect (`Nutrition` and `Hydration` records). Seven nutrients have
+their own field; every other one is in `nutrients`, by name. Each nutrient has one unit, whatever
+the source: the mappers convert to it and refuse a value whose unit does not convert.
+
+| Nutrients | Unit |
+|---|---|
+| `energy_kcal` (energy consumed), `nutrients.energy_from_fat` | kcal |
+| `protein_g`, `carbs_g`, `fat_g`, `fiber_g`, `sugar_g`; `nutrients.fat_saturated`, `fat_monounsaturated`, `fat_polyunsaturated`, `fat_unsaturated`, `fat_trans` | g |
+| `sodium_mg`; `nutrients.cholesterol`, `caffeine`, `calcium`, `chloride`, `copper`, `iron`, `magnesium`, `manganese`, `phosphorus`, `potassium`, `zinc`, `niacin`, `pantothenic_acid`, `riboflavin`, `thiamin`, `vitamin_b6`, `vitamin_c`, `vitamin_e` | mg |
+| `nutrients.biotin`, `chromium`, `folate`, `folic_acid`, `iodine`, `molybdenum`, `selenium`, `vitamin_a`, `vitamin_b12`, `vitamin_d`, `vitamin_k` | mcg |
+| `nutrients.water` | mL |
+
+`meal_type` is `breakfast`, `lunch`, `dinner`, `snack` or null. Rows written before the release after 0.1.0 may
+hold `nutrients` in the unit the upload gave (an Apple Health food entry also kept its core
+masses unconverted); erasing the provider's data and importing again rewrites them. A Health
+Connect entry is identified by its record id: a re-sent record replaces its figures, a record
+whose start moved replaces its older copy, and a `Deletion` line removes it. The same logs are
+FHIR Observations ([fhir.md](fhir.md#nutrition-logs)).
+
 ### Knowing when an upload is processed
 
 Processing is asynchronous. `GET /v1/users/{id}/coverage` returns record counts per provider and
@@ -469,7 +491,7 @@ curl -s -X POST $OHS/v1/users/$USER_ID/shares -H "Authorization: Bearer $KEY" \
 
 `GET /v1/users/{id}/fhir/Observation` serves the same quantity samples, blood pressure readings
 (a systolic and a diastolic sample paired into one panel), sleep sessions, workouts, daily
-summaries and ECG recordings as FHIR R4 Observations, in one `searchset` Bundle (`application/fhir+json`) in time
+summaries, ECG recordings and nutrition logs as FHIR R4 Observations, in one `searchset` Bundle (`application/fhir+json`) in time
 order, paged by its `next` link, and `GET /v1/users/{id}/fhir/Observation/{observation_id}` reads
 one back. Filters: `type`, `code` (`http://loinc.org|8867-4`), `category` (`vital-signs`,
 `laboratory`, `activity`), `start`, `end`. The user is `GET /v1/users/{id}/fhir/Patient/{id}`,

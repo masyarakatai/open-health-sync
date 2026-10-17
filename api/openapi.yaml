@@ -20,7 +20,7 @@ info:
     `start` and `end` take an RFC 3339 time or a `YYYY-MM-DD` date (midnight UTC).
 
     **FHIR.** `GET /v1/users/{id}/fhir/Observation` serves the same quantity samples, blood
-    pressure readings, sleep sessions, workouts, daily summaries and ECG recordings as FHIR R4 Observations
+    pressure readings, sleep sessions, workouts, daily summaries, ECG recordings and nutrition logs as FHIR R4 Observations
     (`application/fhir+json`), the user as a Patient, the devices the records came from as
     Devices, who produced each Observation as its Provenance, and all of them in one paged
     Bundle with `GET /v1/users/{id}/fhir/Patient/{id}/$everything`; see docs/fhir.md.
@@ -1194,6 +1194,10 @@ paths:
       tags: [read]
       operationId: listNutrition
       summary: Nutrition logs
+      description: |
+        Food and drink entries from Apple Health and Health Connect. Each nutrient has one
+        unit whatever the source: kcal for energy, g for the macronutrients, mg or mcg for
+        the others, mL for water (the table is in docs/api.md).
       parameters:
         - $ref: "#/components/parameters/Start"
         - $ref: "#/components/parameters/End"
@@ -1765,9 +1769,10 @@ paths:
         The user's records as one FHIR R4 (4.0.1) `searchset` Bundle of Observations,
         `Content-Type: application/fhir+json`: quantity samples (`qs-` ids), blood pressure
         panels pairing a systolic and a diastolic sample (`bp-`), sleep sessions (`sleep-`),
-        workouts (`workout-`), daily summaries (`daily-`) and ECG recordings with their
-        voltage samples (`ecg-`), merged in time order (a sample's start, a bedtime, a
-        workout's start, a day at midnight UTC, a recording's start), then by kind and id.
+        workouts (`workout-`), daily summaries (`daily-`), ECG recordings with their
+        voltage samples (`ecg-`) and nutrition logs (`nutrition-`), merged in time order (a
+        sample's start, a bedtime, a workout's start, a day at midnight UTC, a recording's or
+        a meal's start), then by kind and id.
         Paged like every list: the Bundle's `next` link carries the cursor, and there is no
         `next` link on the last page; `total` is left out. A blood pressure pair is never
         split across pages, and its two samples are not listed on their own. A page holds at
@@ -1796,7 +1801,7 @@ paths:
             (`https://github.com/soma-intelligence/open-health-sync/fhir/CodeSystem/quantity-type|heart_rate`,
             like `type`), or a record type
             (`https://github.com/soma-intelligence/open-health-sync/fhir/CodeSystem/record-type|`
-            `blood_pressure`, `sleep_session`, `workout`, `daily_summary` or `ecg_recording`). One value; other
+            `blood_pressure`, `sleep_session`, `workout`, `daily_summary`, `ecg_recording` or `nutrition_log`). One value; other
             systems are a 400. A code no Observation carries is an empty Bundle.
           schema: { type: string, examples: ["http://loinc.org|8867-4"] }
         - name: category
@@ -1832,7 +1837,7 @@ paths:
         required: true
         description: |
           The Observation id, as the Bundle gives it: `qs-`, `bp-` (the systolic sample's
-          id), `sleep-`, `workout-`, `daily-` or `ecg-`, then the stored row id.
+          id), `sleep-`, `workout-`, `daily-`, `ecg-` or `nutrition-`, then the stored row id.
         schema: { type: string, examples: [qs-1234, bp-1235, sleep-77, ecg-12] }
     get:
       tags: [fhir]
@@ -3814,7 +3819,9 @@ components:
             id: { type: integer, format: int64 }
             start_date: { type: string, format: date-time }
             end_date: { type: [string, "null"], format: date-time }
-            meal_type: { type: [string, "null"] }
+            meal_type:
+              type: [string, "null"]
+              description: breakfast, lunch, dinner or snack.
             energy_kcal: { type: [number, "null"] }
             protein_g: { type: [number, "null"] }
             carbs_g: { type: [number, "null"] }
@@ -3824,7 +3831,9 @@ components:
             sodium_mg: { type: [number, "null"] }
             nutrients:
               type: [object, "null"]
-              description: Extended nutrients by name.
+              description: |
+                Extended nutrients by name (caffeine, vitamin_d, water...), each in its
+                nutrient's unit (docs/api.md lists them).
               additionalProperties: true
             external_id: { type: [string, "null"] }
             metadata: { $ref: "#/components/schemas/Metadata" }

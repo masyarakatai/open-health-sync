@@ -20,7 +20,7 @@ import (
 const (
 	// RecordTypeSystem codes the kind of record an Observation was made
 	// from: blood_pressure, sleep_session, workout, daily_summary,
-	// ecg_recording.
+	// ecg_recording, nutrition_log.
 	RecordTypeSystem = Namespace + "/CodeSystem/record-type"
 	// ComponentSystem codes the components: the REST field each one comes
 	// from (deep_sleep_seconds, distance_m...).
@@ -73,6 +73,7 @@ var idPrefixes = []struct {
 	{WorkoutIDPrefix, read.KindWorkout, false},
 	{DailyIDPrefix, read.KindDaily, false},
 	{ECGIDPrefix, read.KindECG, false},
+	{NutritionIDPrefix, read.KindNutrition, false},
 }
 
 // RecordID is the stable id of the Observation made from r.
@@ -91,6 +92,8 @@ func RecordID(r read.ObservationRecord) string {
 		return DailyIDPrefix + strconv.FormatInt(r.Daily.ID, 10)
 	case read.KindECG:
 		return ECGIDPrefix + strconv.FormatInt(r.ECG.ID, 10)
+	case read.KindNutrition:
+		return NutritionIDPrefix + strconv.FormatInt(r.Nutrition.ID, 10)
 	}
 	return ""
 }
@@ -135,6 +138,8 @@ func FromRecord(user uuid.UUID, r read.ObservationRecord) Observation {
 		return FromDailySummary(user, *r.Daily)
 	case read.KindECG:
 		return FromECG(user, *r.ECG)
+	case read.KindNutrition:
+		return FromNutritionLog(user, *r.Nutrition)
 	}
 	if r.Partner != nil {
 		return FromBloodPressure(user, *r.Sample, *r.Partner)

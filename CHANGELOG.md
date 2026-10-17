@@ -112,6 +112,20 @@ release may change the API, the configuration or the database schema.
   and summarizes one without its samples. Exports: dataset `ecg` (metadata) and
   `canonical/ecg.ndjson` in the user archive (with samples). No migration. See
   [docs/api.md](docs/api.md#ecg-recordings) and [docs/fhir.md](docs/fhir.md#ecg-recordings).
+- Health Connect nutrition and energy: `Nutrition` and `Hydration` records become nutrition logs
+  (every mass converted from grams to its nutrient's unit, the meal type, the food name in
+  `metadata.food_name`), identified by record id like the samples, so an edit replaces the
+  figures, a moved start replaces the older copy and a `Deletion` removes it.
+  `TotalCaloriesBurned` becomes the new quantity type `total_energy_burned` (kcal), which is the
+  daily summary's `total_kcal` when a source sends it, and `BasalMetabolicRate` the new type
+  `basal_metabolic_rate` (kcal/d). Migration 0040 adds the two types to the catalog. See
+  [docs/connectors/health-connect.md](docs/connectors/health-connect.md).
+- Nutrition in FHIR: each nutrition log is an Observation `nutrition-{id}` (record type
+  `nutrition_log`, no category) with the meal type and every figure as components, coded by
+  REST field and by LOINC where a point in time code exists (energy 9052-2, protein 9079-5,
+  carbohydrates 9059-7, fat 9066-2, water 8999-5). In the Observation search, read by id,
+  Provenance, `$everything` and the user archive. See
+  [docs/fhir.md](docs/fhir.md#nutrition-logs).
 
 ### Changed
 
@@ -159,6 +173,14 @@ release may change the API, the configuration or the database schema.
   notifications were deletions.
 - MCP `get_coverage` without `start` reports the last 30 days. On years of Apple Health history
   it answered with over a megabyte of JSON, more than an agent can read.
+- Nutrient units: every nutrient now has one documented unit (kcal, g, mg, mcg or mL; see
+  [docs/api.md](docs/api.md#nutrition-logs)) and every mapper converts to it. The extended
+  nutrients of Apple Health (`nutrients.caffeine`, `nutrients.vitamin_d`...) were stored in the
+  unit of the upload, and a food entry (`HKCorrelationTypeIdentifierFood`) stored its core masses
+  without the conversion single dietary samples had, so a mass sent in kilograms landed 1,000
+  times too low in `protein_g`. A unit that does not convert now rejects the record instead.
+  Rows already stored keep their values: erase the provider's data
+  (`DELETE /v1/users/{id}/data/apple_health`) and import again to rewrite them.
 
 ## [0.1.0] - 2026-10-13
 

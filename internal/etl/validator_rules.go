@@ -239,6 +239,15 @@ var rangeRules = map[string]rangeRule{
 		Unit:    "kcal",
 		HardMin: 0, HardMax: unbounded, SoftMin: 0, SoftMax: 20000,
 	},
+	model.QTTotalEnergyBurned: {
+		Unit:    "kcal",
+		HardMin: 0, HardMax: unbounded, SoftMin: 0, SoftMax: 30000,
+	},
+	// Health Connect caps a basal metabolic rate at 10,000 kcal a day.
+	model.QTBasalMetabolicRate: {
+		Unit:    "kcal/d",
+		HardMin: 0, HardMax: 10000, SoftMin: 500, SoftMax: 5000,
+	},
 	model.QTDistanceWalkingRunning: {
 		Unit:    "m",
 		HardMin: 0, HardMax: unbounded, SoftMin: 0, SoftMax: 300000,

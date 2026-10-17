@@ -3,14 +3,14 @@
 Open Health Sync serves a user's records as [FHIR R4](https://hl7.org/fhir/R4/) (4.0.1)
 Observations, so a FHIR client, an EHR integration or a research pipeline can read them without
 learning the REST JSON shapes: quantity samples (heart rate, steps, weight, SpO2...), blood
-pressure readings, sleep sessions, workouts, daily summaries and ECG recordings with their
-waveform. The user is served as a
+pressure readings, sleep sessions, workouts, daily summaries, ECG recordings with their
+waveform, and what the user ate and drank. The user is served as a
 [Patient](#patient), the devices the records came from as [Devices](#devices), and who produced
 each Observation as its [Provenance](#provenance); [`$everything`](#everything) pages through all
 of them in one Bundle. The output is checked against the specification with the official HL7
 validator, in CI (see [Validation](#validation)).
 
-Category samples, nutrition, sleep phases, routes and the other resources are
+Category samples, sleep phases, routes and the other resources are
 [not in this version](#not-in-this-version).
 
 ## Routes
@@ -40,7 +40,7 @@ OperationOutcome).
 
 The search returns every kind of record in one list, so a client gets everything with one paged
 search. Observations come in time order, then by kind (quantity sample, sleep session, workout,
-daily summary, ECG recording), then by id:
+daily summary, ECG recording, nutrition log), then by id:
 
 | Record | Its time in the list |
 |---|---|
@@ -49,11 +49,12 @@ daily summary, ECG recording), then by id:
 | workout | start |
 | daily summary | the day at midnight UTC (the Observation itself covers the local day) |
 | ECG recording | start |
+| nutrition log | start |
 
 The cursor in the `next` link is the last Observation's time, kind and id, so a page never
 skips or repeats one even when records of different kinds share a time. A REST list cursor is
 not a valid FHIR cursor (400). The merged list is read in two steps: one query takes the ids of
-the page from the five tables (each branch ordered and limited on its own index, then merged),
+the page from the six tables (each branch ordered and limited on its own index, then merged),
 a second reads those rows (and the samples of the page's ECG recordings).
 
 The search takes these parameters, all optional. They combine: an Observation is listed when it
@@ -80,7 +81,7 @@ for a filtered one: use `start` and `end` where FHIR has `date`, and `limit` whe
 | `http://loinc.org\|55411-3` | the workouts |
 | `http://loinc.org\|11524-6` | the ECG recordings |
 | `.../CodeSystem/quantity-type\|heart_rate` | the same as `type=heart_rate` |
-| `.../CodeSystem/record-type\|blood_pressure` | the blood pressure panels; `sleep_session`, `workout`, `daily_summary` and `ecg_recording` likewise |
+| `.../CodeSystem/record-type\|blood_pressure` | the blood pressure panels; `sleep_session`, `workout`, `daily_summary`, `ecg_recording` and `nutrition_log` likewise |
 
 | `category` | Finds |
 |---|---|
@@ -89,7 +90,7 @@ for a filtered one: use `start` and `end` where FHIR has `date`, and `limit` whe
 | `activity` | the activity quantity samples, the workouts and the daily summaries |
 | `survey` | the [self reports](self-reports.md) |
 
-ECG recordings carry no category, so a `category` search never lists them.
+ECG recordings and nutrition logs carry no category, so a `category` search never lists them.
 
 The Bundle has a `self` link and, unless this is the last page, a `next` link that carries the
 cursor: follow `next` until there is none. `total` is left out (the API never counts). Links
@@ -367,12 +368,45 @@ scale Doc); MDC 131328 in the R4 example
 and the Point-of-Care Device IG's ECG sample array example. LOINC has no code for the raw
 signal.
 
+### Nutrition logs
+
+One nutrition log (a food or drink entry from Apple Health or Health Connect, the rows of
+[`GET /nutrition`](api.md#nutrition-logs)) is one Observation with the meal type and each figure as
+components.
+
+| Observation | From the log |
+|---|---|
+| `id` | `nutrition-` and the row id |
+| `identifier` | the provider's record id (`external_id`), when there is one |
+| `code` | the record type `nutrition_log`; `text` `food and drink`. LOINC has no code for one food entry: its intake panels (75284-0, 81895-5) group 24 hour totals |
+| `category` | none: no HL7 observation category describes intake |
+| `effectivePeriod` | `start_date` to `end_date` (`effectiveDateTime` when they are equal or there is no end) |
+| `component` | the meal type, then each figure that has a value, in the order of the table below; `dataAbsentReason` `unknown` when no figure has one |
+
+| Component | Code | Unit |
+|---|---|---|
+| `meal_type` | component code system only | `valueCodeableConcept`: `breakfast`, `lunch`, `dinner` or `snack` in `.../CodeSystem/meal-type`; left out when not known |
+| `energy_kcal` | LOINC 9052-2 (Calorie intake total) | `kcal` |
+| `protein_g` | LOINC 9079-5 (Protein intake, estimated) | `g` |
+| `carbs_g` | LOINC 9059-7 (Carbohydrate intake, estimated) | `g` |
+| `fat_g` | LOINC 9066-2 (Fat intake, estimated) | `g` |
+| `fiber_g`, `sugar_g` | component code system only | `g` |
+| `sodium_mg` | component code system only (the LOINC sodium intake code is in moles) | `mg` |
+| `nutrients.water` | LOINC 8999-5 (Fluid intake oral, estimated) | `mL` |
+| `nutrients.<name>`, every other nutrient of [the nutrient table](api.md#nutrition-logs) | component code system only | the nutrient's unit: `kcal`, `g`, `mg` or `ug` (`mcg`) |
+
+The LOINC codes are point in time codes, the shape of one entry. A name in `nutrients` that the
+nutrient table does not list has no known unit and is left out. Rows written before the release after 0.1.0 may
+hold extended nutrients in the unit the line gave rather than the table's
+([api.md](api.md#nutrition-logs) says how to rewrite them). Like ECG
+recordings, nutrition logs have no merged view: two apps logging one meal are two entries.
+
 ### Units
 
 `valueQuantity.code` is UCUM. For a quantity sample it is the catalog's UCUM unit when the type
 has one, else the spelling of the storage unit below; a unit outside this table (a type the
 catalog does not declare) is kept in `unit` with no `system` or `code`. The components of sleep
-sessions, workouts and daily summaries use the units of their tables above.
+sessions, workouts, daily summaries and nutrition logs use the units of their tables above.
 
 | Storage unit | UCUM | Storage unit | UCUM |
 |---|---|---|---|
@@ -380,7 +414,7 @@ sessions, workouts and daily summaries use the units of their tables above.
 | `percent` | `%` | `kcal/kg/h` | `kcal/kg/h` |
 | `celsius` | `Cel` | `min` | `min` |
 | `mmHg` | `mm[Hg]` | `W` | `W` |
-| `kg`, `kg/m2`, `cm`, `m`, `m/s`, `ms`, `L`, `L/min`, `mg/dL`, `mL/kg/min` | the same | `uS` | `uS` |
+| `kg`, `kg/m2`, `cm`, `m`, `m/s`, `ms`, `L`, `L/min`, `mg/dL`, `mL/kg/min`, `kcal/d` | the same | `uS` | `uS` |
 | `years` | `a` | `dBASPL` | `dB[SPL]` |
 | `IU` | `[IU]` | `count`, `index`, `score` | `{count}`, `{index}`, `{score}` |
 
@@ -405,8 +439,9 @@ holds only what it does store:
 A Device is one device the user's records came from, as their provenance names it. Its
 identity is five stored fields: the provider, the source (`source_slug`), and the device fields
 of the record: `device_id`, and for a quantity sample `device_model` and `product_type` (sleep
-sessions, workouts and ECG recordings keep `device_id` only; daily summaries keep none; the
-ECG import leaves `device_id` empty today, so ECG Observations name no Device). A record with no
+sessions, workouts, ECG recordings and nutrition logs keep `device_id` only; daily summaries keep
+none; the ECG and nutrition imports leave `device_id` empty today, so their Observations name no
+Device). A record with no
 device id, model or product type names no Device. Two records with the same five fields name
 the same Device, whatever their kind.
 
@@ -422,7 +457,8 @@ the same Device, whatever their kind.
 
 The id is computed from the record's own fields, so an Observation references its Device with
 no extra query. `GET /fhir/Device` reads the five fields of the user's quantity samples, sleep
-sessions, workouts and ECG recordings whose time is in `[start, end)` (both optional, as for Observations), each
+sessions, workouts, ECG recordings and nutrition logs whose time is in `[start, end)` (both
+optional, as for Observations), each
 device once, in one page with no `next` link: a user has a handful of devices. It reads the
 `(tenant_id, user_id, time)` index of each table, so a window reads only the chunks it covers;
 with no window it reads the device fields of every record of the user once, which on years of
@@ -489,8 +525,9 @@ are identifiers, documented here; nothing is served at them.
 | URI | Used for |
 |---|---|
 | `.../CodeSystem/quantity-type` | `code.coding`: the canonical quantity names of [data-model.md](data-model.md) |
-| `.../CodeSystem/record-type` | `code.coding`: `blood_pressure`, `sleep_session`, `workout`, `daily_summary`, `ecg_recording` |
-| `.../CodeSystem/observation-component` | `component.code.coding`: the REST field a component comes from (`deep_sleep_seconds`, `distance_m`...) |
+| `.../CodeSystem/record-type` | `code.coding`: `blood_pressure`, `sleep_session`, `workout`, `daily_summary`, `ecg_recording`, `nutrition_log` |
+| `.../CodeSystem/observation-component` | `component.code.coding`: the REST field a component comes from (`deep_sleep_seconds`, `distance_m`, `nutrients.caffeine`...) |
+| `.../CodeSystem/meal-type` | `valueCodeableConcept` of a nutrition log's meal: `breakfast`, `lunch`, `dinner`, `snack` |
 | `.../CodeSystem/ecg-afib-classification` | `valueCodeableConcept` of a Withings ECG's atrial fibrillation classification, as the device gave it: `negative`, `positive`, `inconclusive` |
 | `.../CodeSystem/healthkit-ecg-classification` | `valueCodeableConcept` of an Apple Health ECG's classification, HealthKit's names: `sinus_rhythm`, `atrial_fibrillation`, `inconclusive_low_heart_rate`, `inconclusive_high_heart_rate`, `inconclusive_poor_reading`, `inconclusive_other`, `unrecognized` |
 | `.../CodeSystem/ecg-symptoms-status` | whether symptoms were recorded with an ECG: `none`, `present` |
@@ -510,7 +547,7 @@ Each mapping case has a golden file in [internal/fhir/testdata](../internal/fhir
 profiled vital sign of each kind, resting heart rate, an unpaired systolic sample, a blood
 pressure panel, an interval, a laboratory value, a type without LOINC code, a type and unit
 outside the catalog, a NaN value, a sleep session, a workout, a daily summary on a daylight
-saving day, an ECG recording with its waveform, searchset Bundles (vital signs, every kind of record, empty), a Patient with and
+saving day, an ECG recording with its waveform, a nutrition log, searchset Bundles (vital signs, every kind of record, empty), a Patient with and
 without identifier, a Device with every field and one with a model only, the Provenance of a
 sample, of a blood pressure panel and of a daily summary (no device), the Device and Provenance
 searchsets, a first and a last `$everything` page, and the CapabilityStatement. `go test
@@ -537,8 +574,8 @@ codes; with the default terminology server it checks them.
 
 Planned, in no fixed order:
 
-- Category samples, nutrition, sleep phases and workout routes as FHIR resources, and the
-  devices of those records.
+- Category samples, sleep phases and workout routes as FHIR resources, and the devices of those
+  records. Daily intake totals (the LOINC 24 hour intake codes).
 - Patient demographics (none are stored), a Patient search, and an `Organization` for each
   provider (the Provenance names it by identifier only).
 - A Provenance entity for the raw upload or provider response a record was read from.

@@ -1267,6 +1267,10 @@ class OpenHealthSync:
 
         ``GET /v1/users/{id}/nutrition``
 
+        Food and drink entries from Apple Health and Health Connect. Each nutrient has one
+        unit whatever the source: kcal for energy, g for the macronutrients, mg or mcg for
+        the others, mL for water (the table is in docs/api.md).
+
         Args:
             start: Inclusive lower bound, RFC 3339 or YYYY-MM-DD.
             end: Exclusive upper bound, RFC 3339 or YYYY-MM-DD. Must not be before start.
@@ -1948,9 +1952,10 @@ class OpenHealthSync:
         The user's records as one FHIR R4 (4.0.1) `searchset` Bundle of Observations,
         `Content-Type: application/fhir+json`: quantity samples (`qs-` ids), blood pressure
         panels pairing a systolic and a diastolic sample (`bp-`), sleep sessions (`sleep-`),
-        workouts (`workout-`), daily summaries (`daily-`) and ECG recordings with their
-        voltage samples (`ecg-`), merged in time order (a sample's start, a bedtime, a
-        workout's start, a day at midnight UTC, a recording's start), then by kind and id.
+        workouts (`workout-`), daily summaries (`daily-`), ECG recordings with their
+        voltage samples (`ecg-`) and nutrition logs (`nutrition-`), merged in time order (a
+        sample's start, a bedtime, a workout's start, a day at midnight UTC, a recording's or
+        a meal's start), then by kind and id.
         Paged like every list: the Bundle's `next` link carries the cursor, and there is no
         `next` link on the last page; `total` is left out. A blood pressure pair is never
         split across pages, and its two samples are not listed on their own. A page holds at
@@ -1973,7 +1978,7 @@ class OpenHealthSync:
                 (`https://github.com/soma-intelligence/open-health-sync/fhir/CodeSystem/quantity-type|heart_rate`,
                 like `type`), or a record type
                 (`https://github.com/soma-intelligence/open-health-sync/fhir/CodeSystem/record-type|`
-                `blood_pressure`, `sleep_session`, `workout`, `daily_summary` or `ecg_recording`). One value; other
+                `blood_pressure`, `sleep_session`, `workout`, `daily_summary`, `ecg_recording` or `nutrition_log`). One value; other
                 systems are a 400. A code no Observation carries is an empty Bundle.
             category: An HL7 observation category code, bare or as
                 `http://terminology.hl7.org/CodeSystem/observation-category|code`: `vital-signs`,

@@ -191,6 +191,7 @@ Stored in `ohs_data.nutrition_logs`.
 | `ContentHash` | `string` | De-duplication identity of the source record. Part of the unique key with the time column. |
 | `Metadata` | `map[string]any` | Provider fields kept as sent, plus `timezone` (IANA name) when the provider gives one. |
 | `Replaceable` | `bool` | Writer instruction, not a column. |
+| `SupersedeMoved` | `bool` | Writer instruction, not a column: a stored copy of the log under another start is deleted. |
 
 ### ECGRecording
 
@@ -341,6 +342,7 @@ stored as 0 to 100, not as fractions.
 | `apple_stand_time` | `min` |
 | `basal_body_temperature` | `celsius` |
 | `basal_energy_burned` | `kcal` |
+| `basal_metabolic_rate` | `kcal/d` |
 | `blood_alcohol_content` | `percent` |
 | `blood_glucose` | `mg/dL` |
 | `blood_pressure_diastolic` | `mmHg` |
@@ -406,6 +408,7 @@ stored as 0 to 100, not as fractions.
 | `step_count_intraday` | `count` |
 | `strain` | `index` |
 | `stress_high_time` | `min` |
+| `total_energy_burned` | `kcal` |
 | `underwater_depth` | `m` |
 | `uv_exposure` | `index` |
 | `vascular_age` | `years` |

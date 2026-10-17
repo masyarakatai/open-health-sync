@@ -626,6 +626,7 @@ export interface NutritionLog {
   id: number;
   start_date: string;
   end_date?: string | null;
+  /** breakfast, lunch, dinner or snack. */
   meal_type?: string | null;
   energy_kcal?: number | null;
   protein_g?: number | null;
@@ -634,7 +635,10 @@ export interface NutritionLog {
   fiber_g?: number | null;
   sugar_g?: number | null;
   sodium_mg?: number | null;
-  /** Extended nutrients by name. */
+  /**
+   * Extended nutrients by name (caffeine, vitamin_d, water...), each in its
+   * nutrient's unit (docs/api.md lists them).
+   */
   nutrients?: Record<string, unknown> | null;
   external_id?: string | null;
   /** Provider fields kept as is, plus timezone (IANA name) when known. */

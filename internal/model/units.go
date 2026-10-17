@@ -74,6 +74,8 @@ var storageUnits = map[string]string{
 	QTActiveEnergyBurned:     "kcal",
 	QTActiveEnergyIntraday:   "kcal",
 	QTBasalEnergyBurned:      "kcal",
+	QTTotalEnergyBurned:      "kcal",
+	QTBasalMetabolicRate:     "kcal/d",
 	QTDistanceWalkingRunning: "m",
 	QTDistanceWalkRunIntday:  "m",
 
@@ -170,6 +172,7 @@ var unitAliases = map[string]string{
 	"{flights}": "count",
 	"flights":   "count",
 	"kcal":      "kcal",
+	"kcal/day":  "kcal/d",
 	"m":         "m",
 	"meters":    "m",
 	"metres":    "m",
