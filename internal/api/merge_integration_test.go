@@ -226,11 +226,31 @@ func TestMergedDailyTakesEachFigureFromItsBestSource(t *testing.T) {
 	assert.ElementsMatch(t, []string{id(apple), id(oura), id(whoop), id(withings)}, fhirIDs("&view=all"))
 	assert.ElementsMatch(t, []string{id(oura), id(whoop), id(withings)}, fhirIDs(""),
 		"apple's only figure, steps, is withings' now")
-	r = e.do("GET", base+"/fhir/Observation/"+id(oura), e.keyA, nil)
-	require.Equal(t, http.StatusOK, r.code, string(r.body))
-	assert.NotContains(t, string(r.body), "8000", "oura's steps are withings'")
-	r = e.do("GET", base+"/fhir/Observation/"+id(oura)+"?view=all", e.keyA, nil)
-	assert.Contains(t, string(r.body), "8000")
+	// Compare component codes, not the raw body: the body carries random UUIDs
+	// that can contain "8000" by chance.
+	components := func(q string) []string {
+		r := e.do("GET", base+"/fhir/Observation/"+id(oura)+q, e.keyA, nil)
+		require.Equal(t, http.StatusOK, r.code, string(r.body))
+		var o struct {
+			Component []struct {
+				Code struct {
+					Coding []struct {
+						Code string `json:"code"`
+					} `json:"coding"`
+				} `json:"code"`
+			} `json:"component"`
+		}
+		r.json(t, &o)
+		var out []string
+		for _, c := range o.Component {
+			for _, cd := range c.Code.Coding {
+				out = append(out, cd.Code)
+			}
+		}
+		return out
+	}
+	assert.NotContains(t, components(""), "step_count", "oura's steps are withings'")
+	assert.Contains(t, components("?view=all"), "step_count")
 }
 
 func TestSourcePrioritiesRoute(t *testing.T) {

@@ -159,3 +159,79 @@ func TestImportHelp(t *testing.T) {
 		}
 	}
 }
+
+// fixtureMiFitness is the invented Mi Fitness copy of the converter's tests.
+var fixtureMiFitness = filepath.Join("..", "..", "connectors", "xiaomi", "export", "testdata", "mi_fitness")
+
+func TestImportMiFitness(t *testing.T) {
+	var (
+		mu    sync.Mutex
+		paths = map[string]int{}
+		types = map[string]bool{}
+	)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		if r.Header.Get("Authorization") != "Bearer ohs_ut_cli_test" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		mu.Lock()
+		paths[r.URL.Path]++
+		types[r.Header.Get("X-OHS-Type")] = true
+		mu.Unlock()
+		_ = json.NewEncoder(w).Encode(map[string]any{"duplicate": false})
+	}))
+	t.Cleanup(srv.Close)
+
+	var out bytes.Buffer
+	err := run([]string{"import", "mi-fitness", fixtureMiFitness, "--url", srv.URL, "--token", "ohs_ut_cli_test"}, &out)
+	if err != nil {
+		t.Fatalf("import: %v\n%s", err, out.String())
+	}
+	if paths["/v1/ingest/xiaomi"] != 2 || len(paths) != 1 {
+		t.Errorf("parts went to %v, want 2 to /v1/ingest/xiaomi", paths)
+	}
+	if !types["fitness_data"] || !types["sport_record"] {
+		t.Errorf("part types %v", types)
+	}
+	text := out.String()
+	for _, want := range []string{"batch mif-", "rows read         15", "uploaded          2", "fitness_data/heart_rate", "unreadable value"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("output lacks %q:\n%s", want, text)
+		}
+	}
+	// No token, no account id, no health value in the output.
+	values := strings.ReplaceAll(text, srv.URL, "")
+	for _, never := range []string{"ohs_ut_cli_test", "1000000001", "72.4", "5230"} {
+		if strings.Contains(values, never) {
+			t.Errorf("output shows %q:\n%s", never, text)
+		}
+	}
+}
+
+func TestImportMiFitnessDryRunAndUsage(t *testing.T) {
+	t.Setenv("OHS_URL", "")
+	t.Setenv("OHS_TOKEN", "")
+	var out bytes.Buffer
+	if err := run([]string{"import", "mi-fitness", fixtureMiFitness, "--dry-run"}, &out); err != nil {
+		t.Fatalf("dry run: %v", err)
+	}
+	if !strings.Contains(out.String(), "dry run done") || !strings.Contains(out.String(), "parts             2") {
+		t.Errorf("dry run output:\n%s", out.String())
+	}
+	for want, args := range map[string][]string{
+		"one folder or zip": {"import", "mi-fitness"},
+		"--tz is for":       {"import", "mi-fitness", fixtureMiFitness, "--dry-run", "--tz", "Europe/Paris"},
+		"YYYY-MM-DD":        {"import", "mi-fitness", fixtureMiFitness, "--dry-run", "--since", "yesterday"},
+		"--token":           {"import", "mi-fitness", fixtureMiFitness, "--url", "https://ohs.example.org"},
+	} {
+		err := run(args, &bytes.Buffer{})
+		var ue usageError
+		if err == nil || !errors.As(err, &ue) || !strings.Contains(err.Error(), want) {
+			t.Errorf("run %v = %v, want a usage error containing %q", args, err, want)
+		}
+	}
+	if err := run([]string{"import", "mi-fitness", t.TempDir(), "--dry-run"}, &bytes.Buffer{}); err == nil {
+		t.Error("a folder without Mi Fitness tables must fail")
+	}
+}

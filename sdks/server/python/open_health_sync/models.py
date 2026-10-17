@@ -24,7 +24,10 @@ ConsentCategoryName = Literal["activity", "location", "heart", "ecg", "blood_pre
 # `tag.created`, `tag.updated`, `tag.deleted`: a time tag of the user was created, changed
 # or deleted through the API.
 # `consent.granted`, `consent.revoked`: a user granted or revoked data categories of a source.
-WebhookEventType = Literal["data.written", "data.deleted", "data.erased", "user.deleted", "connection.needs_reauth", "connection.broken", "connection.restored", "tag.created", "tag.updated", "tag.deleted", "consent.granted", "consent.revoked"]
+# `share.created`: a share link of the user was made. `share.revoked`: a share link
+# stopped before its expiry; `reason` says why. `share.accessed`: a share link's file was
+# given to a reader. They name the share, never the link, its key, its label or the reader.
+WebhookEventType = Literal["data.written", "data.deleted", "data.erased", "user.deleted", "connection.needs_reauth", "connection.broken", "connection.restored", "tag.created", "tag.updated", "tag.deleted", "consent.granted", "consent.revoked", "share.created", "share.revoked", "share.accessed"]
 
 # Provider fields kept as is, plus timezone (IANA name) when known.
 Metadata = Dict[str, Any]
@@ -36,6 +39,14 @@ SourceOrders = Dict[str, List[str]]
 TimeTagKind = Literal["illness", "injury", "travel", "jet_lag", "vaccination", "medication", "alcohol", "other"]
 
 TimeTagTime = str
+
+# The scale of each kind: feeling, mood, stress, energy, sleep_quality and
+# muscle_soreness from 1 to 5; exertion and pain from 0 to 10 (docs/self-reports.md).
+SelfReportKind = Literal["feeling", "mood", "stress", "energy", "sleep_quality", "muscle_soreness", "exertion", "pain"]
+
+# The consent categories a share link can hold: those with records in the FHIR view.
+# location, ecg, nutrition, reproductive and mental are refused (400).
+ShareCategory = Literal["activity", "heart", "blood_pressure", "glucose", "respiratory", "body", "sleep", "other"]
 
 
 class SetupStatus(TypedDict):
@@ -113,7 +124,8 @@ class _AuditEventRequired(TypedDict):
     # data.read, data.export, data.write, user.create, user.read, user.delete,
     # user.erased, token.create, connection.read, connection.create,
     # connection.delete, connection.sync, webhook.read, webhook.write, audit.read, config.read,
-    # config.write, tenant.create, key.create, key.revoke (more may be added).
+    # config.write, tenant.create, key.create, key.revoke, share.create, share.read,
+    # share.revoke, share.access (more may be added).
     action: str
     # The end user the action concerns.
     user_id: Optional[str]
@@ -133,9 +145,10 @@ class AuditEvent(_AuditEventRequired, total=False):
 
 
 class AuditEventActor(TypedDict):
-    type: Literal["api_key", "user_token", "admin", "system"]
+    type: Literal["api_key", "user_token", "admin", "system", "share_link"]
     # The API key's id, the first 16 hex characters of a user token's SHA-256
-    # hash, or the command or worker for admin and system events.
+    # hash, the command or worker for admin and system events, or the share's id
+    # for a share link used by its reader.
     id: str
 
 
@@ -328,8 +341,19 @@ class WebhookEventData(TypedDict, total=False):
     job_id: str
     # tag.created, tag.updated and tag.deleted.
     tag_id: str
-    # connection.broken.
-    reason: Literal["needs_reauth", "missing_scope", "failing", "rate_limited"]
+    # consent.granted and consent.revoked, the categories that changed; share.created, the categories shared.
+    categories: List[ConsentCategoryName]
+    # share.created, share.revoked and share.accessed.
+    share_id: str
+    # share.created.
+    expires_at: str
+    # share.created. Whether the link needs a passcode.
+    passcode: bool
+    # connection.broken: needs_reauth, missing_scope, failing or rate_limited.
+    # share.revoked: owner (revoked through the API), consent (a consent change refused
+    # a category it holds), provider_erased (the records of a provider it holds were
+    # erased) or passcode_attempts (too many wrong passcodes).
+    reason: Literal["needs_reauth", "missing_scope", "failing", "rate_limited", "owner", "consent", "provider_erased", "passcode_attempts"]
     # connection.broken.
     action: Literal["reconnect", "wait"]
     # connection.broken, rate_limited. When pulls resume.
@@ -732,6 +756,84 @@ class MenstrualCycle(TypedDict):
     flow_days: List[MenstrualFlowDay]
 
 
+class ECGRecording(TypedDict):
+    # The integration the record came through (apple_health, withings...).
+    provider: str
+    # The vendor that produced the record, when it differs or is known.
+    source: Optional[str]
+    device: Optional[str]
+    ingested_at: str
+    id: int
+    start_date: str
+    end_date: Optional[str]
+    # The label the recording device gave, in its maker's vocabulary, passed through as
+    # recorded. Apple Health: not_set, sinus_rhythm, atrial_fibrillation,
+    # inconclusive_low_heart_rate, inconclusive_high_heart_rate, inconclusive_poor_reading,
+    # inconclusive_other, unrecognized. Withings: negative, positive, inconclusive. Null
+    # when the stored value is none of these.
+    classification: Optional[str]
+    # The stored value the label comes from.
+    classification_value: int
+    # Whether the person recorded symptoms with the recording (not_set, none, present).
+    symptoms_status: Optional[str]
+    # Beats per minute, as the device reported it.
+    average_heart_rate: Optional[float]
+    # Samples per second; 0 when the provider gives none.
+    sampling_frequency_hz: float
+    # The sample count the device reported.
+    number_of_measurements: int
+    # Provider fields kept as is, plus timezone (IANA name) when known.
+    metadata: Metadata
+
+
+class ECGSamples(TypedDict):
+    # Samples returned.
+    count: int
+    # More samples are stored than the 100000 returned.
+    truncated: bool
+    # Seconds from start_date, in order.
+    offsets_s: List[float]
+    # Microvolts, single lead, one per offset.
+    voltages_uv: List[float]
+
+
+class ECGRecordingDetail(TypedDict):
+    # The integration the record came through (apple_health, withings...).
+    provider: str
+    # The vendor that produced the record, when it differs or is known.
+    source: Optional[str]
+    device: Optional[str]
+    ingested_at: str
+    id: int
+    start_date: str
+    end_date: Optional[str]
+    # The label the recording device gave, in its maker's vocabulary, passed through as
+    # recorded. Apple Health: not_set, sinus_rhythm, atrial_fibrillation,
+    # inconclusive_low_heart_rate, inconclusive_high_heart_rate, inconclusive_poor_reading,
+    # inconclusive_other, unrecognized. Withings: negative, positive, inconclusive. Null
+    # when the stored value is none of these.
+    classification: Optional[str]
+    # The stored value the label comes from.
+    classification_value: int
+    # Whether the person recorded symptoms with the recording (not_set, none, present).
+    symptoms_status: Optional[str]
+    # Beats per minute, as the device reported it.
+    average_heart_rate: Optional[float]
+    # Samples per second; 0 when the provider gives none.
+    sampling_frequency_hz: float
+    # The sample count the device reported.
+    number_of_measurements: int
+    # Provider fields kept as is, plus timezone (IANA name) when known.
+    metadata: Metadata
+    samples: ECGSamples
+
+
+class ECGRecordingPage(TypedDict):
+    data: List[ECGRecording]
+    # Null on the last page.
+    next_cursor: Optional[str]
+
+
 class Coverage(TypedDict):
     # Work of the user not finished yet: ETL jobs and provider pulls (backfill,
     # scheduled or notified), pending or running. A pull that keeps failing stays
@@ -867,6 +969,51 @@ class TimeTag(TypedDict):
     updated_at: str
 
 
+class CreateSelfReportsRequest(TypedDict):
+    reports: List[SelfReportInput]
+
+
+class _SelfReportInputRequired(TypedDict):
+    # The scale of each kind: feeling, mood, stress, energy, sleep_quality and
+    # muscle_soreness from 1 to 5; exertion and pain from 0 to 10 (docs/self-reports.md).
+    kind: SelfReportKind
+    # A whole number on the kind's scale.
+    value: int
+    # When the rating applies, between 1900 and 2200.
+    start_at: str
+
+
+class SelfReportInput(_SelfReportInputRequired, total=False):
+    # Your id of the report. Sending it again replaces the stored value. Absent, the
+    # server gives one (a retry then records the report twice, unless it carries the
+    # same Idempotency-Key).
+    id: str
+    # After `start_at`, for a rating of a period (a training session). Absent or null for an instant.
+    end_at: Optional[str]
+    # The IANA time zone the person was in. Empty or null is none.
+    timezone: Optional[str]
+
+
+class SelfReport(TypedDict):
+    id: str
+    # The scale of each kind: feeling, mood, stress, energy, sleep_quality and
+    # muscle_soreness from 1 to 5; exertion and pain from 0 to 10 (docs/self-reports.md).
+    kind: SelfReportKind
+    # The quantity type it is stored as, `reported_<kind>`.
+    type: str
+    value: int
+    start_at: str
+    end_at: Optional[str]
+    timezone: Optional[str]
+
+
+class SelfReportsResponse(TypedDict):
+    # The reports as stored, in request order, each with its id.
+    reports: List[SelfReport]
+    # true when these exact reports had already been received.
+    duplicate: bool
+
+
 class _CreateTimeTagRequestRequired(TypedDict):
     # The controlled vocabulary of time tags; see docs/time-tags.md.
     kind: TimeTagKind
@@ -900,6 +1047,186 @@ class TimeTagPage(TypedDict):
     data: List[TimeTag]
     # Null on the last page.
     next_cursor: Optional[str]
+
+
+class Share(TypedDict):
+    """A share link as its owner reads it. Never the link, its key or the passcode."""
+
+    id: str
+    # Shown to the reader; empty for none.
+    label: str
+    categories: List[ShareCategory]
+    # Inclusive start of the time window.
+    start: str
+    # Exclusive end of the time window.
+    end: str
+    # When the link stops working.
+    expires_at: str
+    # Whether the link needs a passcode.
+    passcode: bool
+    # Wrong or missing passcodes so far; the 10th disables the link.
+    passcode_failures: int
+    # `active`: the link works. `expired`: past `expires_at`. `revoked`: stopped before its
+    # expiry (see `revoked_reason`). `disabled`: too many wrong passcodes.
+    status: Literal["active", "expired", "revoked", "disabled"]
+    revoked_at: Optional[str]
+    revoked_reason: Optional[Literal["owner", "consent", "provider_erased", "passcode_attempts"]]
+    # How many Observations the file holds.
+    observations: int
+    # The size of the encrypted file when it was made.
+    file_bytes: int
+    # How many manifest requests were served the file.
+    accesses: int
+    # The latest of them.
+    last_accessed_at: Optional[str]
+    created_at: str
+
+
+class ShareAccess(TypedDict):
+    at: str
+    # The name the reader gave, as given.
+    recipient: str
+    # `served`: the manifest was answered. `wrong_passcode`: a wrong or missing passcode.
+    # `inactive`: the link no longer worked (listed once a day at most; the audit log
+    # has every one).
+    outcome: Literal["served", "wrong_passcode", "inactive"]
+
+
+class ShareDetail(TypedDict):
+    id: str
+    # Shown to the reader; empty for none.
+    label: str
+    categories: List[ShareCategory]
+    # Inclusive start of the time window.
+    start: str
+    # Exclusive end of the time window.
+    end: str
+    # When the link stops working.
+    expires_at: str
+    # Whether the link needs a passcode.
+    passcode: bool
+    # Wrong or missing passcodes so far; the 10th disables the link.
+    passcode_failures: int
+    # `active`: the link works. `expired`: past `expires_at`. `revoked`: stopped before its
+    # expiry (see `revoked_reason`). `disabled`: too many wrong passcodes.
+    status: Literal["active", "expired", "revoked", "disabled"]
+    revoked_at: Optional[str]
+    revoked_reason: Optional[Literal["owner", "consent", "provider_erased", "passcode_attempts"]]
+    # How many Observations the file holds.
+    observations: int
+    # The size of the encrypted file when it was made.
+    file_bytes: int
+    # How many manifest requests were served the file.
+    accesses: int
+    # The latest of them.
+    last_accessed_at: Optional[str]
+    created_at: str
+    # The 50 latest manifest requests, newest first.
+    recent_accesses: List[ShareAccess]
+
+
+class SharePage(TypedDict):
+    data: List[Share]
+    # Null on the last page.
+    next_cursor: Optional[str]
+
+
+class _CreateShareRequestRequired(TypedDict):
+    categories: List[ShareCategory]
+    # Inclusive start of the window, RFC 3339 or YYYY-MM-DD.
+    start: str
+    # Exclusive end of the window, after `start`.
+    end: str
+    # When the link stops working, in the future and at most 365 days ahead.
+    expires_at: str
+
+
+class CreateShareRequest(_CreateShareRequestRequired, total=False):
+    # When set, the reader must give it. 6 to 64 characters, no control character. The
+    # server keeps a PBKDF2-SHA256 hash of it only.
+    passcode: Optional[str]
+    # Shown to the reader, for example who the link is for. One line.
+    label: str
+
+
+class CreatedShare(TypedDict):
+    id: str
+    # Shown to the reader; empty for none.
+    label: str
+    categories: List[ShareCategory]
+    # Inclusive start of the time window.
+    start: str
+    # Exclusive end of the time window.
+    end: str
+    # When the link stops working.
+    expires_at: str
+    # Whether the link needs a passcode.
+    passcode: bool
+    # Wrong or missing passcodes so far; the 10th disables the link.
+    passcode_failures: int
+    # `active`: the link works. `expired`: past `expires_at`. `revoked`: stopped before its
+    # expiry (see `revoked_reason`). `disabled`: too many wrong passcodes.
+    status: Literal["active", "expired", "revoked", "disabled"]
+    revoked_at: Optional[str]
+    revoked_reason: Optional[Literal["owner", "consent", "provider_erased", "passcode_attempts"]]
+    # How many Observations the file holds.
+    observations: int
+    # The size of the encrypted file when it was made.
+    file_bytes: int
+    # How many manifest requests were served the file.
+    accesses: int
+    # The latest of them.
+    last_accessed_at: Optional[str]
+    created_at: str
+    # The link, `shlink:/` + the base64url payload (`url`, `key`, `exp`, `flag` `P`
+    # with a passcode, `label`). It carries the key: shown only this once.
+    uri: str
+    # The built-in viewer with the link in its fragment (`.../shl/view#shlink:/...`).
+    viewer_url: str
+
+
+class _ShareManifestRequestRequired(TypedDict):
+    # Who opens the link, as the reader names themselves; shown to the owner.
+    recipient: str
+
+
+class ShareManifestRequest(_ShareManifestRequestRequired, total=False):
+    # Required when the link's flag holds P.
+    passcode: str
+    # The longest file to embed; a longer one comes as a `location`.
+    embeddedLengthMax: int
+
+
+class ShareManifest(TypedDict):
+    # A snapshot never changes.
+    status: Literal["finalized"]
+    files: List[ShareManifestFile]
+
+
+class _ShareManifestFileRequired(TypedDict):
+    contentType: Literal["application/fhir+json"]
+    lastUpdated: str
+
+
+class ShareManifestFile(_ShareManifestFileRequired, total=False):
+    # The file, a compact JWE.
+    embedded: str
+    # Where to GET the file, once, within 15 minutes.
+    location: str
+
+
+class _PasscodeProblemRequired(TypedDict):
+    type: str
+    title: str
+    status: int
+    # Wrong passcodes the link still takes before it is disabled.
+    remainingAttempts: int
+
+
+class PasscodeProblem(_PasscodeProblemRequired, total=False):
+    detail: str
+    # The X-Request-Id of the response, to quote when reporting the error.
+    request_id: str
 
 
 class FHIRCoding(TypedDict, total=False):
@@ -1187,7 +1514,7 @@ class _FHIRObservationRequired(TypedDict):
 
 class FHIRObservation(_FHIRObservationRequired, total=False):
     """A FHIR R4 Observation made from one quantity sample, a blood pressure pair, a sleep
-    session, a workout or a daily summary (docs/fhir.md).
+    session, a workout, a daily summary or an ECG recording (docs/fhir.md).
     """
 
     meta: FHIRObservationMeta
@@ -1198,13 +1525,15 @@ class FHIRObservation(_FHIRObservationRequired, total=False):
     effectivePeriod: FHIRObservationEffectivePeriod
     # When the record was ingested (the later of a panel's two samples).
     issued: str
+    # The person, on a self report (category survey); absent otherwise.
+    performer: List[FHIRReference]
     valueQuantity: FHIRQuantity
     # Instead of valueQuantity for a classification (ecg_afib_classification).
     valueCodeableConcept: FHIRObservationValueCodeableConcept
     dataAbsentReason: FHIRCodeableConcept
     device: FHIRReference
-    # The two values of a blood pressure panel, or a sleep session's, workout's or daily
-    # summary's other fields; a field without a value is left out.
+    # The two values of a blood pressure panel, or a sleep session's, workout's, daily
+    # summary's or ECG recording's other fields; a field without a value is left out.
     component: List[FHIRObservationComponent]
 
 
@@ -1240,7 +1569,28 @@ class _FHIRObservationComponentRequired(TypedDict):
 class FHIRObservationComponent(_FHIRObservationComponentRequired, total=False):
     valueQuantity: FHIRQuantity
     valueCodeableConcept: FHIRCodeableConcept
+    # An ECG recording's voltage samples: `data` holds the values, separated by spaces, each
+    # `origin + factor * value` in microvolts (factor is absent, so 1), `period` milliseconds
+    # apart; `E` marks a value that is not a finite number.
+    valueSampledData: FHIRSampledData
     dataAbsentReason: FHIRCodeableConcept
+
+
+class _FHIRSampledDataRequired(TypedDict):
+    origin: FHIRQuantity
+    # Milliseconds between two samples.
+    period: float
+    dimensions: int
+    data: str
+
+
+class FHIRSampledData(_FHIRSampledDataRequired, total=False):
+    """An ECG recording's voltage samples: `data` holds the values, separated by spaces, each
+    `origin + factor * value` in microvolts (factor is absent, so 1), `period` milliseconds
+    apart; `E` marks a value that is not a finite number.
+    """
+
+    factor: float
 
 
 class FHIRQuantity(TypedDict, total=False):
@@ -1271,7 +1621,7 @@ class FHIRBundleLink(TypedDict):
 class _FHIRBundleEntryRequired(TypedDict):
     fullUrl: str
     # A FHIR R4 Observation made from one quantity sample, a blood pressure pair, a sleep
-    # session, a workout or a daily summary (docs/fhir.md).
+    # session, a workout, a daily summary or an ECG recording (docs/fhir.md).
     resource: FHIRObservation
 
 
@@ -1395,6 +1745,18 @@ class IngestHealthConnectResponse(TypedDict):
     duplicate: bool
 
 
+class IngestXiaomiResponse(TypedDict):
+    # Raw object key.
+    key: str
+    duplicate: bool
+
+
+class IngestActivityFilesResponse(TypedDict):
+    # Raw object key.
+    key: str
+    duplicate: bool
+
+
 class ListAuditEventsResponse(TypedDict):
     data: List[AuditEvent]
     # Null on the last page.
@@ -1424,15 +1786,22 @@ __all__ = [
     "ConsentSource",
     "Coverage",
     "CoverageDay",
+    "CreateSelfReportsRequest",
+    "CreateShareRequest",
     "CreateTimeTagRequest",
     "CreateUserRequest",
     "CreateWebhookRequest",
+    "CreatedShare",
     "DailySummary",
     "DailySummaryPage",
     "DeleteConnectionResponse",
     "DeleteProviderDataResponse",
     "DeleteUserResponse",
     "DeletionJob",
+    "ECGRecording",
+    "ECGRecordingDetail",
+    "ECGRecordingPage",
+    "ECGSamples",
     "FHIRBundle",
     "FHIRBundleEntry",
     "FHIRBundleEntrySearch",
@@ -1472,12 +1841,15 @@ __all__ = [
     "FHIRProvenanceEntity",
     "FHIRQuantity",
     "FHIRReference",
+    "FHIRSampledData",
     "GetFreshnessResponse",
     "HRVSeries",
     "HRVSeriesPage",
     "HealthzResponse",
+    "IngestActivityFilesResponse",
     "IngestAppleHealthResponse",
     "IngestHealthConnectResponse",
+    "IngestXiaomiResponse",
     "ListAuditEventsResponse",
     "ListConnectionsResponse",
     "ListConsentHistoryResponse",
@@ -1500,6 +1872,7 @@ __all__ = [
     "OMHDataPointHeaderSchemaId",
     "OMHDataPointPage",
     "PageBase",
+    "PasscodeProblem",
     "Problem",
     "Provenance",
     "Provider",
@@ -1514,10 +1887,22 @@ __all__ = [
     "SamplePage",
     "SampleStats",
     "SampleStatsBucket",
+    "SelfReport",
+    "SelfReportInput",
+    "SelfReportKind",
+    "SelfReportsResponse",
     "SetConsentRequest",
     "SetupRequest",
     "SetupResult",
     "SetupStatus",
+    "Share",
+    "ShareAccess",
+    "ShareCategory",
+    "ShareDetail",
+    "ShareManifest",
+    "ShareManifestFile",
+    "ShareManifestRequest",
+    "SharePage",
     "SleepPhase",
     "SleepPhasePage",
     "SleepSession",

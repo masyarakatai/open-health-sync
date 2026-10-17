@@ -9,6 +9,29 @@ release may change the API, the configuration or the database schema.
 
 ### Added
 
+- Self reports: `POST /v1/users/{id}/self-reports` records a person's own ratings next to their
+  synced data: how they feel, mood, stress, energy, sleep quality and muscle soreness (1 to 5),
+  the effort of a session and pain (0 to 10). It takes a tenant key, or the user's own token
+  with scope `upload`, and honours `Idempotency-Key`. Each report becomes a quantity sample of
+  type `reported_<kind>` from the new `self_report` source, so it is read with `/samples`,
+  `/samples/stats`, the exports, the archive and the MCP tools, consented to and erased like any
+  other source. A report sent again with the same `id` replaces its value. In FHIR, self reports
+  are Observations with category `survey` and the person as `performer`; pain carries LOINC
+  72514-3. Migration 0036 adds the eight types to the catalog. See
+  [docs/self-reports.md](docs/self-reports.md).
+
+- Share links (SMART Health Links, HL7 FHIR IG "SMART Health Cards and Links" STU1): a person
+  shares a time window of some data categories of their own records with whoever they choose.
+  `POST /v1/users/{id}/shares` (tenant key) writes the records as a FHIR R4 Bundle, encrypts it
+  as a JWE (`dir`, `A256GCM`, standard library only) with a fresh key, stores the ciphertext
+  only and answers the `shlink:/` link once. A link expires (at most 365 days), may need a
+  passcode (10 wrong tries disable it), is revoked with `DELETE`, by a consent change that
+  refuses a category it holds or by an erasure of a provider's data, and goes with the user.
+  The public `POST /shl/{manifest_id}` and `GET /shl/file/{ticket}` serve the reader, rate
+  limited per client address (`OHS_RATE_LIMIT_OAUTH`, `route_group="share"`); `/shl/view` is a
+  built-in viewer that decrypts in the browser. Every access is in the audit log (`share.access`,
+  actor `share_link`); webhooks `share.created`, `share.revoked`, `share.accessed`. Migration
+  0037. See [docs/share-links.md](docs/share-links.md).
 - `GET /v1/users/{id}/samples/stats` and the MCP tool `get_sample_stats`: count, sum, mean,
   min and max of a quantity type per hour or per local day in any IANA time zone (`tz`), for
   ranges up to 10,000 intervals. By default (`view=merged`) each interval keeps the best
@@ -30,6 +53,24 @@ release may change the API, the configuration or the database schema.
   `ohs_rate_limited_total`). See [docs/setup.md](docs/setup.md).
 - A reproducible ingestion benchmark against Open Wearables: `bench/openwearables/` and
   [the method and results](docs/benchmarks/open-wearables.md).
+- Xiaomi: `ohs import mi-fitness <folder|copy.zip>` loads the copy of Mi Fitness data that
+  Xiaomi sends from its account privacy center (heart rate, resting heart rate, SpO2, steps,
+  distance, active energy, weight, body fat, VO2 max, sleep with stages, workouts) through the new
+  `POST /v1/ingest/xiaomi` upload route, provider `xiaomi`. Records that Mi Fitness, Mi Health and
+  Zepp Life write to Health Connect now get the source slug `xiaomi`; those of the Zepp app
+  (Amazfit) get `zepp`, and those of the RingConn app `ringconn`. No private Xiaomi API is
+  used. See [docs/connectors/xiaomi.md](docs/connectors/xiaomi.md).
+- Activity files: `ohs import files <file|folder|zip>` imports FIT, GPX and TCX files (and their
+  `.gz` versions) through the new `POST /v1/ingest/activity-files` upload route, provider
+  `activity_files`, one file per part. It reads single files, folders and account exports with
+  zips inside zips: the Garmin account export, the Strava archive, the COROS bulk export, and
+  the files Wahoo, Zwift, Suunto and Polar let a user download. Each file gives workouts with
+  their GPS route, per-second heart rate, and cycling or running power. The source slug comes
+  from the file (FIT manufacturer, TCX or GPX creator: `garmin`, `coros`, `wahoo`, `zwift`...)
+  and the device from the FIT product. A file is uploaded once, keyed by its SHA-256, so a
+  re-run or an overlapping export sends nothing twice; `--dry-run` counts without uploading.
+  No vendor API is used. New dependency: `github.com/muktihari/fit` v0.28.4 (BSD-3-Clause), the
+  FIT decoder. See [docs/connectors/activity-files.md](docs/connectors/activity-files.md).
 - MCP prompts: the prompt library is now served by the MCP server (`prompts/list`,
   `prompts/get`). Twelve ready-made questions about a person's own training, sleep and recovery
   (morning check, taper check, after a break, a new habit, two devices side by side...), each
@@ -60,9 +101,27 @@ release may change the API, the configuration or the database schema.
   [SECURITY.md](SECURITY.md#verifying-releases).
 - Docs: [security model](docs/security-model.md) (assets, trust boundaries, mitigations with
   their code, residual risks) and a [hardening checklist](docs/hardening.md) for production.
+- ECG recordings are served. `GET /v1/users/{id}/ecg` lists a user's Apple Watch and Withings
+  recordings (metadata, paged, `start` and `end`), `GET /v1/users/{id}/ecg/{ecg_id}` returns one
+  with its voltage samples (offsets in seconds, microvolts, at most 100000). The classification
+  is the recording device's own, passed through in its maker's vocabulary with the stored value;
+  nothing is computed from the signal. FHIR: each recording is an Observation `ecg-{id}`
+  (LOINC 11524-6, the waveform as `component.valueSampledData` under MDC 131328), in the
+  Observation search (`code=http://loinc.org|11524-6`), read by id, Provenance and
+  `$everything`; a search page holds at most 100 of them. MCP: `get_ecg_recordings` lists them
+  and summarizes one without its samples. Exports: dataset `ecg` (metadata) and
+  `canonical/ecg.ndjson` in the user archive (with samples). No migration. See
+  [docs/api.md](docs/api.md#ecg-recordings) and [docs/fhir.md](docs/fhir.md#ecg-recordings).
 
 ### Changed
 
+- A canonical `Workout` can name its source and device (`SourceSlug`, `DeviceID`), written to
+  `workouts.source_slug` and `workouts.device_id` (columns that already existed). A connector
+  that leaves them empty gets the previous behavior: the provider as the source, no device.
+- The default workouts order of the merged view puts `garmin`, `coros`, `wahoo`, `suunto` and
+  `zwift` after `polar` and before `strava`: the original recording of a workout, which carries
+  its route and streams, wins over a summary copy of it. A user's own `source-priorities` still
+  take precedence.
 - Merged view reads are faster on a long history: a merged page's lookups of a better ranked
   record are bounded by the page's dates, a page with no end is read through growing windows
   (2, 16, 128 days), and these statements are planned for their parameters at every run (a

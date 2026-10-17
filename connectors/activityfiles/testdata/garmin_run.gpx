@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx creator="Garmin Connect" version="1.1"
+  xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd"
+  xmlns:ns3="http://www.garmin.com/xmlschemas/TrackPointExtension/v1"
+  xmlns="http://www.topografix.com/GPX/1/1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <metadata>
+    <link href="connect.garmin.com"><text>Garmin Connect</text></link>
+    <time>2026-03-02T07:00:00.000Z</time>
+  </metadata>
+  <trk>
+    <name>Invented run</name>
+    <type>running</type>
+    <trkseg>
+      <trkpt lat="45.200000" lon="6.200000">
+        <ele>400.0</ele>
+        <time>2026-03-02T07:00:00.000Z</time>
+        <extensions><ns3:TrackPointExtension><ns3:hr>140</ns3:hr><ns3:cad>84</ns3:cad></ns3:TrackPointExtension></extensions>
+      </trkpt>
+      <trkpt lat="45.200100" lon="6.200100">
+        <ele>401.0</ele>
+        <time>2026-03-02T07:00:01.000Z</time>
+        <extensions><ns3:TrackPointExtension><ns3:hr>141</ns3:hr><ns3:cad>84</ns3:cad></ns3:TrackPointExtension></extensions>
+      </trkpt>
+      <trkpt lat="45.200200" lon="6.200200">
+        <ele>402.0</ele>
+        <time>2026-03-02T07:00:02.000Z</time>
+        <extensions><ns3:TrackPointExtension><ns3:hr>142</ns3:hr><ns3:cad>85</ns3:cad></ns3:TrackPointExtension></extensions>
+      </trkpt>
+    </trkseg>
+    <trkseg>
+      <trkpt lat="45.200300" lon="6.200300">
+        <ele>403.0</ele>
+        <time>2026-03-02T07:00:03.000Z</time>
+        <extensions><ns3:TrackPointExtension><ns3:hr>143</ns3:hr><ns3:cad>85</ns3:cad></ns3:TrackPointExtension></extensions>
+      </trkpt>
+      <trkpt lat="45.200400" lon="6.200400">
+        <ele>404.0</ele>
+        <time>2026-03-02T07:00:04.000Z</time>
+        <extensions><ns3:TrackPointExtension><ns3:hr>144</ns3:hr><ns3:cad>86</ns3:cad></ns3:TrackPointExtension></extensions>
+      </trkpt>
+    </trkseg>
+  </trk>
+</gpx>

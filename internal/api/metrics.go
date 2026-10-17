@@ -39,6 +39,7 @@ func newHTTPMetrics() *httpMetrics {
 			groupInbound:       new(atomic.Int64),
 			groupOAuthCallback: new(atomic.Int64),
 			groupSetup:         new(atomic.Int64),
+			groupShare:         new(atomic.Int64),
 		},
 	}
 }
@@ -112,7 +113,7 @@ func renderMetrics(w io.Writer, m *httpMetrics, etl map[string]int64) {
 	fmt.Fprintf(w, "ohs_audit_write_failures_total %d\n", m.auditFailures.Load())
 	fmt.Fprint(w, "# HELP ohs_rate_limited_total Unauthenticated requests refused with 429 by the rate limiter.\n")
 	fmt.Fprint(w, "# TYPE ohs_rate_limited_total counter\n")
-	for _, g := range []string{groupInbound, groupOAuthCallback, groupSetup} {
+	for _, g := range []string{groupInbound, groupOAuthCallback, groupSetup, groupShare} {
 		fmt.Fprintf(w, "ohs_rate_limited_total{route_group=\"%s\"} %d\n", g, m.rateLimited[g].Load())
 	}
 

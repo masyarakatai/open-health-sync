@@ -23,15 +23,21 @@ from .models import (
     ConsentEvent,
     ConsentSource,
     Coverage,
+    CreateSelfReportsRequest,
+    CreateShareRequest,
     CreateTimeTagRequest,
     CreateUserRequest,
     CreateWebhookRequest,
+    CreatedShare,
     DailySummary,
     DailySummaryPage,
     DeleteConnectionResponse,
     DeleteProviderDataResponse,
     DeleteUserResponse,
     DeletionJob,
+    ECGRecording,
+    ECGRecordingDetail,
+    ECGRecordingPage,
     FHIRBundle,
     FHIRCapabilityStatement,
     FHIRDevice,
@@ -45,8 +51,10 @@ from .models import (
     HRVSeries,
     HRVSeriesPage,
     HealthzResponse,
+    IngestActivityFilesResponse,
     IngestAppleHealthResponse,
     IngestHealthConnectResponse,
+    IngestXiaomiResponse,
     ListAuditEventsResponse,
     ListConnectionsResponse,
     ListConsentHistoryResponse,
@@ -73,10 +81,14 @@ from .models import (
     Sample,
     SamplePage,
     SampleStats,
+    SelfReportsResponse,
     SetConsentRequest,
     SetupRequest,
     SetupResult,
     SetupStatus,
+    Share,
+    ShareDetail,
+    SharePage,
     SleepPhase,
     SleepPhasePage,
     SleepSession,
@@ -1526,6 +1538,74 @@ class OpenHealthSync:
             )
         )
 
+    def list_ecg_recordings(
+        self,
+        user_id: str,
+        *,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+        cursor: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> ECGRecordingPage:
+        """ECG recordings, metadata only.
+
+        ``GET /v1/users/{id}/ecg``
+
+        The user's ECG recordings (Apple Watch, Withings) by start time, then id, without their
+        voltage samples: read one recording for those. `classification` is the label the recording
+        device gave, in its maker's vocabulary, passed through as recorded: Open Health Sync does
+        not compute or check it. `start` and `end` bound `start_date`. See docs/api.md.
+
+        Args:
+            start: Inclusive lower bound, RFC 3339 or YYYY-MM-DD.
+            end: Exclusive upper bound, RFC 3339 or YYYY-MM-DD. Must not be before start.
+            cursor: The next_cursor of the previous page.
+        """
+        return self._request(
+            "GET",
+            f"/v1/users/{_path(user_id)}/ecg",
+            query={
+                "start": start,
+                "end": end,
+                "cursor": cursor,
+                "limit": limit,
+            },
+        )
+
+    def iter_ecg_recordings(
+        self,
+        user_id: str,
+        *,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> Iterator[ECGRecording]:
+        """Every item of :meth:`list_ecg_recordings`, page after page, following ``next_cursor``."""
+        return paginate(
+            lambda cursor: self.list_ecg_recordings(
+                user_id,
+                start=start,
+                end=end,
+                cursor=cursor,
+                limit=limit,
+            )
+        )
+
+    def get_ecg_recording(self, user_id: str, ecg_id: int) -> ECGRecordingDetail:
+        """One ECG recording with its voltage samples.
+
+        ``GET /v1/users/{id}/ecg/{ecg_id}``
+
+        One recording and its stored voltage samples, in offset order, as two parallel arrays:
+        `offsets_s` (seconds from `start_date`) and `voltages_uv` (microvolts), single lead. At
+        most 100000 samples are returned (a recording holds about 15360); `truncated` is true when
+        more are stored. A recording that is not the user's, or a user of another tenant, is a 404.
+        """
+        return self._request(
+            "GET",
+            f"/v1/users/{_path(user_id)}/ecg/{_path(ecg_id)}",
+        )
+
     def get_source_priorities(self, user_id: str) -> SourcePriorities:
         """The order of sources the merged view ranks by.
 
@@ -1723,6 +1803,131 @@ class OpenHealthSync:
             expect="none",
         )
 
+    def create_self_reports(
+        self,
+        user_id: str,
+        body: CreateSelfReportsRequest,
+        *,
+        idempotency_key: Optional[str] = None,
+    ) -> SelfReportsResponse:
+        """Record the user's own ratings.
+
+        ``POST /v1/users/{id}/self-reports``
+
+        1 to 100 self reports: how the person feels, their mood, stress, energy, sleep
+        quality, muscle soreness, the effort of a session or pain, each a whole number on the
+        kind's scale (docs/self-reports.md). Each report is stored as a quantity sample of type
+        `reported_<kind>` from the source `self_report`, read back like any other sample
+        (`/samples`, `/samples/stats`, FHIR with category `survey`, exports). Sending a report
+        again with the same `id` replaces its value, also when `start_at` moved. The reports
+        go through the same processing as an upload, so the answer is 202. A tenant key records
+        reports for any user of the tenant; a user token with scope `upload` only for its own
+        user, and another user is a 404. Values are health data: never logged, never quoted in
+        an error. While the user's self reports are being deleted the answer is 409 and nothing
+        is kept.
+        """
+        return self._request(
+            "POST",
+            f"/v1/users/{_path(user_id)}/self-reports",
+            json_body=body,
+            idempotency_key=idempotency_key,
+        )
+
+    def create_share(self, user_id: str, body: CreateShareRequest) -> CreatedShare:
+        """Make a share link of the user's records.
+
+        ``POST /v1/users/{id}/shares``
+
+        A SMART Health Link (HL7 FHIR IG "SMART Health Cards and Links", STU1) that the person
+        gives to whoever they choose. The server reads the user's records of `categories` in
+        `[start, end)` (the merged view, as the FHIR routes serve them), writes them as one
+        FHIR R4 `collection` Bundle (a Patient with no identifier, the Observations, the
+        Devices), compresses it (DEFLATE) and encrypts it as a compact JWE (`alg` `dir`,
+        `enc` `A256GCM`) with a fresh random 256-bit key. It stores the ciphertext only. The
+        answer holds the link (`uri`) and the built-in viewer's link (`viewer_url`), each
+        carrying the key, this once: the server keeps neither and cannot show them again.
+
+        A category holds every metric the consent model files under it. Records of a source
+        whose consent refuses the category, or whose purge is pending, are left out. The
+        snapshot is fixed when it is made (no `L` flag): later records are not added. At most
+        50000 records; more is a 400. A sleep session's, a workout's or a daily summary's
+        figures of another category (a resting heart rate is `heart`) are kept only on the
+        terms of their own category. The records are read and the share stored in one
+        transaction that holds the user and their consent: a consent change or an erasure
+        that starts meanwhile waits, then revokes the share if it holds what they remove.
+
+        The route takes no `Idempotency-Key`: a stored response would keep the key. Sent with
+        `Cache-Control: no-store`. See docs/share-links.md.
+        """
+        return self._request(
+            "POST",
+            f"/v1/users/{_path(user_id)}/shares",
+            json_body=body,
+        )
+
+    def list_shares(
+        self,
+        user_id: str,
+        *,
+        cursor: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> SharePage:
+        """The user's share links.
+
+        ``GET /v1/users/{id}/shares``
+
+        Oldest first, every status. Never a link, a key or a passcode: the server does not
+        keep them.
+
+        Args:
+            cursor: The next_cursor of the previous page.
+        """
+        return self._request(
+            "GET",
+            f"/v1/users/{_path(user_id)}/shares",
+            query={
+                "cursor": cursor,
+                "limit": limit,
+            },
+        )
+
+    def iter_shares(self, user_id: str, *, limit: Optional[int] = None) -> Iterator[Share]:
+        """Every item of :meth:`list_shares`, page after page, following ``next_cursor``."""
+        return paginate(
+            lambda cursor: self.list_shares(
+                user_id,
+                cursor=cursor,
+                limit=limit,
+            )
+        )
+
+    def get_share(self, user_id: str, share_id: str) -> ShareDetail:
+        """One share link, with its latest accesses.
+
+        ``GET /v1/users/{id}/shares/{share_id}``
+
+        The share and its 50 latest manifest requests, newest first, each with the name the
+        reader gave and the outcome.
+        """
+        return self._request(
+            "GET",
+            f"/v1/users/{_path(user_id)}/shares/{_path(share_id)}",
+        )
+
+    def revoke_share(self, user_id: str, share_id: str) -> None:
+        """Revoke a share link.
+
+        ``DELETE /v1/users/{id}/shares/{share_id}``
+
+        The link stops working at once and its file is removed; the share stays listed as
+        `revoked` (reason `owner`). Revoking a share that is no longer active changes nothing.
+        """
+        return self._request(
+            "DELETE",
+            f"/v1/users/{_path(user_id)}/shares/{_path(share_id)}",
+            expect="none",
+        )
+
     def search_fhir_observations(
         self,
         user_id: str,
@@ -1743,11 +1948,13 @@ class OpenHealthSync:
         The user's records as one FHIR R4 (4.0.1) `searchset` Bundle of Observations,
         `Content-Type: application/fhir+json`: quantity samples (`qs-` ids), blood pressure
         panels pairing a systolic and a diastolic sample (`bp-`), sleep sessions (`sleep-`),
-        workouts (`workout-`) and daily summaries (`daily-`), merged in time order (a
-        sample's start, a bedtime, a workout's start, a day at midnight UTC), then by kind
-        and id. Paged like every list: the Bundle's `next` link carries the cursor, and
-        there is no `next` link on the last page; `total` is left out. A blood pressure pair
-        is never split across pages, and its two samples are not listed on their own.
+        workouts (`workout-`), daily summaries (`daily-`) and ECG recordings with their
+        voltage samples (`ecg-`), merged in time order (a sample's start, a bedtime, a
+        workout's start, a day at midnight UTC, a recording's start), then by kind and id.
+        Paged like every list: the Bundle's `next` link carries the cursor, and there is no
+        `next` link on the last page; `total` is left out. A blood pressure pair is never
+        split across pages, and its two samples are not listed on their own. A page holds at
+        most 100 ECG recordings: one that reaches them ends there, with a `next` link.
         Vital signs meet the R4 vital signs profiles they claim in `meta.profile`. The
         mapping (codes, units, categories, provenance and limits) is in docs/fhir.md. In the
         merged view (the default) a record another source covers better is left out, and a
@@ -1761,16 +1968,18 @@ class OpenHealthSync:
                 outside the quantity type catalog is a 400 (unless this user has samples of it).
             code: A FHIR token `system|code` matched against `Observation.code`: a LOINC code
                 (`http://loinc.org|8867-4`; 85354-9, 8480-6 and 8462-4 find the blood pressure
-                panels, 93832-4 the sleep sessions, 55411-3 the workouts), a quantity type
+                panels, 93832-4 the sleep sessions, 55411-3 the workouts, 11524-6 the ECG
+                recordings), a quantity type
                 (`https://github.com/soma-intelligence/open-health-sync/fhir/CodeSystem/quantity-type|heart_rate`,
                 like `type`), or a record type
                 (`https://github.com/soma-intelligence/open-health-sync/fhir/CodeSystem/record-type|`
-                `blood_pressure`, `sleep_session`, `workout` or `daily_summary`). One value; other
+                `blood_pressure`, `sleep_session`, `workout`, `daily_summary` or `ecg_recording`). One value; other
                 systems are a 400. A code no Observation carries is an empty Bundle.
             category: An HL7 observation category code, bare or as
                 `http://terminology.hl7.org/CodeSystem/observation-category|code`: `vital-signs`,
-                `laboratory` or `activity` (activity samples, workouts and daily summaries). One
-                value. Another code of that system is an empty Bundle; anything else is a 400.
+                `laboratory`, `activity` (activity samples, workouts and daily summaries) or `survey`
+                (self reports). One value. Another code of that system is an empty Bundle; anything
+                else is a 400.
             start: Inclusive lower bound, RFC 3339 or YYYY-MM-DD.
             end: Exclusive upper bound, RFC 3339 or YYYY-MM-DD. Must not be before start.
             view: `merged` (the default): when several sources recorded the same thing (a ring and a
@@ -2045,7 +2254,7 @@ class OpenHealthSync:
     def export_dataset(
         self,
         user_id: str,
-        dataset: Literal["samples", "category-samples", "sleep", "workouts", "nutrition", "daily"],
+        dataset: Literal["samples", "category-samples", "sleep", "workouts", "nutrition", "daily", "ecg"],
         *,
         format: Optional[Literal["csv", "parquet"]] = None,
         type: Optional[str] = None,
@@ -2059,7 +2268,8 @@ class OpenHealthSync:
         Every record of one list in `[start, end)`, as one file streamed in a single response
         (`Content-Disposition: attachment`). The columns are the members of the list's JSON
         records, in the same order and with the same names and values: times in UTC, a missing
-        value empty (CSV) or null (Parquet), `metadata` (and the daily `sources`) as JSON text. `samples` holds every
+        value empty (CSV) or null (Parquet), `metadata` (and the daily `sources`) as JSON text. `ecg` holds the
+        recordings' metadata, not their voltage samples (in the archive and the FHIR Observation). `samples` holds every
         quantity type unless `type` names one. The file is not paged: `cursor` and `limit` are
         a 400. A failure once the file has started cuts the connection, so a truncated file
         never looks complete. See docs/exports.md.
@@ -2093,7 +2303,8 @@ class OpenHealthSync:
         `user.json` (the user and its provider connections, never a token),
         `canonical/<list>.ndjson` (every record of samples, category-samples, sleep,
         sleep-phases, workouts, workout-routes, nutrition and daily, the same JSON as the list
-        items, one per line), `fhir/bundle.json` (a FHIR R4 `collection` Bundle of every
+        items, one per line, and ecg, each ECG recording with its voltage samples as
+        `GET /v1/users/{id}/ecg/{ecg_id}` returns it), `fhir/bundle.json` (a FHIR R4 `collection` Bundle of every
         Observation), `omh/data-points.ndjson` (the Open mHealth data points) and `raw/...`
         (every raw payload of the user, byte for byte, under its path below the user). A
         tenant key reads any user of the tenant; a user token with scope `read` reads only its
@@ -2175,6 +2386,94 @@ class OpenHealthSync:
         return self._request(
             "POST",
             "/v1/ingest/health-connect",
+            headers={
+                "X-OHS-Type": ohs_type,
+                "X-OHS-Day": ohs_day,
+                "X-OHS-Batch": ohs_batch,
+                "X-OHS-Part": ohs_part,
+            },
+            data=body,
+            content_type="application/gzip",
+        )
+
+    def ingest_xiaomi(
+        self,
+        body: bytes,
+        *,
+        ohs_type: str,
+        ohs_day: str,
+        ohs_batch: str,
+        ohs_part: int,
+    ) -> IngestXiaomiResponse:
+        """Upload one part of a Mi Fitness data copy.
+
+        ``POST /v1/ingest/xiaomi``
+
+        One gzip NDJSON part (at most 64 MiB, never truncated), one row of the Mi Fitness data
+        copy per line, each a JSON object with a `table` and a `key` (the line format is in
+        docs/connectors/xiaomi.md; `ohs import mi-fitness` writes it). Same headers, limits and
+        answers as the Apple Health upload.
+        Re-sending the same part is safe: the answer is 200 with `duplicate: true`. Other
+        bytes under a (day, batch, part) already stored are a 409, and so is a part sent while
+        this provider's data is being deleted for the user (nothing is kept; send it again
+        once the deletion job is done). Each instance processes a
+        bounded number of uploads at once; above it the answer is 503 with `Retry-After`.
+
+        Needs a user token (ohs_ut_) as the client's api_key.
+
+        Args:
+            ohs_type: Sent as the X-OHS-Type header. Export table of the lines of the part (fitness_data or sport_record).
+        """
+        return self._request(
+            "POST",
+            "/v1/ingest/xiaomi",
+            headers={
+                "X-OHS-Type": ohs_type,
+                "X-OHS-Day": ohs_day,
+                "X-OHS-Batch": ohs_batch,
+                "X-OHS-Part": ohs_part,
+            },
+            data=body,
+            content_type="application/gzip",
+        )
+
+    def ingest_activity_files(
+        self,
+        body: bytes,
+        *,
+        ohs_type: Literal["fit", "gpx", "tcx"],
+        ohs_day: str,
+        ohs_batch: str,
+        ohs_part: int,
+    ) -> IngestActivityFilesResponse:
+        """Upload one activity file (FIT, GPX or TCX).
+
+        ``POST /v1/ingest/activity-files``
+
+        One gzip NDJSON part (at most 64 MiB, never truncated) holding one activity file on one
+        line: `{"type":"fit","data":"<base64 of the file>"}`, `type` being `fit`, `gpx` or `tcx`
+        and equal to `X-OHS-Type`. The file is at most 20 MiB once decoded (the line format is in
+        docs/connectors/activity-files.md; `ohs import files` writes it). The part is refused
+        with 400, and nothing is stored, unless the file parses as an activity that starts at
+        most 48 hours from now: a FIT course, settings or monitoring file, a GPX route without
+        times or a file with a broken CRC is refused. Same headers, limits and answers as the
+        Apple Health upload.
+        Re-sending the same part is safe: the answer is 200 with `duplicate: true`. Other
+        bytes under a (day, batch, part) already stored are a 409, and so is a part sent while
+        this provider's data is being deleted for the user (nothing is kept; send it again
+        once the deletion job is done). Each instance processes a
+        bounded number of uploads at once; above it the answer is 503 with `Retry-After`.
+
+        Needs a user token (ohs_ut_) as the client's api_key.
+
+        Args:
+            ohs_type: Sent as the X-OHS-Type header. Format of the file in the part.
+            ohs_day: Sent as the X-OHS-Day header. UTC day the activity starts (`ohs import files` sends it; the server does not check it).
+            ohs_batch: Sent as the X-OHS-Batch header. `ohs import files` sends `af1-` and the first 32 hex digits of the file's SHA-256.
+        """
+        return self._request(
+            "POST",
+            "/v1/ingest/activity-files",
             headers={
                 "X-OHS-Type": ohs_type,
                 "X-OHS-Day": ohs_day,

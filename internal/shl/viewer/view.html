@@ -1,0 +1,54 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<title>Shared health data</title>
+<link rel="stylesheet" href="view/view.css">
+<script type="module" src="view/view.mjs"></script>
+</head>
+<body>
+<header class="bar">
+  <span class="brand">Shared health data</span>
+</header>
+<main id="main">
+  <section id="open">
+    <h1 id="share-title">Data shared with you</h1>
+    <p class="muted">Someone shared some of their own health data with you through this link. It was
+    recorded by their devices and apps and is shown as recorded, with no interpretation. The data
+    is decrypted in this browser: the key is in the link and is never sent to the server.</p>
+    <dl id="share-facts" class="facts" hidden>
+      <dt>Link expires</dt><dd id="share-exp"></dd>
+    </dl>
+
+    <form id="open-form" autocomplete="off" hidden>
+      <label for="recipient">Your name</label>
+      <p id="recipient-hint" class="muted hint">The person who shared this sees who opened it, by this name.</p>
+      <input id="recipient" name="recipient" type="text" autocomplete="name" maxlength="256" required
+        aria-describedby="recipient-hint">
+      <div id="passcode-field" hidden>
+        <label for="passcode">Passcode</label>
+        <p id="passcode-hint" class="muted hint">The person who shared this link gave you the passcode
+        separately.</p>
+        <input id="passcode" name="passcode" type="password" autocomplete="off" spellcheck="false"
+          maxlength="64" aria-describedby="passcode-hint">
+      </div>
+      <button id="open-submit" type="submit">Open the shared data</button>
+    </form>
+
+    <p id="status" class="muted" role="status" aria-live="polite"></p>
+    <p id="error" class="bad" role="alert"></p>
+  </section>
+
+  <section id="data" hidden aria-labelledby="data-title">
+    <h2 id="data-title" tabindex="-1">Records</h2>
+    <p id="data-summary" class="muted"></p>
+    <div id="tables"></div>
+  </section>
+</main>
+<noscript><p>This page needs JavaScript to decrypt the shared data.</p></noscript>
+</body>
+</html>

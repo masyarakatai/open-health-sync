@@ -16,8 +16,8 @@ the JSON the API returns uses snake_case names, and some differ (for example
 
 The read API returns these records with the provenance fields `provider`,
 `source`, `device` and `ingested_at`; see [api.md](api.md). ECG
-recordings, ECG voltage samples and heartbeat (RR interval) samples are stored but
-have no read route yet: they are planned.
+recordings are served with their voltage samples by `/ecg`, heartbeat (RR
+interval) samples by `/rr-intervals` and `/hrv`.
 
 ## Canonical types
 
@@ -128,6 +128,8 @@ Stored in `ohs_data.workouts`.
 | `TenantID` | `string` | Owning tenant. Set by the pipeline. |
 | `UserID` | `string` | Owning end user. Set by the pipeline. |
 | `Provider` | `string` |  |
+| `SourceSlug` | `string` | The vendor that recorded the workout. Empty means the provider; the column is never null. |
+| `DeviceID` | `string` | The device that recorded the workout (`Garmin edge_530`). Null when the provider does not say. |
 | `ExternalID` | `string` |  |
 | `ActivityType` | `string` |  |
 | `StartDate` | `time.Time` |  |
@@ -194,7 +196,7 @@ Stored in `ohs_data.nutrition_logs`.
 
 ECGRecording represents ECG metadata (voltage data is in ECGVoltageSample).
 
-Stored in `ohs_data.ecg_recordings`. No read route yet (planned): stored, not served by the API or MCP.
+Stored in `ohs_data.ecg_recordings`.
 
 | Field | Type | Note |
 |---|---|---|
@@ -215,7 +217,7 @@ Stored in `ohs_data.ecg_recordings`. No read route yet (planned): stored, not se
 
 ECGVoltageSample represents a single voltage measurement from an ECG recording.
 
-Stored in `ohs_data.ecg_samples`. No read route yet (planned): stored, not served by the API or MCP.
+Stored in `ohs_data.ecg_samples`.
 
 | Field | Type | Note |
 |---|---|---|
@@ -383,6 +385,14 @@ stored as 0 to 100, not as fractions.
 | `readiness_hrv_balance` | `index` |
 | `readiness_score` | `score` |
 | `recovery_high_time` | `min` |
+| `reported_energy` | `score` |
+| `reported_exertion` | `score` |
+| `reported_feeling` | `score` |
+| `reported_mood` | `score` |
+| `reported_muscle_soreness` | `score` |
+| `reported_pain` | `score` |
+| `reported_sleep_quality` | `score` |
+| `reported_stress` | `score` |
 | `respiratory_rate` | `bpm` |
 | `resting_heart_rate` | `bpm` |
 | `running_ground_contact_time` | `ms` |

@@ -27,6 +27,8 @@ func (s *server) mountReads(mux *http.ServeMux) {
 	s.tenantRoute(mux, "GET /v1/users/{id}/rr-intervals", rrRoute(s, read.RRIntervals))
 	s.tenantRoute(mux, "GET /v1/users/{id}/hrv", rrRoute(s, read.HRV))
 	s.tenantRoute(mux, "GET /v1/users/{id}/menstrual-cycles", listRoute(s, read.MenstrualCycles))
+	s.tenantRoute(mux, "GET /v1/users/{id}/ecg", listRoute(s, read.ECGRecordings))
+	s.tenantRoute(mux, "GET /v1/users/{id}/ecg/{ecg_id}", s.ecgRecording)
 	s.tenantRoute(mux, "GET /v1/users/{id}/coverage", s.coverage)
 }
 
@@ -101,6 +103,26 @@ func rrRoute[T any](s *server, fn func(context.Context, read.Querier, uuid.UUID,
 		}
 		writeJSON(w, http.StatusOK, newPage(pg.Records, pg.NextCursor))
 	}
+}
+
+// ecgRecording serves one ECG recording of the user with its voltage
+// samples.
+func (s *server) ecgRecording(w http.ResponseWriter, r *http.Request) {
+	p, user, ok := pathUser(w, r)
+	if !ok {
+		return
+	}
+	id, err := strconv.ParseInt(r.PathValue("ecg_id"), 10, 64)
+	if err != nil {
+		notFound(w, "ECG recording")
+		return
+	}
+	rec, err := read.ECGRecordingByID(r.Context(), s.d.Pool, p.TenantID, user, id)
+	if err != nil {
+		readError(w, r, err, "ECG recording")
+		return
+	}
+	writeJSON(w, http.StatusOK, rec)
 }
 
 func readError(w http.ResponseWriter, r *http.Request, err error, what string) {

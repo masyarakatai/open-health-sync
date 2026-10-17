@@ -36,7 +36,7 @@ Commands:
   admin     create tenants, create, list and revoke their API keys, personal setup,
             re-seal stored secrets after an encryption key rotation
   mcp       serve MCP on stdin and stdout for a local agent (Claude Desktop, Claude Code)
-  import    load an existing history from a file export: apple-health
+  import    load an existing history from a file export: apple-health, mi-fitness, files
   seed      fill an instance with synthetic demo data: seed --demo
   version   print the version and commit
   help      print this help, or the help of one command: ohs help <command>
@@ -125,6 +125,8 @@ every call to the instance's /mcp endpoint and needs no database.
 Setup for each client: docs/mcp.md.
 `,
 	"import": `usage: ohs import apple-health <export.zip|export.xml> [flags]
+       ohs import mi-fitness <folder|copy.zip> [flags]
+       ohs import files <file|folder|zip> [flags]
 
 Loads the history of an Apple Health export ("Export All Health Data" in the
 Health app on the iPhone) into an instance, through the same upload API an
@@ -144,8 +146,23 @@ it is, in constant memory, and needs no database.
   --concurrency N   parts uploaded at once (default 4)
   --allow-http      accept a plain http URL off localhost
 
-Prints counts only, never a health value or the token. Details:
-docs/connectors/apple-health.md.
+mi-fitness loads the copy of Mi Fitness data that Xiaomi sends from its
+account privacy center (account.xiaomi.com, Privacy, Manage your data):
+readings, sleep and workouts of Xiaomi bands and watches. Pass the folder of
+CSV files, or a zip of it. --tz does not apply: readings carry their own UTC
+offset, and --since days are UTC days.
+
+files loads activity files (.fit, .gpx, .tcx, and their .gz versions): one
+file, a folder, or a zip, zips inside it included, such as a Garmin account
+export ("Export Your Data"), a Strava archive, or files downloaded from
+COROS, Wahoo, Suunto, Polar or Zwift. Each file is uploaded once: running it
+again, or importing another export holding the same file, sends nothing
+twice. --since keeps activities starting on or after that UTC day. --tz and
+--batch do not apply.
+
+Prints counts only, never a health value, a file name or the token. Details:
+docs/connectors/apple-health.md, docs/connectors/xiaomi.md and
+docs/connectors/activity-files.md.
 `,
 	"seed": `usage: ohs seed --demo [flags]
 

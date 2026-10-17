@@ -244,6 +244,13 @@ const sources: Record<string, Target[]> = {
       description: "Mark the periods that give context to the data: illness, travel, jet lag and more.",
     },
   ],
+  "docs/self-reports.md": [
+    {
+      page: "(guides)/guides/self-reports",
+      title: "Self reports",
+      description: "Record how a person feels, their mood, stress, energy, effort or pain next to their synced data.",
+    },
+  ],
   "docs/audit-log.md": [
     {
       page: "(guides)/guides/audit-log",
@@ -256,6 +263,13 @@ const sources: Record<string, Target[]> = {
       page: "(guides)/guides/consent",
       title: "Consent",
       description: "Per user, per source and per data category: what is stored, revocation and its purge.",
+    },
+  ],
+  "docs/share-links.md": [
+    {
+      page: "(guides)/guides/share-links",
+      title: "Share links",
+      description: "Let a person share a window of their own data through an encrypted, expiring SMART Health Link.",
     },
   ],
   "docs/server-sdks.md": [
@@ -354,6 +368,8 @@ const icons: Record<string, string> = {
   "(guides)/guides/webhooks": "Webhook",
   "(guides)/guides/menstrual-cycles": "CalendarDays",
   "(guides)/guides/time-tags": "Tag",
+  "(guides)/guides/self-reports": "Smile",
+  "(guides)/guides/share-links": "Share2",
   "(guides)/recipes/index": "Sparkles",
   "(guides)/recipes/sleep-report": "Moon",
   "(guides)/recipes/heart-trend": "HeartPulse",

@@ -1,0 +1,3 @@
+Uid,Sid,Key,Time,Category,Value,UpdateTime
+1000000001,2000000001,outdoor_running,1772964000,running,"{""time"":1772964000,""timezone"":4,""version"":4,""start_time"":1772964000,""end_time"":1772966100,""duration"":2040,""distance"":5230,""calories"":356,""total_cal"":402,""avg_hrm"":148,""max_hrm"":171,""min_hrm"":98,""steps"":5400,""rise_height"":32,""vo2_max"":46}",1772966500
+1000000001,2000000001,dumbbell_training,1772971200,dumbbell_training,"{""time"":1772971200,""timezone"":4,""version"":4,""start_time"":1772971200,""end_time"":1772973000,""duration"":1800,""calories"":150,""avg_hrm"":112,""max_hrm"":140}",1772973500
