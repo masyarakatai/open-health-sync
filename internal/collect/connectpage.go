@@ -542,6 +542,7 @@ func minutesLeft(d time.Duration) int {
 var providerNames = map[string]string{
 	"activity_files": "Activity files",
 	"apple_health":   "Apple Health",
+	"bluetooth":      "Bluetooth devices",
 	"dexcom":         "Dexcom",
 	"fitbit":         "Fitbit",
 	"health_connect": "Health Connect",
