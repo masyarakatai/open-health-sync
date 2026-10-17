@@ -57,6 +57,13 @@ const (
 	// provider classed as high stress or high recovery (Oura daily_stress).
 	QTStressHighTime   = "stress_high_time"
 	QTRecoveryHighTime = "recovery_high_time"
+	// moderate_activity_time and vigorous_activity_time are the minutes of a
+	// day a provider classed as moderate or vigorous activity (Oura medium and
+	// high activity, Withings moderate and intense), each in the provider's
+	// own classes. Kept apart rather than summed: guidelines weigh them
+	// differently.
+	QTModerateActivityTime = "moderate_activity_time"
+	QTVigorousActivityTime = "vigorous_activity_time"
 
 	// A person's own ratings, recorded through the self report route: whole
 	// numbers on a fixed scale (SelfReportScales), unit "score". They are

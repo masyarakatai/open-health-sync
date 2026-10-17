@@ -198,9 +198,31 @@ It is left out when none of them describes the measurement, rather than set to a
 |---|---|
 | `vital-signs` | `heart_rate`, `resting_heart_rate`, `respiratory_rate`, `oxygen_saturation`, `body_temperature`, `blood_pressure_systolic`, `blood_pressure_diastolic`, `body_mass`, `height`, `body_mass_index`, and the blood pressure panels |
 | `laboratory` | `blood_glucose`, `blood_alcohol_content` |
-| `activity` | steps, flights, distances, active energy, Apple exercise, move and stand time, push count, physical effort, walking and running speed, running and cycling power, running form metrics, strain and workout strain, and the other activity counts of the catalog (and their intraday variants); workouts; daily summaries |
+| `activity` | steps, flights, distances, active energy, Apple exercise, move and stand time, moderate and vigorous activity time, push count, physical effort, walking and running speed, running and cycling power, running form metrics, strain and workout strain, and the other activity counts of the catalog (and their intraday variants); workouts; daily summaries |
 | `survey` | the [self reports](self-reports.md): `reported_feeling`, `reported_mood`, `reported_stress`, `reported_energy`, `reported_sleep_quality`, `reported_muscle_soreness`, `reported_exertion`, `reported_pain`; each also carries `performer`, the Patient, since the person made the observation |
 | none | everything else: body composition, heart rate variability, VO2 max, the other temperatures, readiness scores, audio exposure, respiratory function, insulin, falls, UV, electrodermal activity, vascular age, pulse wave velocity, names outside the catalog, and sleep sessions (no HL7 category describes sleep) |
+
+### Physical activity
+
+The Observations that are measures of the HL7
+[Physical Activity IG](https://hl7.org/fhir/us/physical-activity/) (STU1, 1.0.0) follow it: its
+LOINC codes, and its `PhysicalActivity` category (code system
+`http://hl7.org/fhir/us/physical-activity/CodeSystem/pa-temporary-codes`) as a second category
+next to `activity`.
+
+| Record | IG measure |
+|---|---|
+| `moderate_activity_time` sample | LOINC 77592-4 (moderate physical activity), `min`, over the provider's day |
+| `vigorous_activity_time` sample | LOINC 77593-2 (vigorous physical activity), `min`, over the provider's day |
+| workout | LOINC 55411-3 (exercise duration), with the activity (73985-4), mean heart rate (55425-3) and maximum heart rate (55426-1) as components |
+| daily summary | its `total_kcal` component is LOINC 41979-6 (calories burned in 24 hours), its `step_count` 41950-7 and its `resting_hr` 40443-4 |
+
+These Observations pass the IG's activity measure profile
+(`pa-observation-activity-measure`) in CI (see [Validation](#validation)), but `meta.profile`
+does not claim it: the IG derives from US Core 3.1.1 and requires a US Core Patient (a name and
+a gender), which the [Patient](#patient) does not carry. The moderate and vigorous minutes are
+each provider's own classes (Oura's medium and high activity, Withings' moderate and intense),
+kept apart, not summed.
 
 ### Glucose from a CGM
 
@@ -293,7 +315,7 @@ One workout is one Observation of its duration.
 |---|---|
 | `id` | `workout-` and the row id |
 | `code` | LOINC 55411-3 (exercise duration), then the record type `workout`; `text` is the activity (`trail running workout`) |
-| `category` | `activity` |
+| `category` | `activity`, then the [Physical Activity](#physical-activity) IG's `PhysicalActivity` |
 | `effectivePeriod` | `start_date` to `end_date` |
 | `valueQuantity` | `duration_s` in `s`; `dataAbsentReason` `unknown` when it is not known |
 | `component` | the activity type, then each measurement that has a value |
@@ -303,7 +325,7 @@ One workout is one Observation of its duration.
 | `activity_type` | LOINC 73985-4 (exercise activity) | `valueCodeableConcept` in the workout activity code system (`running`, `cycling`...) |
 | `active_energy_kcal` | LOINC 41981-2 (calories burned) | `kcal` |
 | `distance_m` | component code system only | `m` |
-| `avg_heart_rate`, `max_heart_rate` | component code system only | `/min` |
+| `avg_heart_rate`, `max_heart_rate` | LOINC 55425-3 and 55426-1 (mean and maximum heart rate during the activity) | `/min` |
 | `avg_speed_mps` | component code system only | `m/s` |
 | `elevation_gain_m` | component code system only | `m` |
 | `vo2_max` | component code system only | `mL/kg/min` |
@@ -327,7 +349,8 @@ Observation per day rather than per metric keeps one id per row and one place in
 | `active_kcal` | LOINC 41981-2 | `kcal` |
 | `resting_hr` | LOINC 40443-4 | `/min` |
 | `hrv_avg_ms` | LOINC 80404-7 | `ms` |
-| `total_kcal`, `distance_m` | component code system only | `kcal`, `m` |
+| `total_kcal` | LOINC 41979-6 (calories burned in 24 hours) | `kcal` |
+| `distance_m` | component code system only | `m` |
 | `floors_climbed` | component code system only | `{floors}` |
 | `readiness_score`, `activity_score`, `sleep_score`, `recovery_score`, `strain_score` | component code system only | `{score}` |
 
@@ -509,7 +532,7 @@ No custom extension is used, so a validator needs nothing beyond the R4 specific
 Each mapping case has a golden file in [internal/fhir/testdata](../internal/fhir/testdata): a
 profiled vital sign of each kind, resting heart rate, an unpaired systolic sample, a blood
 pressure panel, an interval, a laboratory value, a type without LOINC code, a type and unit
-outside the catalog, a NaN value, a sleep session, a workout, a daily summary on a daylight
+outside the catalog, a NaN value, moderate and vigorous activity minutes, a sleep session, a workout, a daily summary on a daylight
 saving day, an ECG recording with its waveform, searchset Bundles (vital signs, every kind of record, empty), a Patient with and
 without identifier, a Device with every field and one with a model only, the Provenance of a
 sample, of a blood pressure panel and of a daily summary (no device), the Device and Provenance
@@ -519,7 +542,10 @@ no empty array, object or string, which FHIR JSON forbids. The contract tests ch
 files against `api/openapi.yaml`, each against the route that answers it.
 
 `make fhir-validate` (`scripts/fhir-validate.sh`) runs the official HL7 validator on the golden
-files with `-version 4.0.1`. It needs Java 17 or later and the network. CI runs it
+files with `-version 4.0.1`, then on the [Physical Activity](#physical-activity) golden files (the
+moderate and vigorous minutes and the workout) a second time with the IG loaded
+(`-ig hl7.fhir.us.physical-activity#1.0.0`) against its activity measure profile. It needs Java 17
+or later and the network. CI runs it
 (`.github/workflows/fhir-validate.yml`, Java 21) on every pull request and push to `main` that
 changes `internal/fhir`, the script or the workflow, and fails on any error. The warnings left
 are expected:

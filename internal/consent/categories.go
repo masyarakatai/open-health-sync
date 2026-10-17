@@ -68,7 +68,7 @@ var rules = []rule{
 		"visceral_fat_rating", "waist_circumference"},
 		prefixes: []string{"body_", "skin_temperature", "wrist_temperature"}, contains: []string{"temperature"}},
 	{category: Activity, exact: []string{"strain", "workout_strain", "push_count", "physical_effort",
-		"reported_exertion", "reported_muscle_soreness"},
+		"reported_exertion", "reported_muscle_soreness", "moderate_activity_time", "vigorous_activity_time"},
 		prefixes: []string{"step", "distance", "flights", "active_energy", "basal_energy", "apple_", "workout",
 			"running_", "walking_", "cycling_", "swimming", "stand", "exercise", "activity", "cadence",
 			"wheelchair", "downhill", "elevation"}, contains: []string{"_speed", "_power"}},

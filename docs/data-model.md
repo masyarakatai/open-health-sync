@@ -373,6 +373,7 @@ stored as 0 to 100, not as fractions.
 | `inhaler_usage` | `count` |
 | `insulin_delivery` | `IU` |
 | `lean_body_mass` | `kg` |
+| `moderate_activity_time` | `min` |
 | `muscle_mass` | `kg` |
 | `nike_fuel` | `count` |
 | `number_of_alcoholic_beverages` | `count` |
@@ -409,6 +410,7 @@ stored as 0 to 100, not as fractions.
 | `underwater_depth` | `m` |
 | `uv_exposure` | `index` |
 | `vascular_age` | `years` |
+| `vigorous_activity_time` | `min` |
 | `visceral_fat_rating` | `index` |
 | `vo2_max` | `mL/kg/min` |
 | `waist_circumference` | `cm` |

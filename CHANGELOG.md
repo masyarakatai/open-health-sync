@@ -9,6 +9,18 @@ release may change the API, the configuration or the database schema.
 
 ### Added
 
+- Activity intensity minutes: `moderate_activity_time` and `vigorous_activity_time`, the minutes
+  of a day a provider classed as moderate or vigorous activity, one sample per provider day in
+  `min`. Oura's `daily_activity` (medium and high activity time) and Withings' `getactivity`
+  (`moderate` and `intense`) fill them; the metadata copies stay. Read them with `/samples`,
+  `/samples/stats`, the exports and the MCP tools. Migration 0039 adds the two types to the
+  catalog with LOINC 77592-4 and 77593-2.
+- FHIR follows the HL7 Physical Activity IG (1.0.0) for its measures: the two intensity types
+  and workouts also carry the IG's `PhysicalActivity` category, workout mean and maximum heart
+  rate carry LOINC 55425-3 and 55426-1, and the daily summary's `total_kcal` carries 41979-6.
+  CI validates these golden files against the IG's activity measure profile as well. See
+  [docs/fhir.md](docs/fhir.md#physical-activity).
+
 - Self reports: `POST /v1/users/{id}/self-reports` records a person's own ratings next to their
   synced data: how they feel, mood, stress, energy, sleep quality and muscle soreness (1 to 5),
   the effort of a session and pain (0 to 10). It takes a tenant key, or the user's own token
