@@ -342,7 +342,7 @@ p:last-child { margin-bottom: 0; }
   mask-image: linear-gradient(90deg, transparent 22%, #000 44%);
 }
 .scene .mist { inset: 0; background: linear-gradient(98deg, rgb(206 207 201) 0%, rgb(178 180 172 / 88%) 13%, rgb(126 131 120 / 42%) 29%, transparent 45%); }
-.scene .prism {
+.scene .sheen {
   border-radius: 50%;
   filter: blur(26px);
   mix-blend-mode: screen;
