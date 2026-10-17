@@ -18,8 +18,10 @@ import (
 // tenant: pass the whole key instead.
 var ErrAmbiguousPrefix = errors.New("tenant: key prefix matches several keys")
 
-// APIKey describes one tenant API key, never its secret.
+// APIKey describes one tenant API key, never its secret. ID is what the
+// audit log names the key by (auth.Principal.KeyID).
 type APIKey struct {
+	ID         uuid.UUID
 	Prefix     string
 	CreatedAt  time.Time
 	LastUsedAt *time.Time
@@ -34,7 +36,7 @@ type TenantSummary struct {
 
 // ListTenants lists every tenant, oldest first.
 func (s *Store) ListTenants(ctx context.Context) ([]TenantSummary, error) {
-	rows, err := s.pool.Query(ctx, `SELECT t.id, t.name, t.created_at,
+	rows, err := s.pool.Query(ctx, `SELECT t.id, t.name, t.created_at, t.admin,
 		(SELECT count(*) FROM ohs_core.api_keys k WHERE k.tenant_id = t.id AND k.revoked_at IS NULL)
 		FROM ohs_core.tenants t ORDER BY t.created_at, t.id`)
 	if err != nil {
@@ -42,7 +44,7 @@ func (s *Store) ListTenants(ctx context.Context) ([]TenantSummary, error) {
 	}
 	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (TenantSummary, error) {
 		var t TenantSummary
-		err := r.Scan(&t.ID, &t.Name, &t.CreatedAt, &t.ActiveKeys)
+		err := r.Scan(&t.ID, &t.Name, &t.CreatedAt, &t.Admin, &t.ActiveKeys)
 		return t, err
 	})
 }
@@ -50,35 +52,58 @@ func (s *Store) ListTenants(ctx context.Context) ([]TenantSummary, error) {
 // CreateKey adds an API key to an existing tenant, for rotation: deploy the
 // new key, then revoke the old one. The plaintext key is returned once.
 func (s *Store) CreateKey(ctx context.Context, tenantID uuid.UUID) (string, error) {
+	full, _, err := s.CreateKeyInfo(ctx, tenantID)
+	return full, err
+}
+
+// CreateKeyInfo is CreateKey that also describes the new key.
+func (s *Store) CreateKeyInfo(ctx context.Context, tenantID uuid.UUID) (string, APIKey, error) {
 	full, hash, err := auth.NewSecret(auth.PrefixSecretKey)
 	if err != nil {
-		return "", err
+		return "", APIKey{}, err
 	}
-	tag, err := s.pool.Exec(ctx,
+	k := APIKey{Prefix: full[:keyPrefixLen]}
+	err = s.pool.QueryRow(ctx,
 		`INSERT INTO ohs_core.api_keys (tenant_id, key_prefix, key_hash)
-		 SELECT id, $2, $3 FROM ohs_core.tenants WHERE id = $1`,
-		tenantID, full[:keyPrefixLen], hash)
+		 SELECT id, $2, $3 FROM ohs_core.tenants WHERE id = $1
+		 RETURNING id, created_at`,
+		tenantID, k.Prefix, hash).Scan(&k.ID, &k.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", APIKey{}, ErrNotFound
+	}
 	if err != nil {
-		return "", fmt.Errorf("tenant: create key: %w", err)
+		return "", APIKey{}, fmt.Errorf("tenant: create key: %w", err)
+	}
+	return full, k, nil
+}
+
+// RevokeKeyByID revokes one API key of the tenant by its id. An id of no key
+// of the tenant is ErrNotFound; revoking an already revoked key succeeds.
+func (s *Store) RevokeKeyByID(ctx context.Context, tenantID, keyID uuid.UUID) error {
+	tag, err := s.pool.Exec(ctx,
+		`UPDATE ohs_core.api_keys SET revoked_at = coalesce(revoked_at, now()) WHERE tenant_id = $1 AND id = $2`,
+		tenantID, keyID)
+	if err != nil {
+		return fmt.Errorf("tenant: revoke: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return "", ErrNotFound
+		return ErrNotFound
 	}
-	return full, nil
+	return nil
 }
 
 // ListKeys lists the API keys of a tenant, revoked ones included, oldest
 // first. An unknown tenant is ErrNotFound.
 func (s *Store) ListKeys(ctx context.Context, tenantID uuid.UUID) ([]APIKey, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT key_prefix, created_at, last_used_at, revoked_at FROM ohs_core.api_keys
+		`SELECT id, key_prefix, created_at, last_used_at, revoked_at FROM ohs_core.api_keys
 		 WHERE tenant_id = $1 ORDER BY created_at, id`, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("tenant: list keys: %w", err)
 	}
 	keys, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (APIKey, error) {
 		var k APIKey
-		err := r.Scan(&k.Prefix, &k.CreatedAt, &k.LastUsedAt, &k.RevokedAt)
+		err := r.Scan(&k.ID, &k.Prefix, &k.CreatedAt, &k.LastUsedAt, &k.RevokedAt)
 		return k, err
 	})
 	if err != nil || len(keys) > 0 {

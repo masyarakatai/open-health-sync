@@ -62,6 +62,7 @@ const (
 	ConfigRead       = "config.read"
 	ConfigWrite      = "config.write"
 	TenantCreate     = "tenant.create"
+	TenantAdmin      = "tenant.admin"
 	KeyCreate        = "key.create"
 	KeyRevoke        = "key.revoke"
 	ShareCreate      = "share.create"
@@ -146,6 +147,14 @@ func Classify(method, pattern string) string {
 		return DataWrite
 	case path == "/v1/audit":
 		return AuditRead
+	case strings.HasPrefix(path, "/v1/keys"):
+		switch method {
+		case "POST":
+			return KeyCreate
+		case "DELETE":
+			return KeyRevoke
+		}
+		return ConfigRead
 	case strings.HasPrefix(path, "/v1/webhooks"):
 		if method == "GET" {
 			return WebhookRead

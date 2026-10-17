@@ -26,6 +26,7 @@ func (s *server) mountIngest(mux *http.ServeMux) {
 		"POST /v1/ingest/health-connect": s.d.HealthConnect,
 		"POST /v1/ingest/xiaomi":         s.d.Xiaomi,
 		"POST /v1/ingest/activity-files": s.d.ActivityFiles,
+		"POST /v1/ingest/bluetooth":      s.d.Bluetooth,
 	} {
 		if dev == nil {
 			continue

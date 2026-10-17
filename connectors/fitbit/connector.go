@@ -199,6 +199,9 @@ func (c *Connector) Enabled(cfg connector.Config) bool {
 	return cfg[KeyClientID] != "" && cfg[KeyClientSecret] != ""
 }
 
+// OptionalKeys lists the keys it also reads and runs without: WEBHOOK_SECRET and WEBHOOK_SIGNATURE (notifications).
+func (c *Connector) OptionalKeys() []string { return []string{KeyWebhookSecret, KeyWebhookSignature} }
+
 // Configure hands the connector its keys (the OHS_FITBIT_* values). It may
 // be called again; the last call wins. An unknown WEBHOOK_SIGNATURE mode is
 // an error.

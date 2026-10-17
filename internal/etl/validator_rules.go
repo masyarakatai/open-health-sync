@@ -448,6 +448,16 @@ var rangeRules = map[string]rangeRule{
 		Unit:    "min",
 		HardMin: 0, HardMax: 1440, SoftMin: 0, SoftMax: 960,
 	},
+	// Minutes of one day at an intensity. Ten hours of moderate or vigorous
+	// activity is rare enough to flag.
+	model.QTModerateActivityTime: {
+		Unit:    "min",
+		HardMin: 0, HardMax: 1440, SoftMin: 0, SoftMax: 600,
+	},
+	model.QTVigorousActivityTime: {
+		Unit:    "min",
+		HardMin: 0, HardMax: 1440, SoftMin: 0, SoftMax: 600,
+	},
 
 	// A person's own ratings. The scale is the contract (model.SelfReportScales):
 	// the connector refuses anything else before it is stored, so these bounds

@@ -171,6 +171,9 @@ func (c *Connector) Enabled(cfg connector.Config) bool {
 	return cfg[KeyClientID] != "" && cfg[KeyClientSecret] != ""
 }
 
+// OptionalKeys lists the keys it also reads and runs without: WEBHOOK_SECRET (notifications).
+func (c *Connector) OptionalKeys() []string { return []string{KeyWebhookSecret} }
+
 // Configure hands the connector its keys (the OHS_INTERVALS_ICU_* values).
 // It may be called again; the last call wins.
 func (c *Connector) Configure(cfg connector.Config) error {

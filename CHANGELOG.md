@@ -9,6 +9,72 @@ release may change the API, the configuration or the database schema.
 
 ### Added
 
+- Admin console for the whole pipeline. `/console` now runs the instance, not only shows it: an
+  overview of the five pipeline stages (sources, sync, processing, storage, delivery) with what
+  needs attention, providers turned on and their keys saved from the browser, users created and
+  sent a connection link, a sync started, parked processing jobs retried, webhook endpoints and
+  deliveries managed, API keys created and revoked, and the audit log. Each action is a call to a
+  documented route with the tenant key and asks for a confirmation first. Light and dark, works
+  on a phone. See [docs/console.md](docs/console.md).
+- Providers turned on without a restart. An instance admin saves a provider's keys and turns it
+  on or off with `PATCH /v1/admin/providers/{provider}` (also `GET`, `DELETE`, and
+  `GET /v1/admin/providers` with each provider's state, keys and the URLs to register at the
+  provider). Keys are checked by the connector before they are stored, sealed with
+  `OHS_ENCRYPTION_KEY` in the new `ohs_core.provider_settings`, re-sealed by `ohs admin rekey`,
+  and picked up by every process within 30 seconds. A provider's `OHS_<PROVIDER>_*` variables,
+  when set, still win; the on/off switch applies to both. Secrets are write only: the API never
+  returns their value.
+- Instance admin tenants: the first tenant of an instance, the `OHS_BOOTSTRAP_TENANT` tenant and
+  the one of `ohs admin personal setup` are admins. `ohs admin tenant create --admin` and
+  `ohs admin tenant admin --tenant <id> [--off]` set the mark, `ohs admin tenant list` shows it,
+  and `tenant.admin` is audited. Only admin keys reach `/v1/admin/*`.
+- `GET /v1/tenant` (the tenant of the key), `GET /v1/keys`, `POST /v1/keys` and
+  `DELETE /v1/keys/{key_id}`: a tenant manages its own API keys over the API, as
+  `ohs admin key` does from a shell. A key cannot revoke itself (409).
+- `GET /v1/pipeline` (the tenant's pipeline counts in one answer), `GET /v1/pipeline/sync-runs`
+  (sync runs across users, with `status` and `provider` filters), `GET /v1/pipeline/etl-jobs`
+  (parked, pending or running processing jobs), and `POST /v1/pipeline/etl-jobs/{job_id}/retry`
+  and `POST /v1/pipeline/etl-jobs/retry` to queue parked jobs again with fresh attempts.
+- `GET /v1/providers` gives each provider its display `name`.
+- Audit events of a route that names a provider, an API key or a processing job in its path keep
+  that `provider`, `key_id` or `job_id` in `detail`.
+- Migration 0038 adds `tenants.admin`, `provider_settings` and two indexes for the console's
+  lists of failed runs and parked jobs.
+- Bluetooth devices: heart rate straps, blood pressure cuffs, scales, glucose meters,
+  thermometers and pulse oximeters that implement the standard Bluetooth SIG health profiles
+  send their readings straight to the server, with no vendor account and no phone. The new
+  `POST /v1/ingest/bluetooth` upload route (provider `bluetooth`, user token with scope
+  `upload`) stores each characteristic value as the bytes the device sent, with the time it
+  arrived, and the ETL decodes it: heart rate and RR intervals, blood pressure with pulse, mean
+  arterial pressure and the cuff's status flags, weight, BMI and height, body composition, blood
+  glucose (control solution left out), body temperature and SpO2. Device clocks are used when
+  they hold a plausible time (metadata `clock`), shared devices are filtered by user index, and
+  the source slug comes from the manufacturer (`polar`, `omron`, `and`...). Blood pressure in
+  kPa is converted to mmHg. No migration, no new Go dependency. See
+  [docs/connectors/bluetooth.md](docs/connectors/bluetooth.md).
+- `ohs-bridge`, a desktop bridge written in Rust (`bridge/`), for macOS, Linux (Raspberry Pi
+  included) and Windows: it scans for standard Bluetooth health devices, connects and
+  reconnects, sets their clock, asks glucose meters for new records, spools every value on
+  disk and uploads it in parts that survive a crash or a network loss. `ohs-bridge files`
+  uploads new FIT files from a folder, such as a watch mounted over USB, through the activity
+  files route. `ohs-bridge watch` shows heart rate, RR and battery live, and `--status-file`
+  keeps a one-line status for menu bar tools. See [docs/bridge.md](docs/bridge.md).
+- Swift and Kotlin SDKs: `BluetoothRecorder` builds the Bluetooth upload parts and
+  `uploadBluetoothPart` sends them; the Swift package gets an `OpenHealthSyncBluetooth`
+  product (CoreBluetooth) that does the scanning and subscriptions on iOS and macOS, and the
+  Android example app shows the same with `BluetoothGatt`.
+- Activity intensity minutes: `moderate_activity_time` and `vigorous_activity_time`, the minutes
+  of a day a provider classed as moderate or vigorous activity, one sample per provider day in
+  `min`. Oura's `daily_activity` (medium and high activity time) and Withings' `getactivity`
+  (`moderate` and `intense`) fill them; the metadata copies stay. Read them with `/samples`,
+  `/samples/stats`, the exports and the MCP tools. Migration 0039 adds the two types to the
+  catalog with LOINC 77592-4 and 77593-2.
+- FHIR follows the HL7 Physical Activity IG (1.0.0) for its measures: the two intensity types
+  and workouts also carry the IG's `PhysicalActivity` category, workout mean and maximum heart
+  rate carry LOINC 55425-3 and 55426-1, and the daily summary's `total_kcal` carries 41979-6.
+  CI validates these golden files against the IG's activity measure profile as well. See
+  [docs/fhir.md](docs/fhir.md#physical-activity).
+
 - Self reports: `POST /v1/users/{id}/self-reports` records a person's own ratings next to their
   synced data: how they feel, mood, stress, energy, sleep quality and muscle soreness (1 to 5),
   the effort of a session and pain (0 to 10). It takes a tenant key, or the user's own token
@@ -129,6 +195,21 @@ release may change the API, the configuration or the database schema.
 
 ### Changed
 
+- `OHS_CONSOLE=true` now serves the console with its actions. An instance that turned it on for
+  the read-only view gets them on upgrade; set `OHS_CONSOLE=read-only` to keep the console
+  without any action.
+- Migration 0038 makes the only tenant of a single-tenant instance its instance admin, so the
+  console can turn providers on after the upgrade. An instance with several tenants gets no admin
+  until one is named with `ohs admin tenant admin`.
+- A connector can list the keys it runs without (`connector.OptionalKeyed`), and `Configure` may
+  be called again while the connector runs, when the console saves new keys.
+- The hosted connect page and its result page are redesigned: frosted glass panels on a
+  background the page draws itself, with no image or web font. Each source is one row and one
+  button, with a line on what it shares (from the data its connector reads) and a "Connected" or
+  "Needs reconnecting" status. Two large figures give the connected sources and the minutes left
+  on the link. The page says that the access is read only and that the user signs in on each
+  source's own site. The result page says the data now syncs in the background and offers a
+  button back to the sources. Still no script, and fits a phone screen.
 - A canonical `Workout` can name its source and device (`SourceSlug`, `DeviceID`), written to
   `workouts.source_slug` and `workouts.device_id` (columns that already existed). A connector
   that leaves them empty gets the previous behavior: the provider as the source, no device.
@@ -166,6 +247,12 @@ release may change the API, the configuration or the database schema.
 
 ### Fixed
 
+- Apple Health basal and active energy recorded in `Cal` (HealthKit's large calorie, a
+  kilocalorie) is stored as is. An export written with Calories as the energy unit spells those
+  records `Cal`, and their values were stored 1,000 times too low (read as the small calorie),
+  so a derived day's `total_kcal` was close to its active energy alone. Values already stored
+  stay wrong: erase the Apple Health data (`DELETE /v1/users/{id}/data/apple_health`) and
+  import the export again.
 - Disconnecting or deleting a user now revokes the Oura access token (`GET /oauth/revoke`),
   like WHOOP, Strava and Polar.
 - A provider deletion notice (Oura, WHOOP, Strava) now updates the connection's
@@ -181,6 +268,25 @@ release may change the API, the configuration or the database schema.
   times too low in `protein_g`. A unit that does not convert now rejects the record instead.
   Rows already stored keep their values: erase the provider's data
   (`DELETE /v1/users/{id}/data/apple_health`) and import again to rewrite them.
+- `GET /v1/users/{id}/connections` and the MCP tool `list_connections` return `created_at`,
+  `initial_backfill_at`, `scopes` and `updated_at`, as `api/openapi.yaml` documents. Only
+  `connected_at` was sent, so the Swift and Kotlin SDKs could not decode the list and the
+  console showed `-` for when a source was connected and when its backfill started.
+  `connected_at` stays, with the same value as `created_at`.
+- Apple Health nights are whole again. A night recorded "in bed" had no figures; a night that
+  crossed midnight, which uploads file in two parts, was split in two, or its stages went to the
+  next night's session; a nap uploaded with a night went to that night or was dropped. Each
+  night is now one session with all its stages, whatever order its parts are processed in, and
+  its figures are the sums of its stages (`total_sleep_seconds` is the Health app's time
+  asleep). A night with no in bed sample is marked `"synthesized": true`. To rebuild nights
+  stored before, see [docs/connectors/apple-health.md](docs/connectors/apple-health.md#sleep).
+
+### Security
+
+- The release workflow builds only a version tag on a commit of `main`, and never rebuilds a
+  published release: re-pushing its tag stops before anything is built, signed or uploaded.
+  The image build context is an allowlist of what `go build` needs, so a local `.env`, a dump
+  in `backups/` or a health export never reaches a builder.
 
 ## [0.1.0] - 2026-10-13
 

@@ -50,12 +50,37 @@ type KeyedConnector interface {
 	RequiredKeys() []string
 }
 
+// OptionalKeyed is optionally implemented by a KeyedConnector that also
+// reads keys it can run without (a webhook secret, a region). The console
+// lists them beside RequiredKeys.
+type OptionalKeyed interface {
+	OptionalKeys() []string
+}
+
 // Configurable is optionally implemented by connectors that take their
-// operator keys at startup. The app calls Configure once per enabled
-// connector before any role starts; an error stops startup.
+// operator keys. The app calls Configure for every enabled connector before
+// any role starts (an error stops startup), and again whenever the keys
+// saved in the console change. Configure must validate before it changes
+// anything, so a refused call leaves the connector as it was, and be safe to
+// call while the connector is in use.
 type Configurable interface {
 	Configure(cfg Config) error
 }
+
+// publicKeys are the operator keys whose values are not secrets: the console
+// shows them back. Every other key is write only.
+var publicKeys = map[string]bool{
+	"CLIENT_ID":         true,
+	"REGION":            true,
+	"ENVIRONMENT":       true,
+	"WEBHOOK_SIGNATURE": true,
+	"SUBSCRIPTION_ID":   true,
+}
+
+// SecretKey reports whether the value of an operator key (a FIELD of
+// OHS_<SLUG>_<FIELD>) is a secret, never shown once stored. Any key not
+// known to be public is a secret.
+func SecretKey(field string) bool { return !publicKeys[field] }
 
 // Subscriber is optionally implemented by an OAuthConnector whose provider
 // pushes notifications to a registered callback URL. callbackURL is

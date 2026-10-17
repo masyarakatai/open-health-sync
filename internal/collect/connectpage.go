@@ -54,7 +54,7 @@ const (
 	connectCookie = "ohs_connect"
 )
 
-var connectPage = template.Must(template.ParseFS(pageFS, "page/connect.html"))
+var connectPage = template.Must(template.ParseFS(pageFS, "page/connect.html", "page/frame.html"))
 
 // ConnectSessionRequest is the CreateConnectSession body. Every field is
 // optional.
@@ -306,6 +306,8 @@ func (h *Handlers) allowed(s connectSession, provider string) ([]string, bool) {
 // providerView is one provider row of the page.
 type providerView struct {
 	Slug, Name         string
+	Initial            string // the first letter of Name, on the row's tile
+	Detail             string // what the source shares, when known
 	Status, StatusText string
 	Button             string
 	Action             string
@@ -318,7 +320,9 @@ type connectView struct {
 	Session         string
 	Single          bool
 	Expires         string
+	ExpiresMinutes  int // the minutes left, at least 1, for the page's large figure
 	Providers       []providerView
+	Connected       int // providers the user has an active connection to
 }
 
 // ConnectPage serves GET /connect?session=T and GET /connect/{provider}?session=T,
@@ -348,10 +352,13 @@ func (h *Handlers) ConnectPage() http.Handler {
 		}
 		v := connectView{
 			AppName: s.appName, LogoURL: s.logoURL, Session: token, Single: provider != "",
-			Expires: expiresIn(s.expiresAt.Sub(h.d.now())),
+			Expires: expiresIn(s.expiresAt.Sub(h.d.now())), ExpiresMinutes: minutesLeft(s.expiresAt.Sub(h.d.now())),
 		}
 		for _, p := range slugs {
-			pv := providerView{Slug: p, Name: providerName(p)}
+			pv := providerView{Slug: p, Name: providerName(p), Detail: providerDetails[p]}
+			if r, _ := utf8.DecodeRuneInString(pv.Name); r != utf8.RuneError {
+				pv.Initial = string(unicode.ToUpper(r))
+			}
 			// The form posts to /connect/{provider}, relative to the page so
 			// an instance served under a path prefix works too.
 			if provider == "" {
@@ -362,6 +369,7 @@ func (h *Handlers) ConnectPage() http.Handler {
 			switch status[p] {
 			case StatusActive:
 				pv.Status, pv.StatusText, pv.Button = "connected", "Connected", "Reconnect"
+				v.Connected++
 			case StatusNeedsReauth:
 				pv.Status, pv.StatusText, pv.Button = "needs_reauth", "Needs reconnecting", "Reconnect"
 			default:
@@ -517,27 +525,58 @@ func renderConnectProblem(w http.ResponseWriter, code int, title, detail string)
 
 // expiresIn says when the link expires, for the page footer.
 func expiresIn(d time.Duration) string {
-	m := int(math.Ceil(d.Minutes()))
-	if m <= 1 {
+	m := minutesLeft(d)
+	if m == 1 {
 		return "in about a minute"
 	}
 	return fmt.Sprintf("in %d minutes", m)
 }
 
+// minutesLeft is d rounded up to whole minutes, at least 1.
+func minutesLeft(d time.Duration) int {
+	return max(1, int(math.Ceil(d.Minutes())))
+}
+
 // providerNames are the display names of the providers whose name is not
 // their slug capitalized.
 var providerNames = map[string]string{
-	"dexcom":        "Dexcom",
-	"fitbit":        "Fitbit",
-	"intervals_icu": "intervals.icu",
-	"omron":         "OMRON",
-	"oura":          "Oura",
-	"polar":         "Polar",
-	"strava":        "Strava",
-	"suunto":        "Suunto",
-	"ultrahuman":    "Ultrahuman",
-	"whoop":         "WHOOP",
-	"withings":      "Withings",
+	"activity_files": "Activity files",
+	"apple_health":   "Apple Health",
+	"bluetooth":      "Bluetooth devices",
+	"dexcom":         "Dexcom",
+	"fitbit":         "Fitbit",
+	"health_connect": "Health Connect",
+	"intervals_icu":  "intervals.icu",
+	"omron":          "OMRON",
+	"oura":           "Oura",
+	"polar":          "Polar",
+	"self_report":    "Self reports",
+	"strava":         "Strava",
+	"suunto":         "Suunto",
+	"ultrahuman":     "Ultrahuman",
+	"whoop":          "WHOOP",
+	"withings":       "Withings",
+	"xiaomi":         "Xiaomi",
+}
+
+// ProviderName is how the pages and the console name a provider: its display
+// name when known, else its slug.
+func ProviderName(slug string) string { return providerName(slug) }
+
+// providerDetails say on the connection page what each source shares, from
+// the data its connector reads.
+var providerDetails = map[string]string{
+	"dexcom":        "Continuous glucose readings",
+	"fitbit":        "Sleep, activity, workouts and heart rate",
+	"intervals_icu": "Workouts, HRV, sleep score and weight",
+	"omron":         "Blood pressure, heart rate and weight",
+	"oura":          "Sleep, readiness, activity and heart rate",
+	"polar":         "Workouts, sleep, activity and heart rate",
+	"strava":        "Workouts with distance, pace and heart rate",
+	"suunto":        "Workouts with distance, pace and heart rate",
+	"ultrahuman":    "Sleep, heart rate, HRV, steps and temperature",
+	"whoop":         "Recovery, sleep, strain and workouts",
+	"withings":      "Weight, body composition, blood pressure and sleep",
 }
 
 // providerName is how the pages name a provider: its display name when

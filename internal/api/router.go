@@ -25,6 +25,7 @@ import (
 	"github.com/soma-intelligence/open-health-sync/internal/etl/automation"
 	"github.com/soma-intelligence/open-health-sync/internal/fusion"
 	"github.com/soma-intelligence/open-health-sync/internal/mcp"
+	"github.com/soma-intelligence/open-health-sync/internal/providerset"
 	"github.com/soma-intelligence/open-health-sync/internal/rawstore"
 	"github.com/soma-intelligence/open-health-sync/internal/reqid"
 	"github.com/soma-intelligence/open-health-sync/internal/tenant"
@@ -42,8 +43,10 @@ type Deps struct {
 	Raw   rawstore.Store
 	// Lookup authenticates bearer secrets. Nil means Store.LookupKey.
 	Lookup auth.Lookup
-	// Providers are the connectors enabled on this instance (GET /v1/providers).
-	Providers []connector.Connector
+	// Providers are the connectors of this instance: the enabled ones (GET
+	// /v1/providers) and the console's provider settings (/v1/admin). Nil
+	// means none is enabled.
+	Providers *providerset.Set
 	// Device handles POST /v1/ingest/apple-health. Nil leaves the route out.
 	Device connector.DeviceConnector
 	// HealthConnect handles POST /v1/ingest/health-connect. Nil leaves the
@@ -55,6 +58,9 @@ type Deps struct {
 	// ActivityFiles handles POST /v1/ingest/activity-files (FIT, GPX and
 	// TCX files). Nil leaves the route out.
 	ActivityFiles connector.DeviceConnector
+	// Bluetooth handles POST /v1/ingest/bluetooth (values of standard
+	// Bluetooth health devices). Nil leaves the route out.
+	Bluetooth connector.DeviceConnector
 	// SelfReport handles POST /v1/users/{id}/self-reports. Nil leaves the
 	// route out.
 	SelfReport connector.DeviceConnector
@@ -62,8 +68,9 @@ type Deps struct {
 	IngestLimit int
 	// Metrics mounts GET /metrics (OHS_METRICS).
 	Metrics bool
-	// Console mounts the read-only admin console at /console (OHS_CONSOLE).
-	Console bool
+	// Console mounts the admin console at /console (OHS_CONSOLE);
+	// ConsoleReadOnly serves it without write actions.
+	Console, ConsoleReadOnly bool
 	// MetricsToken (OHS_METRICS_TOKEN) is the bearer secret /metrics asks
 	// for. Empty means /metrics on the API listener refuses every scrape.
 	MetricsToken string
@@ -122,6 +129,9 @@ func NewRouter(d Deps) http.Handler {
 	mux := http.NewServeMux()
 	s.mountOps(mux)
 	s.mountProviders(mux)
+	s.mountAdmin(mux)
+	s.mountTenant(mux)
+	s.mountPipeline(mux)
 	s.mountUsers(mux)
 	s.mountTokens(mux)
 	s.mountWebhooks(mux)
@@ -141,7 +151,7 @@ func NewRouter(d Deps) http.Handler {
 	s.mountShares(mux)
 	s.mountSetup(mux)
 	if d.Console {
-		console.Mount(mux)
+		console.Mount(mux, d.ConsoleReadOnly)
 	}
 	s.mountAudit(mux)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

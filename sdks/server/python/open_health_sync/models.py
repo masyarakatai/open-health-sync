@@ -116,6 +116,202 @@ class ConsentEvent(TypedDict):
     evidence: str
 
 
+class Tenant(TypedDict):
+    id: str
+    name: str
+    # True for the instance admin tenant, whose keys manage the providers. The first tenant of an instance is the admin.
+    admin: bool
+    created_at: str
+    # The key making the call.
+    key: TenantKey
+
+
+class TenantKey(TypedDict):
+    """The key making the call."""
+
+    id: str
+    prefix: str
+
+
+class APIKey(TypedDict):
+    id: str
+    # The start of the key, kept in clear to tell keys apart.
+    prefix: str
+    created_at: str
+    last_used_at: Optional[str]
+    revoked_at: Optional[str]
+    # True for the key making the call.
+    current: bool
+
+
+class CreatedAPIKey(TypedDict):
+    id: str
+    # The start of the key, kept in clear to tell keys apart.
+    prefix: str
+    created_at: str
+    last_used_at: Optional[str]
+    revoked_at: Optional[str]
+    # True for the key making the call.
+    current: bool
+    # The whole key, returned this once.
+    key: str
+
+
+class Pipeline(TypedDict):
+    generated_at: str
+    users: PipelineUser
+    sources: List[PipelineSource]
+    # Sync runs in flight (`queued`, `running`, `retrying` after a failed attempt,
+    # `rate_limited`), and those created in the last 24 hours that ended `failed` or
+    # `succeeded`.
+    sync: PipelineSync
+    # Processing jobs by status, and the records processing rejected and has not recovered (as in the coverage report).
+    processing: PipelineProcessing
+    # Raw payloads stored in the last 24 hours.
+    storage: PipelineStorage
+    # Webhook endpoints (failing ones are on but their last deliveries failed) and the deliveries not done.
+    delivery: PipelineDelivery
+
+
+class PipelineUser(TypedDict):
+    active: int
+    deleting: int
+
+
+class PipelineSync(TypedDict):
+    """Sync runs in flight (`queued`, `running`, `retrying` after a failed attempt,
+    `rate_limited`), and those created in the last 24 hours that ended `failed` or
+    `succeeded`.
+    """
+
+    queued: int
+    running: int
+    retrying: int
+    rate_limited: int
+    failed_24h: int
+    succeeded_24h: int
+
+
+class PipelineProcessing(TypedDict):
+    """Processing jobs by status, and the records processing rejected and has not recovered (as in the coverage report)."""
+
+    pending: int
+    running: int
+    parked: int
+    rejected_records: int
+
+
+class PipelineStorage(TypedDict):
+    """Raw payloads stored in the last 24 hours."""
+
+    raw_objects_24h: int
+    raw_bytes_24h: int
+
+
+class PipelineDelivery(TypedDict):
+    """Webhook endpoints (failing ones are on but their last deliveries failed) and the deliveries not done."""
+
+    endpoints: int
+    endpoints_failing: int
+    endpoints_disabled: int
+    pending: int
+    parked: int
+
+
+class PipelineSource(TypedDict):
+    slug: str
+    name: str
+    kinds: List[Literal["oauth", "push", "device"]]
+    enabled: bool
+    # The tenant's connections by status (active, needs_reauth, disconnected).
+    connections: Dict[str, int]
+    # Active connections whose health is not ok.
+    broken: int
+    # Set while the provider's rate limit pauses every pull.
+    paused_until: Optional[str]
+
+
+class TenantSyncRun(TypedDict):
+    id: int
+    provider: str
+    trigger: Literal["backfill", "scheduled", "notification", "manual"]
+    status: Literal["queued", "running", "retrying", "rate_limited", "succeeded", "failed", "cancelled"]
+    # Set when a notification named the one data type to pull.
+    data_type: Optional[str]
+    window_start: str
+    window_end: str
+    # Failed attempts so far.
+    attempts: int
+    objects_stored: Optional[int]
+    error: Optional[str]
+    created_at: str
+    started_at: Optional[str]
+    finished_at: Optional[str]
+    next_attempt_at: Optional[str]
+    user_id: str
+
+
+class ETLJob(TypedDict):
+    """One processing job, turning a stored raw payload into records."""
+
+    id: int
+    user_id: str
+    provider: str
+    tier: str
+    status: Literal["pending", "running", "parked", "done"]
+    attempts: int
+    # The error of the last failed attempt.
+    error: Optional[str]
+    created_at: str
+    # Set while the job is pending.
+    next_attempt_at: Optional[str]
+
+
+class AdminProvider(TypedDict):
+    slug: str
+    name: str
+    kinds: List[Literal["oauth", "push", "device"]]
+    # `active` runs; `off` was turned off; `not_configured` lacks a required key; `error` has
+    # keys the provider's rules refuse (see `error`); `built_in` needs no key and is always on.
+    status: Literal["active", "off", "not_configured", "error", "built_in"]
+    enabled: bool
+    # Where the keys come from. Environment variables win over the console as a whole.
+    source: Optional[Literal["env", "console"]]
+    keys: List[AdminProviderKey]
+    error: Optional[str]
+    # The addresses to register in the provider's developer portal.
+    urls: AdminProviderUrl
+    updated_at: Optional[str]
+    # The id of the API key that saved the last change.
+    updated_by: Optional[str]
+
+
+class AdminProviderUrl(TypedDict):
+    """The addresses to register in the provider's developer portal."""
+
+    # The OAuth redirect URI, for a provider users connect to.
+    redirect: Optional[str]
+    # Where the provider posts notifications, for a push provider.
+    inbound: Optional[str]
+
+
+class AdminProviderKey(TypedDict):
+    name: str
+    # The environment variable that can set it instead.
+    env: str
+    required: bool
+    secret: bool
+    set: bool
+    # The saved value of a key that is not a secret. Secrets are never served.
+    value: Optional[str]
+
+
+class AdminProviderPatch(TypedDict, total=False):
+    # Key name to its new value; null removes the key.
+    keys: Dict[str, Optional[str]]
+    enabled: bool
+
+
 class _AuditEventRequired(TypedDict):
     # Increasing; the cursor of the next page.
     id: int
@@ -152,9 +348,14 @@ class AuditEventActor(TypedDict):
     id: str
 
 
-class Provider(TypedDict):
+class _ProviderRequired(TypedDict):
     slug: str
     kinds: List[Literal["oauth", "push", "device"]]
+
+
+class Provider(_ProviderRequired, total=False):
+    # Display name, the slug when the build has none. Older servers leave it out.
+    name: str
 
 
 class CreateUserRequest(TypedDict, total=False):
@@ -381,8 +582,11 @@ class _ConnectionRequired(TypedDict):
 class Connection(_ConnectionRequired, total=False):
     scopes: List[str]
     last_sync_at: Optional[str]
+    # When the pull of the user's history was queued.
     initial_backfill_at: Optional[str]
     updated_at: str
+    # Same as created_at, under its earlier name.
+    connected_at: str
     # Whether the connection syncs, and if not why and what fixes it. `reason` is `needs_reauth`
     # (the provider refused the grant: token expired or revoked), `missing_scope` (the grant lacks a
     # permission the data needs), `failing` (the last 3 pulls failed) or `rate_limited` (the provider
@@ -1759,6 +1963,37 @@ class IngestActivityFilesResponse(TypedDict):
     duplicate: bool
 
 
+class IngestBluetoothResponse(TypedDict):
+    # Raw object key.
+    key: str
+    duplicate: bool
+
+
+class ListKeysResponse(TypedDict):
+    data: List[APIKey]
+
+
+class ListTenantSyncRunsResponse(TypedDict):
+    data: List[TenantSyncRun]
+    # Null on the last page.
+    next_cursor: Optional[str]
+
+
+class ListETLJobsResponse(TypedDict):
+    data: List[ETLJob]
+    # Null on the last page.
+    next_cursor: Optional[str]
+
+
+class RetryParkedETLJobsRequest(TypedDict, total=False):
+    # Only this provider's parked jobs.
+    provider: str
+
+
+class RetryParkedETLJobsResponse(TypedDict):
+    retried: int
+
+
 class ListAuditEventsResponse(TypedDict):
     data: List[AuditEvent]
     # Null on the last page.
@@ -1774,6 +2009,11 @@ class ReadyzResponse(TypedDict, total=False):
 
 
 __all__ = [
+    "APIKey",
+    "AdminProvider",
+    "AdminProviderKey",
+    "AdminProviderPatch",
+    "AdminProviderUrl",
     "AuditEvent",
     "AuditEventActor",
     "CategorySample",
@@ -1793,6 +2033,7 @@ __all__ = [
     "CreateTimeTagRequest",
     "CreateUserRequest",
     "CreateWebhookRequest",
+    "CreatedAPIKey",
     "CreatedShare",
     "DailySummary",
     "DailySummaryPage",
@@ -1804,6 +2045,7 @@ __all__ = [
     "ECGRecordingDetail",
     "ECGRecordingPage",
     "ECGSamples",
+    "ETLJob",
     "FHIRBundle",
     "FHIRBundleEntry",
     "FHIRBundleEntrySearch",
@@ -1850,14 +2092,18 @@ __all__ = [
     "HealthzResponse",
     "IngestActivityFilesResponse",
     "IngestAppleHealthResponse",
+    "IngestBluetoothResponse",
     "IngestHealthConnectResponse",
     "IngestXiaomiResponse",
     "ListAuditEventsResponse",
     "ListConnectionsResponse",
     "ListConsentHistoryResponse",
     "ListConsentsResponse",
+    "ListETLJobsResponse",
+    "ListKeysResponse",
     "ListProvidersResponse",
     "ListSyncRunsResponse",
+    "ListTenantSyncRunsResponse",
     "ListUsersResponse",
     "ListWebhookDeliveriesResponse",
     "ListWebhooksResponse",
@@ -1875,6 +2121,13 @@ __all__ = [
     "OMHDataPointPage",
     "PageBase",
     "PasscodeProblem",
+    "Pipeline",
+    "PipelineDelivery",
+    "PipelineProcessing",
+    "PipelineSource",
+    "PipelineStorage",
+    "PipelineSync",
+    "PipelineUser",
     "Problem",
     "Provenance",
     "Provider",
@@ -1882,6 +2135,8 @@ __all__ = [
     "RRInterval",
     "RRIntervalPage",
     "ReadyzResponse",
+    "RetryParkedETLJobsRequest",
+    "RetryParkedETLJobsResponse",
     "RotateWebhookSecretResponse",
     "RoutePoint",
     "RoutePointPage",
@@ -1916,6 +2171,9 @@ __all__ = [
     "StartConnectionResponse",
     "SyncConnectionRequest",
     "SyncRun",
+    "Tenant",
+    "TenantKey",
+    "TenantSyncRun",
     "TestWebhookRequest",
     "TimeTag",
     "TimeTagKind",

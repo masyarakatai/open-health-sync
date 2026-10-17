@@ -71,6 +71,9 @@ tags:
   - name: ingest
   - name: provider-facing
   - name: mcp
+  - name: tenant
+  - name: pipeline
+  - name: admin
   - name: audit
   - name: ops
 security:
@@ -2457,6 +2460,87 @@ paths:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
 
+  /v1/ingest/bluetooth:
+    post:
+      tags: [ingest]
+      operationId: ingestBluetooth
+      summary: Upload one part of Bluetooth device values
+      description: |
+        One gzip NDJSON part (at most 64 MiB, never truncated), one characteristic value a
+        standard Bluetooth health device sent per line: `{"at": "<RFC 3339 arrival time with
+        offset>", "char": "2a37", "value": "<hex>", "session": "<id of the connection>",
+        "device": {"name", "manufacturer", "model", "firmware"}, "device_user": <index>}`
+        (`device` and `device_user` optional; the line format is in docs/connectors/bluetooth.md;
+        `ohs-bridge` and the Swift and Kotlin SDKs write it). The server decodes heart rate with
+        RR intervals, blood pressure, weight, body composition, glucose, temperature and pulse
+        oximetry; other characteristics are stored and not mapped. The part is refused with
+        400, and nothing is stored, when a line breaks the format; a value that does not decode
+        is a failed record of its line only. Same headers, limits and answers as the Apple
+        Health upload.
+        Re-sending the same part is safe: the answer is 200 with `duplicate: true`. Other
+        bytes under a (day, batch, part) already stored are a 409, and so is a part sent while
+        this provider's data is being deleted for the user (nothing is kept; send it again
+        once the deletion job is done). Each instance processes a
+        bounded number of uploads at once; above it the answer is 503 with `Retry-After`.
+      security:
+        - userToken: [upload]
+      parameters:
+        - name: X-OHS-Type
+          in: header
+          required: true
+          description: Always `gatt`.
+          schema: { type: string, enum: [gatt] }
+        - name: X-OHS-Day
+          in: header
+          required: true
+          description: UTC day of the part's first line (the server does not check it).
+          schema: { type: string, format: date }
+        - name: X-OHS-Batch
+          in: header
+          required: true
+          schema: { type: string, maxLength: 128 }
+        - name: X-OHS-Part
+          in: header
+          required: true
+          schema: { type: integer, minimum: 0, maximum: 1000000 }
+      requestBody:
+        required: true
+        content:
+          application/gzip:
+            schema: { type: string, contentEncoding: binary }
+          application/octet-stream:
+            schema: { type: string, contentEncoding: binary }
+      responses:
+        "200":
+          description: Stored (or already stored) and queued for processing.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [key, duplicate]
+                properties:
+                  key: { type: string, description: Raw object key. }
+                  duplicate: { type: boolean }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "410":
+          description: The user started being deleted while this upload was stored (its token was accepted just before); nothing is kept.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "413": { $ref: "#/components/responses/TooLarge" }
+        "503":
+          description: Too many uploads in progress on this instance.
+          headers:
+            Retry-After:
+              schema: { type: integer }
+              description: Seconds to wait before retrying.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
   /connect:
     get:
       tags: [connections]
@@ -2778,6 +2862,332 @@ paths:
         "202": { description: Notification accepted. }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+
+  /v1/tenant:
+    get:
+      tags: [tenant]
+      operationId: getTenant
+      summary: The tenant of the calling key
+      description: |
+        The tenant the key belongs to, whether it is the instance admin (the one tenant whose keys
+        manage the providers, see /v1/admin/providers) and which key is calling.
+      responses:
+        "200":
+          description: The tenant.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Tenant" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /v1/keys:
+    get:
+      tags: [tenant]
+      operationId: listKeys
+      summary: The tenant's API keys
+      description: |
+        Every key of the tenant, revoked ones included, newest first. Only the prefix of a key is
+        stored in clear; the secret itself was shown once, when the key was created.
+      responses:
+        "200":
+          description: The keys.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/APIKey" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [tenant]
+      operationId: createKey
+      summary: Create an API key for the tenant
+      description: |
+        A new key of the calling key's tenant, as `ohs admin key create` makes. The whole key is in
+        this answer only. To rotate: deploy the new key, then revoke the old one. Recorded in the
+        audit log as `key.create`.
+      requestBody:
+        required: false
+        description: Empty, or an empty object.
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false }
+      responses:
+        "201":
+          description: "The key, with its secret. Sent with `Cache-Control: no-store`."
+          headers:
+            Cache-Control: { schema: { type: string, const: no-store } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreatedAPIKey" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /v1/keys/{key_id}:
+    parameters:
+      - name: key_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    delete:
+      tags: [tenant]
+      operationId: revokeKey
+      summary: Revoke an API key
+      description: |
+        Every call with the key is refused from now on. A key cannot revoke itself (409): revoke it
+        with another key of the tenant. Revoking a revoked key changes nothing. Recorded in the
+        audit log as `key.revoke`.
+      responses:
+        "204": { description: Revoked. }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/pipeline:
+    get:
+      tags: [pipeline]
+      operationId: getPipeline
+      summary: The tenant's pipeline, stage by stage
+      description: |
+        Counts of the tenant's work at each stage, in the order data flows: the sources (providers
+        that are on, and any provider still holding the tenant's connections), the sync runs, the
+        processing jobs, the raw archive and the webhook deliveries. Counts only, never a health
+        value. The console's overview is this answer.
+      responses:
+        "200":
+          description: The pipeline.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Pipeline" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /v1/pipeline/sync-runs:
+    get:
+      tags: [pipeline]
+      operationId: listTenantSyncRuns
+      summary: Sync runs of every user of the tenant
+      description: |
+        The sync runs of all the tenant's users, newest first, each with its user. Filter by
+        `status` (for example `failed`, the runs that gave up) and by provider.
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [queued, running, retrying, rate_limited, succeeded, failed, cancelled] }
+        - name: provider
+          in: query
+          description: Only this provider's runs.
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of runs.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/PageBase"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/TenantSyncRun" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /v1/pipeline/etl-jobs:
+    get:
+      tags: [pipeline]
+      operationId: listETLJobs
+      summary: Processing jobs of the tenant
+      description: |
+        The jobs that turn stored raw payloads into records, newest first. `parked` (the default)
+        lists the jobs that failed 5 times and wait for a retry; `pending` and `running` list the
+        work in flight. Done jobs are summed up by each user's coverage report.
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [parked, pending, running], default: parked }
+        - name: provider
+          in: query
+          description: Only this provider's jobs.
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of jobs.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/PageBase"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/ETLJob" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /v1/pipeline/etl-jobs/retry:
+    post:
+      tags: [pipeline]
+      operationId: retryParkedETLJobs
+      summary: Retry every parked processing job
+      description: |
+        Queues every parked job of the tenant again with fresh attempts, or only one provider's. A
+        job that fails for the same reason parks again after 5 attempts.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                provider: { type: string, description: Only this provider's parked jobs. }
+      responses:
+        "200":
+          description: How many jobs were queued again.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [retried]
+                properties:
+                  retried: { type: integer, format: int64 }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /v1/pipeline/etl-jobs/{job_id}/retry:
+    parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      tags: [pipeline]
+      operationId: retryETLJob
+      summary: Retry one parked processing job
+      description: Queues the job again with fresh attempts. Only a parked job can be retried (409 otherwise).
+      responses:
+        "200":
+          description: The job, pending again.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ETLJob" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/admin/providers:
+    get:
+      tags: [admin]
+      operationId: listAdminProviders
+      summary: Every provider of this build and how it stands (instance admin)
+      description: |
+        Only a key of the instance admin tenant may call it (403 otherwise; `ohs admin tenant list`
+        shows which tenant that is). Provider keys are instance wide: every tenant's users connect
+        through the same provider apps. Secret keys are never served, only whether they are set.
+        `public_url` is false while `OHS_PUBLIC_URL` is unset: the redirect and notification URLs
+        then name localhost, which no provider can reach.
+      responses:
+        "200":
+          description: The providers.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, public_url]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/AdminProvider" }
+                  public_url: { type: boolean }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /v1/admin/providers/{provider}:
+    parameters:
+      - $ref: "#/components/parameters/Provider"
+    get:
+      tags: [admin]
+      operationId: getAdminProvider
+      summary: One provider and how it stands (instance admin)
+      responses:
+        "200":
+          description: The provider.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminProvider" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [admin]
+      operationId: updateAdminProvider
+      summary: Save a provider's keys, or turn it on or off (instance admin)
+      description: |
+        `keys` sets each named key (null removes it); keys left out are kept. The new keys are
+        checked with the provider's own rules before anything is stored (422 with the reason when
+        they are refused), then sealed with `OHS_ENCRYPTION_KEY` and applied by every process
+        within 30 seconds. While any of the provider's `OHS_` environment variables is set, its keys
+        come from there and `keys` is refused (409); `enabled` still applies. Recorded in the audit
+        log as `config.write`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminProviderPatch" }
+      responses:
+        "200":
+          description: The provider after the change.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminProvider" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422":
+          description: The provider's rules refused the keys; nothing was stored.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+    delete:
+      tags: [admin]
+      operationId: forgetAdminProvider
+      summary: Forget what the console saved for a provider (instance admin)
+      description: |
+        Deletes the keys and the switch saved for the provider. Environment variables are not
+        touched. Connections and data are kept. 404 when nothing was saved.
+      responses:
+        "200":
+          description: The provider after the change.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminProvider" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
 
   /v1/audit:
     get:
@@ -3247,6 +3657,196 @@ components:
         actor_id: { type: string, description: "The id of the API key that made the change." }
         evidence: { type: string }
 
+    Tenant:
+      type: object
+      required: [id, name, admin, created_at, key]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        admin:
+          type: boolean
+          description: True for the instance admin tenant, whose keys manage the providers. The first tenant of an instance is the admin.
+        created_at: { type: string, format: date-time }
+        key:
+          type: object
+          description: The key making the call.
+          required: [id, prefix]
+          properties:
+            id: { type: string, format: uuid }
+            prefix: { type: string, examples: [ohs_sk_2dybB] }
+
+    APIKey:
+      type: object
+      required: [id, prefix, created_at, last_used_at, revoked_at, current]
+      properties:
+        id: { type: string, format: uuid }
+        prefix: { type: string, description: "The start of the key, kept in clear to tell keys apart." }
+        created_at: { type: string, format: date-time }
+        last_used_at: { type: [string, "null"], format: date-time }
+        revoked_at: { type: [string, "null"], format: date-time }
+        current: { type: boolean, description: True for the key making the call. }
+
+    CreatedAPIKey:
+      allOf:
+        - $ref: "#/components/schemas/APIKey"
+        - type: object
+          required: [key]
+          properties:
+            key: { type: string, description: "The whole key, returned this once." }
+
+    Pipeline:
+      type: object
+      required: [generated_at, users, sources, sync, processing, storage, delivery]
+      properties:
+        generated_at: { type: string, format: date-time }
+        users:
+          type: object
+          required: [active, deleting]
+          properties:
+            active: { type: integer, format: int64 }
+            deleting: { type: integer, format: int64 }
+        sources:
+          type: array
+          items: { $ref: "#/components/schemas/PipelineSource" }
+        sync:
+          type: object
+          description: |
+            Sync runs in flight (`queued`, `running`, `retrying` after a failed attempt,
+            `rate_limited`), and those created in the last 24 hours that ended `failed` or
+            `succeeded`.
+          required: [queued, running, retrying, rate_limited, failed_24h, succeeded_24h]
+          properties:
+            queued: { type: integer, format: int64 }
+            running: { type: integer, format: int64 }
+            retrying: { type: integer, format: int64 }
+            rate_limited: { type: integer, format: int64 }
+            failed_24h: { type: integer, format: int64 }
+            succeeded_24h: { type: integer, format: int64 }
+        processing:
+          type: object
+          description: Processing jobs by status, and the records processing rejected and has not recovered (as in the coverage report).
+          required: [pending, running, parked, rejected_records]
+          properties:
+            pending: { type: integer, format: int64 }
+            running: { type: integer, format: int64 }
+            parked: { type: integer, format: int64 }
+            rejected_records: { type: integer, format: int64 }
+        storage:
+          type: object
+          description: Raw payloads stored in the last 24 hours.
+          required: [raw_objects_24h, raw_bytes_24h]
+          properties:
+            raw_objects_24h: { type: integer, format: int64 }
+            raw_bytes_24h: { type: integer, format: int64 }
+        delivery:
+          type: object
+          description: Webhook endpoints (failing ones are on but their last deliveries failed) and the deliveries not done.
+          required: [endpoints, endpoints_failing, endpoints_disabled, pending, parked]
+          properties:
+            endpoints: { type: integer, format: int64 }
+            endpoints_failing: { type: integer, format: int64 }
+            endpoints_disabled: { type: integer, format: int64 }
+            pending: { type: integer, format: int64 }
+            parked: { type: integer, format: int64 }
+
+    PipelineSource:
+      type: object
+      required: [slug, name, kinds, enabled, connections, broken, paused_until]
+      properties:
+        slug: { type: string }
+        name: { type: string }
+        kinds:
+          type: array
+          items: { type: string, enum: [oauth, push, device] }
+        enabled: { type: boolean }
+        connections:
+          type: object
+          description: The tenant's connections by status (active, needs_reauth, disconnected).
+          additionalProperties: { type: integer, format: int64 }
+        broken: { type: integer, format: int64, description: Active connections whose health is not ok. }
+        paused_until:
+          type: [string, "null"]
+          format: date-time
+          description: Set while the provider's rate limit pauses every pull.
+
+    TenantSyncRun:
+      allOf:
+        - $ref: "#/components/schemas/SyncRun"
+        - type: object
+          required: [user_id]
+          properties:
+            user_id: { type: string, format: uuid }
+
+    ETLJob:
+      type: object
+      description: One processing job, turning a stored raw payload into records.
+      required: [id, user_id, provider, tier, status, attempts, error, created_at, next_attempt_at]
+      properties:
+        id: { type: integer, format: int64 }
+        user_id: { type: string, format: uuid }
+        provider: { type: string }
+        tier: { type: string }
+        status: { type: string, enum: [pending, running, parked, done] }
+        attempts: { type: integer }
+        error: { type: [string, "null"], description: The error of the last failed attempt. }
+        created_at: { type: string, format: date-time }
+        next_attempt_at: { type: [string, "null"], format: date-time, description: Set while the job is pending. }
+
+    AdminProvider:
+      type: object
+      required: [slug, name, kinds, status, enabled, source, keys, error, urls, updated_at, updated_by]
+      properties:
+        slug: { type: string }
+        name: { type: string }
+        kinds:
+          type: array
+          items: { type: string, enum: [oauth, push, device] }
+        status:
+          type: string
+          enum: [active, off, not_configured, error, built_in]
+          description: |
+            `active` runs; `off` was turned off; `not_configured` lacks a required key; `error` has
+            keys the provider's rules refuse (see `error`); `built_in` needs no key and is always on.
+        enabled: { type: boolean }
+        source:
+          type: [string, "null"]
+          enum: [env, console, null]
+          description: Where the keys come from. Environment variables win over the console as a whole.
+        keys:
+          type: array
+          items: { $ref: "#/components/schemas/AdminProviderKey" }
+        error: { type: [string, "null"] }
+        urls:
+          type: object
+          description: The addresses to register in the provider's developer portal.
+          required: [redirect, inbound]
+          properties:
+            redirect: { type: [string, "null"], description: "The OAuth redirect URI, for a provider users connect to." }
+            inbound: { type: [string, "null"], description: "Where the provider posts notifications, for a push provider." }
+        updated_at: { type: [string, "null"], format: date-time }
+        updated_by: { type: [string, "null"], description: The id of the API key that saved the last change. }
+
+    AdminProviderKey:
+      type: object
+      required: [name, env, required, secret, set, value]
+      properties:
+        name: { type: string, examples: [CLIENT_ID] }
+        env: { type: string, description: "The environment variable that can set it instead.", examples: [OHS_OURA_CLIENT_ID] }
+        required: { type: boolean }
+        secret: { type: boolean }
+        set: { type: boolean }
+        value: { type: [string, "null"], description: The saved value of a key that is not a secret. Secrets are never served. }
+
+    AdminProviderPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        keys:
+          type: object
+          description: Key name to its new value; null removes the key.
+          additionalProperties: { type: [string, "null"] }
+        enabled: { type: boolean }
+
     AuditEvent:
       type: object
       required: [id, at, actor, action, user_id, status, detail]
@@ -3286,6 +3886,10 @@ components:
       required: [slug, kinds]
       properties:
         slug: { type: string, examples: [apple_health] }
+        name:
+          type: string
+          description: Display name, the slug when the build has none. Older servers leave it out.
+          examples: [Apple Health]
         kinds:
           type: array
           items: { type: string, enum: [oauth, push, device] }
@@ -3564,9 +4168,10 @@ components:
           type: array
           items: { type: string }
         last_sync_at: { type: [string, "null"], format: date-time }
-        initial_backfill_at: { type: [string, "null"], format: date-time }
+        initial_backfill_at: { type: [string, "null"], format: date-time, description: "When the pull of the user's history was queued." }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+        connected_at: { type: string, format: date-time, deprecated: true, description: "Same as created_at, under its earlier name." }
         health: { $ref: "#/components/schemas/ConnectionHealth" }
 
     ConnectionHealth:
