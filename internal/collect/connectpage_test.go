@@ -183,9 +183,10 @@ func TestConnectPageTemplateEscapes(t *testing.T) {
 	var b strings.Builder
 	require.NoError(t, connectPage.Execute(&b, connectView{
 		AppName: `<script>alert(1)</script>`, LogoURL: `https://cdn.example.test/l.png?a="b"`,
-		Session: `tok"en`, Expires: "in 30 minutes",
+		Session: `tok"en`, Expires: "in 30 minutes", Connected: 1,
 		Providers: []providerView{
-			{Slug: "withings", Name: "Withings", Status: "connected", StatusText: "Connected", Button: "Reconnect", Action: "connect/withings"},
+			{Slug: "withings", Name: "Withings", Initial: "W", Detail: providerDetails["withings"], Status: "connected",
+				StatusText: "Connected", Button: "Reconnect", Action: "connect/withings"},
 			{Slug: "oura", Name: "Oura", Status: "not_connected", StatusText: "Not connected", Button: "Connect", Action: "connect/oura"},
 		},
 	}))
@@ -198,6 +199,16 @@ func TestConnectPageTemplateEscapes(t *testing.T) {
 	assert.Contains(t, out, `action="connect/oura"`)
 	assert.Contains(t, out, "Not connected")
 	assert.Equal(t, 2, strings.Count(out, "<form"))
+	assert.Contains(t, out, "1 of 2 connected")
+	assert.Contains(t, out, "Weight, body composition, blood pressure and sleep")
+	assert.Contains(t, out, "&lt;script&gt;alert(1)&lt;/script&gt; never sees your password")
+}
+
+func TestProviderDetailsAreForNamedProviders(t *testing.T) {
+	for slug := range providerDetails {
+		_, ok := providerNames[slug]
+		assert.True(t, ok, "%s has a detail line but no display name", slug)
+	}
 }
 
 func TestConnectPageTemplateWithoutAppName(t *testing.T) {
@@ -238,6 +249,8 @@ func TestBackCookie(t *testing.T) {
 func TestExpiresIn(t *testing.T) {
 	assert.Equal(t, "in 30 minutes", expiresIn(29*time.Minute+time.Second))
 	assert.Equal(t, "in about a minute", expiresIn(20*time.Second))
+	assert.Equal(t, 30, minutesLeft(29*time.Minute+time.Second))
+	assert.Equal(t, 1, minutesLeft(-time.Second))
 }
 
 func TestProviderName(t *testing.T) {

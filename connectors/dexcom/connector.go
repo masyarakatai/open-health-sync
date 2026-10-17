@@ -157,6 +157,9 @@ func (c *Connector) Enabled(cfg connector.Config) bool {
 	return cfg[KeyClientID] != "" && cfg[KeyClientSecret] != ""
 }
 
+// OptionalKeys lists the keys it also reads and runs without: REGION (default us).
+func (c *Connector) OptionalKeys() []string { return []string{KeyRegion} }
+
 // Configure hands the connector its keys. The client id and secret are
 // required; an unknown region is an error, so a typo never sends users to the
 // wrong Dexcom.

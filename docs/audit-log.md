@@ -10,7 +10,7 @@ articles 30 and 32 and comparable health data rules expect one).
 | Source | Events |
 |---|---|
 | Every API request authenticated with a tenant key or a user token | One event, whatever the outcome (a 404 on another tenant's user is recorded too) |
-| `ohs admin tenant create`, `key create`, `key revoke` | `tenant.create`, `key.create`, `key.revoke`, actor `admin` |
+| `ohs admin tenant create`, `tenant admin`, `key create`, `key revoke` | `tenant.create`, `tenant.admin` (with `admin` true or false in `detail`), `key.create`, `key.revoke`, actor `admin` |
 | The [first-run setup](setup.md) (`POST /v1/setup`) | `tenant.create`, actor `system` with id `setup`, the key prefix in `detail` |
 | The deletion worker | `user.erased` when a user's data is gone, with the job id, actor `system` |
 | A [share link](share-links.md) opened by its reader | `share.access` for each manifest request on a known link and each file download, actor `share_link`, the outcome in `detail` |
@@ -31,7 +31,7 @@ Each event holds:
 | `user_id` | The end user the action concerns: the user of a user token, or the `{id}` of the route |
 | `method`, `route`, `status` | The HTTP method, the route **pattern** (`GET /v1/users/{id}/samples`) and the status code |
 | `request_id` | The request's `X-Request-Id`, to match the event with your own logs |
-| `detail` | Identifiers only, such as a deletion job id or a key prefix |
+| `detail` | Identifiers only, such as a deletion job id or a key prefix. For a route that names a provider, an API key or a processing job in its path, its `provider`, `key_id` or `job_id` |
 
 An event never holds a health value, a request or response body, a query string (which may hold
 dates or provider codes), a token, a key or an IP address.
@@ -50,8 +50,9 @@ dates or provider codes), a token, a key or an IP address.
 | `webhook.read`, `webhook.write` | The webhook endpoint routes |
 | `share.create`, `share.read`, `share.revoke` | Making, listing or reading, and revoking [share links](share-links.md) |
 | `share.access` | A manifest request or a file download on a share link; `detail` holds `share_id` and `outcome` (`served`, `wrong_passcode`, `inactive`, `file`). Never the reader's name |
+| `key.create`, `key.revoke` | Creating and revoking an API key (`POST /v1/keys`, `DELETE /v1/keys/{key_id}`); listing keys is `config.read` |
 | `audit.read` | Reading this log |
-| `config.read`, `config.write` | Anything else (the provider list, for example) |
+| `config.read`, `config.write` | Anything else: the provider list, the tenant, the pipeline and retrying processing jobs (`/v1/pipeline`), the provider settings (`/v1/admin/providers`) |
 
 New actions may be added; treat an unknown one as `config.read` or `config.write` by its method.
 

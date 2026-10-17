@@ -67,6 +67,200 @@ export interface ConsentEvent {
   evidence: string;
 }
 
+export interface Tenant {
+  id: string;
+  name: string;
+  /** True for the instance admin tenant, whose keys manage the providers. The first tenant of an instance is the admin. */
+  admin: boolean;
+  created_at: string;
+  /** The key making the call. */
+  key: TenantKey;
+}
+
+/** The key making the call. */
+export interface TenantKey {
+  id: string;
+  prefix: string;
+}
+
+export interface APIKey {
+  id: string;
+  /** The start of the key, kept in clear to tell keys apart. */
+  prefix: string;
+  created_at: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+  /** True for the key making the call. */
+  current: boolean;
+}
+
+export interface CreatedAPIKey {
+  id: string;
+  /** The start of the key, kept in clear to tell keys apart. */
+  prefix: string;
+  created_at: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+  /** True for the key making the call. */
+  current: boolean;
+  /** The whole key, returned this once. */
+  key: string;
+}
+
+export interface Pipeline {
+  generated_at: string;
+  users: PipelineUser;
+  sources: PipelineSource[];
+  /**
+   * Sync runs in flight (`queued`, `running`, `retrying` after a failed attempt,
+   * `rate_limited`), and those created in the last 24 hours that ended `failed` or
+   * `succeeded`.
+   */
+  sync: PipelineSync;
+  /** Processing jobs by status, and the records processing rejected and has not recovered (as in the coverage report). */
+  processing: PipelineProcessing;
+  /** Raw payloads stored in the last 24 hours. */
+  storage: PipelineStorage;
+  /** Webhook endpoints (failing ones are on but their last deliveries failed) and the deliveries not done. */
+  delivery: PipelineDelivery;
+}
+
+export interface PipelineUser {
+  active: number;
+  deleting: number;
+}
+
+/**
+ * Sync runs in flight (`queued`, `running`, `retrying` after a failed attempt,
+ * `rate_limited`), and those created in the last 24 hours that ended `failed` or
+ * `succeeded`.
+ */
+export interface PipelineSync {
+  queued: number;
+  running: number;
+  retrying: number;
+  rate_limited: number;
+  failed_24h: number;
+  succeeded_24h: number;
+}
+
+/** Processing jobs by status, and the records processing rejected and has not recovered (as in the coverage report). */
+export interface PipelineProcessing {
+  pending: number;
+  running: number;
+  parked: number;
+  rejected_records: number;
+}
+
+/** Raw payloads stored in the last 24 hours. */
+export interface PipelineStorage {
+  raw_objects_24h: number;
+  raw_bytes_24h: number;
+}
+
+/** Webhook endpoints (failing ones are on but their last deliveries failed) and the deliveries not done. */
+export interface PipelineDelivery {
+  endpoints: number;
+  endpoints_failing: number;
+  endpoints_disabled: number;
+  pending: number;
+  parked: number;
+}
+
+export interface PipelineSource {
+  slug: string;
+  name: string;
+  kinds: ("oauth" | "push" | "device")[];
+  enabled: boolean;
+  /** The tenant's connections by status (active, needs_reauth, disconnected). */
+  connections: Record<string, number>;
+  /** Active connections whose health is not ok. */
+  broken: number;
+  /** Set while the provider's rate limit pauses every pull. */
+  paused_until: string | null;
+}
+
+export interface TenantSyncRun {
+  id: number;
+  provider: string;
+  trigger: "backfill" | "scheduled" | "notification" | "manual";
+  status: "queued" | "running" | "retrying" | "rate_limited" | "succeeded" | "failed" | "cancelled";
+  /** Set when a notification named the one data type to pull. */
+  data_type: string | null;
+  window_start: string;
+  window_end: string;
+  /** Failed attempts so far. */
+  attempts: number;
+  objects_stored: number | null;
+  error: string | null;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  next_attempt_at: string | null;
+  user_id: string;
+}
+
+/** One processing job, turning a stored raw payload into records. */
+export interface ETLJob {
+  id: number;
+  user_id: string;
+  provider: string;
+  tier: string;
+  status: "pending" | "running" | "parked" | "done";
+  attempts: number;
+  /** The error of the last failed attempt. */
+  error: string | null;
+  created_at: string;
+  /** Set while the job is pending. */
+  next_attempt_at: string | null;
+}
+
+export interface AdminProvider {
+  slug: string;
+  name: string;
+  kinds: ("oauth" | "push" | "device")[];
+  /**
+   * `active` runs; `off` was turned off; `not_configured` lacks a required key; `error` has
+   * keys the provider's rules refuse (see `error`); `built_in` needs no key and is always on.
+   */
+  status: "active" | "off" | "not_configured" | "error" | "built_in";
+  enabled: boolean;
+  /** Where the keys come from. Environment variables win over the console as a whole. */
+  source: "env" | "console" | null;
+  keys: AdminProviderKey[];
+  error: string | null;
+  /** The addresses to register in the provider's developer portal. */
+  urls: AdminProviderUrl;
+  updated_at: string | null;
+  /** The id of the API key that saved the last change. */
+  updated_by: string | null;
+}
+
+/** The addresses to register in the provider's developer portal. */
+export interface AdminProviderUrl {
+  /** The OAuth redirect URI, for a provider users connect to. */
+  redirect: string | null;
+  /** Where the provider posts notifications, for a push provider. */
+  inbound: string | null;
+}
+
+export interface AdminProviderKey {
+  name: string;
+  /** The environment variable that can set it instead. */
+  env: string;
+  required: boolean;
+  secret: boolean;
+  set: boolean;
+  /** The saved value of a key that is not a secret. Secrets are never served. */
+  value: string | null;
+}
+
+export interface AdminProviderPatch {
+  /** Key name to its new value; null removes the key. */
+  keys?: Record<string, string | null>;
+  enabled?: boolean;
+}
+
 export interface AuditEvent {
   /** Increasing; the cursor of the next page. */
   id: number;
@@ -106,6 +300,8 @@ export interface AuditEventActor {
 
 export interface Provider {
   slug: string;
+  /** Display name, the slug when the build has none. Older servers leave it out. */
+  name?: string;
   kinds: ("oauth" | "push" | "device")[];
 }
 
@@ -347,9 +543,12 @@ export interface Connection {
   status: "active" | "needs_reauth" | "disconnected";
   scopes?: string[];
   last_sync_at?: string | null;
+  /** When the pull of the user's history was queued. */
   initial_backfill_at?: string | null;
   created_at: string;
   updated_at?: string;
+  /** Same as created_at, under its earlier name. */
+  connected_at?: string;
   /**
    * Whether the connection syncs, and if not why and what fixes it. `reason` is `needs_reauth`
    * (the provider refused the grant: token expired or revoked), `missing_scope` (the grant lacks a
@@ -1666,6 +1865,31 @@ export interface IngestActivityFilesResponse {
   /** Raw object key. */
   key: string;
   duplicate: boolean;
+}
+
+export interface ListKeysResponse {
+  data: APIKey[];
+}
+
+export interface ListTenantSyncRunsResponse {
+  data: TenantSyncRun[];
+  /** Null on the last page. */
+  next_cursor: string | null;
+}
+
+export interface ListETLJobsResponse {
+  data: ETLJob[];
+  /** Null on the last page. */
+  next_cursor: string | null;
+}
+
+export interface RetryParkedETLJobsRequest {
+  /** Only this provider's parked jobs. */
+  provider?: string;
+}
+
+export interface RetryParkedETLJobsResponse {
+  retried: number;
 }
 
 export interface ListAuditEventsResponse {
