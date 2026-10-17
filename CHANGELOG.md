@@ -115,6 +115,12 @@ release may change the API, the configuration or the database schema.
 
 ### Changed
 
+- The hosted connect page and its result page are redesigned. Each source is one row and one
+  button, with a line on what it shares (from the data its connector reads), a "Connected" or
+  "Needs reconnecting" badge and a count of the connected sources. Under the list the page says
+  that the user signs in on each source's own site and that the access is read only. The result
+  page says the data now syncs in the background and offers a button back to the sources. Still
+  no script, light and dark, and fits a phone screen.
 - A canonical `Workout` can name its source and device (`SourceSlug`, `DeviceID`), written to
   `workouts.source_slug` and `workouts.device_id` (columns that already existed). A connector
   that leaves them empty gets the previous behavior: the provider as the source, no device.

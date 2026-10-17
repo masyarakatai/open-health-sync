@@ -306,6 +306,8 @@ func (h *Handlers) allowed(s connectSession, provider string) ([]string, bool) {
 // providerView is one provider row of the page.
 type providerView struct {
 	Slug, Name         string
+	Initial            string // the first letter of Name, on the row's tile
+	Detail             string // what the source shares, when known
 	Status, StatusText string
 	Button             string
 	Action             string
@@ -319,6 +321,7 @@ type connectView struct {
 	Single          bool
 	Expires         string
 	Providers       []providerView
+	Connected       int // providers the user has an active connection to
 }
 
 // ConnectPage serves GET /connect?session=T and GET /connect/{provider}?session=T,
@@ -351,7 +354,10 @@ func (h *Handlers) ConnectPage() http.Handler {
 			Expires: expiresIn(s.expiresAt.Sub(h.d.now())),
 		}
 		for _, p := range slugs {
-			pv := providerView{Slug: p, Name: providerName(p)}
+			pv := providerView{Slug: p, Name: providerName(p), Detail: providerDetails[p]}
+			if r, _ := utf8.DecodeRuneInString(pv.Name); r != utf8.RuneError {
+				pv.Initial = string(unicode.ToUpper(r))
+			}
 			// The form posts to /connect/{provider}, relative to the page so
 			// an instance served under a path prefix works too.
 			if provider == "" {
@@ -362,6 +368,7 @@ func (h *Handlers) ConnectPage() http.Handler {
 			switch status[p] {
 			case StatusActive:
 				pv.Status, pv.StatusText, pv.Button = "connected", "Connected", "Reconnect"
+				v.Connected++
 			case StatusNeedsReauth:
 				pv.Status, pv.StatusText, pv.Button = "needs_reauth", "Needs reconnecting", "Reconnect"
 			default:
@@ -538,6 +545,22 @@ var providerNames = map[string]string{
 	"ultrahuman":    "Ultrahuman",
 	"whoop":         "WHOOP",
 	"withings":      "Withings",
+}
+
+// providerDetails say on the connection page what each source shares, from
+// the data its connector reads.
+var providerDetails = map[string]string{
+	"dexcom":        "Continuous glucose readings",
+	"fitbit":        "Sleep, activity, workouts and heart rate",
+	"intervals_icu": "Workouts, HRV, sleep score and weight",
+	"omron":         "Blood pressure, heart rate and weight",
+	"oura":          "Sleep, readiness, activity and heart rate",
+	"polar":         "Workouts, sleep, activity and heart rate",
+	"strava":        "Workouts with distance, pace and heart rate",
+	"suunto":        "Workouts with distance, pace and heart rate",
+	"ultrahuman":    "Sleep, heart rate, HRV, steps and temperature",
+	"whoop":         "Recovery, sleep, strain and workouts",
+	"withings":      "Weight, body composition, blood pressure and sleep",
 }
 
 // providerName is how the pages name a provider: its display name when
