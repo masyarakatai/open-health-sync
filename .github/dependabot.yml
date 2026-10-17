@@ -24,6 +24,10 @@ updates:
     directory: /sdks/server/typescript
     schedule:
       interval: weekly
+    ignore:
+      # The types follow the Node version CI runs (22), not the newest Node.
+      - dependency-name: "@types/node"
+        update-types: [version-update:semver-major]
     groups:
       sdk-npm-minor-and-patch:
         update-types: [minor, patch]
@@ -44,6 +48,11 @@ updates:
     directory: /deploy
     schedule:
       interval: weekly
+    ignore:
+      # A new Go minor moves go.mod, CI and the Dockerfile together, by hand.
+      # Patch releases of the same minor still come as digest updates.
+      - dependency-name: golang
+        update-types: [version-update:semver-minor]
     commit-message:
       prefix: build(deps)
 
