@@ -176,7 +176,10 @@ Android Health Connect records the same way; its line format is in
 rows of a Mi Fitness data copy, as `ohs import mi-fitness` writes them
 ([connectors/xiaomi.md](connectors/xiaomi.md)). `POST /v1/ingest/activity-files` takes one FIT, GPX
 or TCX activity file per part, base64 on one line, as `ohs import files` sends them
-([connectors/activity-files.md](connectors/activity-files.md)). The routes share the limit of
+([connectors/activity-files.md](connectors/activity-files.md)). `POST /v1/ingest/bluetooth` takes
+the values standard Bluetooth health devices send, one per line in hex with the time they arrived,
+as `ohs-bridge` and the Swift and Kotlin SDKs send them; the server decodes them
+([connectors/bluetooth.md](connectors/bluetooth.md)). The routes share the limit of
 uploads in flight.
 
 ## Reading data

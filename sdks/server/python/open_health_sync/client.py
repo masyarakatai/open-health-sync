@@ -55,6 +55,7 @@ from .models import (
     HealthzResponse,
     IngestActivityFilesResponse,
     IngestAppleHealthResponse,
+    IngestBluetoothResponse,
     IngestHealthConnectResponse,
     IngestXiaomiResponse,
     ListAuditEventsResponse,
@@ -2484,6 +2485,55 @@ class OpenHealthSync:
         return self._request(
             "POST",
             "/v1/ingest/activity-files",
+            headers={
+                "X-OHS-Type": ohs_type,
+                "X-OHS-Day": ohs_day,
+                "X-OHS-Batch": ohs_batch,
+                "X-OHS-Part": ohs_part,
+            },
+            data=body,
+            content_type="application/gzip",
+        )
+
+    def ingest_bluetooth(
+        self,
+        body: bytes,
+        *,
+        ohs_type: Literal["gatt"],
+        ohs_day: str,
+        ohs_batch: str,
+        ohs_part: int,
+    ) -> IngestBluetoothResponse:
+        """Upload one part of Bluetooth device values.
+
+        ``POST /v1/ingest/bluetooth``
+
+        One gzip NDJSON part (at most 64 MiB, never truncated), one characteristic value a
+        standard Bluetooth health device sent per line: `{"at": "<RFC 3339 arrival time with
+        offset>", "char": "2a37", "value": "<hex>", "session": "<id of the connection>",
+        "device": {"name", "manufacturer", "model", "firmware"}, "device_user": <index>}`
+        (`device` and `device_user` optional; the line format is in docs/connectors/bluetooth.md;
+        `ohs-bridge` and the Swift and Kotlin SDKs write it). The server decodes heart rate with
+        RR intervals, blood pressure, weight, body composition, glucose, temperature and pulse
+        oximetry; other characteristics are stored and not mapped. The part is refused with
+        400, and nothing is stored, when a line breaks the format; a value that does not decode
+        is a failed record of its line only. Same headers, limits and answers as the Apple
+        Health upload.
+        Re-sending the same part is safe: the answer is 200 with `duplicate: true`. Other
+        bytes under a (day, batch, part) already stored are a 409, and so is a part sent while
+        this provider's data is being deleted for the user (nothing is kept; send it again
+        once the deletion job is done). Each instance processes a
+        bounded number of uploads at once; above it the answer is 503 with `Retry-After`.
+
+        Needs a user token (ohs_ut_) as the client's api_key.
+
+        Args:
+            ohs_type: Sent as the X-OHS-Type header. Always `gatt`.
+            ohs_day: Sent as the X-OHS-Day header. UTC day of the part's first line (the server does not check it).
+        """
+        return self._request(
+            "POST",
+            "/v1/ingest/bluetooth",
             headers={
                 "X-OHS-Type": ohs_type,
                 "X-OHS-Day": ohs_day,

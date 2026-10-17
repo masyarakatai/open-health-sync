@@ -3278,6 +3278,64 @@
               }
             }
           }
+        },
+        {
+          "name": "Upload one part of Bluetooth device values",
+          "request": {
+            "method": "POST",
+            "description": "Upload one part of Bluetooth device values.\n\n`POST /v1/ingest/bluetooth`\n\nOne gzip NDJSON part (at most 64 MiB, never truncated), one characteristic value a\nstandard Bluetooth health device sent per line: `{\"at\": \"<RFC 3339 arrival time with\noffset>\", \"char\": \"2a37\", \"value\": \"<hex>\", \"session\": \"<id of the connection>\",\n\"device\": {\"name\", \"manufacturer\", \"model\", \"firmware\"}, \"device_user\": <index>}`\n(`device` and `device_user` optional; the line format is in docs/connectors/bluetooth.md;\n`ohs-bridge` and the Swift and Kotlin SDKs write it). The server decodes heart rate with\nRR intervals, blood pressure, weight, body composition, glucose, temperature and pulse\noximetry; other characteristics are stored and not mapped. The part is refused with\n400, and nothing is stored, when a line breaks the format; a value that does not decode\nis a failed record of its line only. Same headers, limits and answers as the Apple\nHealth upload.\nRe-sending the same part is safe: the answer is 200 with `duplicate: true`. Other\nbytes under a (day, batch, part) already stored are a 409, and so is a part sent while\nthis provider's data is being deleted for the user (nothing is kept; send it again\nonce the deletion job is done). Each instance processes a\nbounded number of uploads at once; above it the answer is 503 with `Retry-After`.\n\nNeeds a user token (ohs_ut_) as the client's apiKey.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{userToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "X-OHS-Type",
+                "value": "gatt",
+                "description": "Always `gatt`."
+              },
+              {
+                "key": "X-OHS-Day",
+                "value": "2026-01-01",
+                "description": "UTC day of the part's first line (the server does not check it)."
+              },
+              {
+                "key": "X-OHS-Batch",
+                "value": ""
+              },
+              {
+                "key": "X-OHS-Part",
+                "value": "0"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/gzip"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/ingest/bluetooth",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "ingest",
+                "bluetooth"
+              ]
+            },
+            "body": {
+              "mode": "file",
+              "file": {
+                "src": ""
+              }
+            }
+          }
         }
       ]
     },

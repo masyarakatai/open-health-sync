@@ -263,6 +263,10 @@ var metricUnitConversions = map[string]conversion{
 	"distance_walking_running|cm":          {Factor: 0.01, To: "m"},
 	"distance_walking_running_intraday|cm": {Factor: 0.01, To: "m"},
 	"blood_glucose|mmol/l":                 {Factor: 18.0182, To: "mg/dL"},
+	// Blood pressure cuffs on the Bluetooth Blood Pressure profile may report
+	// kPa. Scoped to the two pressures: kPa means nothing for other metrics.
+	"blood_pressure_systolic|kpa":  {Factor: 7.50062, To: "mmHg"},
+	"blood_pressure_diastolic|kpa": {Factor: 7.50062, To: "mmHg"},
 	// Withings visceral fat arrives as "count" and is stored as "index", one
 	// dimensionless rating under two names. Unconverted, every reading was a
 	// unit error and nothing was ever stored.

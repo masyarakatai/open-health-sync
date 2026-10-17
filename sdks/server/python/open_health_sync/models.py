@@ -1961,6 +1961,12 @@ class IngestActivityFilesResponse(TypedDict):
     duplicate: bool
 
 
+class IngestBluetoothResponse(TypedDict):
+    # Raw object key.
+    key: str
+    duplicate: bool
+
+
 class ListKeysResponse(TypedDict):
     data: List[APIKey]
 
@@ -2084,6 +2090,7 @@ __all__ = [
     "HealthzResponse",
     "IngestActivityFilesResponse",
     "IngestAppleHealthResponse",
+    "IngestBluetoothResponse",
     "IngestHealthConnectResponse",
     "IngestXiaomiResponse",
     "ListAuditEventsResponse",
