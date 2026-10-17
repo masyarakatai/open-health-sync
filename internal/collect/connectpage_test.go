@@ -249,6 +249,8 @@ func TestBackCookie(t *testing.T) {
 func TestExpiresIn(t *testing.T) {
 	assert.Equal(t, "in 30 minutes", expiresIn(29*time.Minute+time.Second))
 	assert.Equal(t, "in about a minute", expiresIn(20*time.Second))
+	assert.Equal(t, 30, minutesLeft(29*time.Minute+time.Second))
+	assert.Equal(t, 1, minutesLeft(-time.Second))
 }
 
 func TestProviderName(t *testing.T) {

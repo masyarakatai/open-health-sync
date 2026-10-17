@@ -50,9 +50,12 @@ status for it:
 To show a single provider, append its slug to the path:
 `https://ohs.example.org/connect/withings?session=...`.
 
-The whole row is the button. The page follows the light or dark setting of the device, has no
-script, and fits a phone screen. Under the list it tells the user that they sign in on each
-source's own site and that the access is read only.
+The whole row is the button. Beside the list, two figures give how many of the sources are
+connected and how many minutes the link has left. The panels sit on a background the page draws
+itself (gradients and SVG noise, no image or font is downloaded), so it has no script, loads
+nothing but your logo, and fits a phone screen. The space around it follows the light or dark
+setting of the device. The list says that the access is read only, and under it the page tells
+the user that they sign in on each source's own site.
 
 When the user presses a button, the page sends them to the provider's consent screen. After
 consent they land on `redirect_uri?status=connected&provider=withings` (`status=error` on

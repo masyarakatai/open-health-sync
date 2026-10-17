@@ -54,7 +54,7 @@ const (
 	connectCookie = "ohs_connect"
 )
 
-var connectPage = template.Must(template.ParseFS(pageFS, "page/connect.html"))
+var connectPage = template.Must(template.ParseFS(pageFS, "page/connect.html", "page/frame.html"))
 
 // ConnectSessionRequest is the CreateConnectSession body. Every field is
 // optional.
@@ -320,6 +320,7 @@ type connectView struct {
 	Session         string
 	Single          bool
 	Expires         string
+	ExpiresMinutes  int // the minutes left, at least 1, for the page's large figure
 	Providers       []providerView
 	Connected       int // providers the user has an active connection to
 }
@@ -351,7 +352,7 @@ func (h *Handlers) ConnectPage() http.Handler {
 		}
 		v := connectView{
 			AppName: s.appName, LogoURL: s.logoURL, Session: token, Single: provider != "",
-			Expires: expiresIn(s.expiresAt.Sub(h.d.now())),
+			Expires: expiresIn(s.expiresAt.Sub(h.d.now())), ExpiresMinutes: minutesLeft(s.expiresAt.Sub(h.d.now())),
 		}
 		for _, p := range slugs {
 			pv := providerView{Slug: p, Name: providerName(p), Detail: providerDetails[p]}
@@ -524,11 +525,16 @@ func renderConnectProblem(w http.ResponseWriter, code int, title, detail string)
 
 // expiresIn says when the link expires, for the page footer.
 func expiresIn(d time.Duration) string {
-	m := int(math.Ceil(d.Minutes()))
-	if m <= 1 {
+	m := minutesLeft(d)
+	if m == 1 {
 		return "in about a minute"
 	}
 	return fmt.Sprintf("in %d minutes", m)
+}
+
+// minutesLeft is d rounded up to whole minutes, at least 1.
+func minutesLeft(d time.Duration) int {
+	return max(1, int(math.Ceil(d.Minutes())))
 }
 
 // providerNames are the display names of the providers whose name is not
