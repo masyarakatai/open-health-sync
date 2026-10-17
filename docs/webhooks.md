@@ -140,8 +140,8 @@ original id. An endpoint that has accepted nothing for 5 days is disabled when o
 runs out of attempts; its pending deliveries are parked and `disabled_reason` says why. Fix the
 receiver, then `PATCH` it with `{"enabled": true}` and retry what you need.
 
-Finished deliveries are kept 30 days. When a user is deleted, the events not yet sent about them
-are dropped and `user.deleted` is queued.
+Finished deliveries are kept 30 days. When a user is deleted, every delivery about them, sent or
+not, is deleted and `user.deleted` is queued.
 
 Deliveries are posted by the `etl` role, so an instance split into roles needs outbound network
 access from its `etl` processes. The signing secrets are sealed with `OHS_ENCRYPTION_KEY`;

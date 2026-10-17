@@ -41,7 +41,7 @@ const maxRedirectURI = 2048
 //go:embed page/*.html
 var pageFS embed.FS
 
-var resultPage = template.Must(template.ParseFS(pageFS, "page/result.html"))
+var resultPage = template.Must(template.ParseFS(pageFS, "page/result.html", "page/frame.html"))
 
 // StartRequest is the StartConnection body. It may be empty.
 type StartRequest struct {
