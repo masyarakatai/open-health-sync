@@ -221,13 +221,14 @@ flags for the rest. State lives in one directory (`OHS_BRIDGE_STATE`, by default
 
 Queue, crash safe:
 
-1. each value is appended as a line to `spool/current.ndjson`;
+1. each value is appended as a line to the open spool file, `spool/<id>.ndjson`;
 2. every 60 seconds (or 5,000 lines) the spool is closed, gzip compressed into
    `parts/<id>.gz` with a `parts/<id>.json` holding its headers (`X-OHS-Day` the UTC day of
    its first line, batch `bt1-<install id>-<sequence>`, part 0), and the spool file removed
    once both are written and synced;
 3. the uploader sends parts oldest first. 200 (stored or duplicate) deletes the part; 401
-   and 403 stop uploads and say the token was refused; 408, 429 and 5xx back off
+   and 403 stop uploads and say the token was refused (404, 405 and redirects stop them too:
+   the URL is wrong); 408, 429 and 5xx back off
    (Retry-After, else 1 s doubling to 5 minutes); another 4xx moves the part to `rejected/`
    with the server's message.
 
@@ -253,8 +254,9 @@ Device handling:
 - Pairing: devices that need bonding (most cuffs and meters) are paired once with the
   operating system (System Settings on macOS, `bluetoothctl` on Linux).
 
-Privacy: the bridge never prints or logs a health value outside `watch`, never sends a
-device address or serial number, and keeps its state directory private to the user.
+Privacy: the bridge never prints or logs a health value outside `watch`, `status` and the
+status file (which the user asks for), never sends a device address or serial number, and
+keeps its state directory private to the user.
 
 ### Dependencies
 
@@ -272,7 +274,7 @@ the `ohs` binary does not change size.
 | `flate2` | gzip, pure Rust backend | MIT or Apache-2.0 |
 | `serde`, `serde_json` | Lines, part headers and state files | MIT or Apache-2.0 |
 | `sha2` | SHA-256 of FIT files, for the same batch ids as `ohs import files` | MIT or Apache-2.0 |
-| `chrono` (clock only) | The local UTC offset of `at`; the standard library has no local time zone | MIT or Apache-2.0 |
+| `chrono` (clock and serde only) | The local UTC offset of `at`, and the times in the status file; the standard library has no local time zone | MIT or Apache-2.0 |
 
 All compatible with AGPL-3.0. Hex and base64 are written by hand (a few lines each);
 arguments are parsed by hand.

@@ -282,6 +282,7 @@ Integration paths, vendor programs and tracking issues for each:
 | Dexcom | ✅ Available | CGM glucose: OAuth, scheduled pulls ([guide](docs/connectors/dexcom.md)) |
 | OMRON | ✅ Available | blood pressure and weight: partner API, OAuth, scheduled pulls ([guide](docs/connectors/omron.md)) |
 | Xiaomi | 🔜 Next release | `ohs import mi-fitness` loads the Mi Fitness data copy (full history); ongoing data through Health Connect or Apple Health ([guide](docs/connectors/xiaomi.md)) |
+| Bluetooth devices | 🔜 Next release | heart rate straps, blood pressure cuffs, scales, glucose meters, thermometers and pulse oximeters on the standard Bluetooth health profiles, through the [`ohs-bridge`](docs/bridge.md) desktop bridge (macOS, Linux, Raspberry Pi, Windows) or the Swift and Kotlin SDKs; no vendor account ([guide](docs/connectors/bluetooth.md)) |
 | Activity files | 🔜 Next release | `ohs import files` loads FIT, GPX and TCX files, and Garmin, COROS, Wahoo, Suunto, Zwift and Strava exports ([guide](docs/connectors/activity-files.md)) |
 | FreeStyle Libre | No public API | through Health Connect or Apple Health ([notes](docs/connectors/freestyle-libre.md)) |
 | Coros | 🛠 Planned | cloud API, OAuth |
@@ -675,6 +676,8 @@ Health Connect reading in the Kotlin SDK, then health records (EHR) through SMAR
 - [Server SDKs](docs/server-sdks.md): TypeScript and Python clients for your backend, and a
   [Postman collection](docs/api-collections.md) (next release).
 - [Example apps](examples/README.md): iOS (HealthKit), Android and React Native, built on the SDKs.
+- [Desktop bridge](docs/bridge.md): `ohs-bridge` sends what Bluetooth health devices and
+  USB-mounted watches record, from a computer or a Raspberry Pi (next release).
 - [Architecture](docs/architecture.md): roles, pipeline, storage, reliability.
 - Connectors: [supported and planned sources](docs/connectors/README.md),
   [Apple Health](docs/connectors/apple-health.md),
