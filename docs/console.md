@@ -40,8 +40,9 @@ status. A user being deleted shows as `deleting`.
 
 **User detail.**
 
-- Connections: provider, status, last sync, when the initial backfill finished. A connection in
-  `needs_reauth` is highlighted: nothing syncs until the user connects that provider again.
+- Connections: provider, status, last sync, when the initial backfill started and when the user
+  connected. A connection in `needs_reauth` is highlighted: nothing syncs until the user connects
+  that provider again.
 - Freshness, one line per source: state, how far the data reaches (`synced_through`), lag, last
   attempt, consecutive failures and the last error. `stale`, `failing` and `needs_reauth` are
   red, `syncing` is amber. See [background-sync.md](background-sync.md) for what each state
