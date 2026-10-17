@@ -18,6 +18,10 @@
 # Only the image and checksums jobs get id-token: write. Verification commands
 # are in SECURITY.md and docs/hardening.md.
 #
+# Only a version tag on a commit of main releases, and a published release is
+# never rebuilt: re-pushing its tag, or re-running this workflow, stops in the
+# test job before anything is built or signed (scripts/check-release-tag.sh).
+#
 # Image tags: <version>, plus edge for a version without a hyphen (not for
 # v0.1.0-rc.1). No `latest` while the version is 0.x.
 #
@@ -43,6 +47,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # main's history, to check the tag is on it
+      - name: The tag is on main and its release is not published
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          scripts/check-release-tag.sh "$GITHUB_REF_NAME" origin/main
+          # This route answers published releases only, never drafts.
+          if url="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${GITHUB_REF_NAME}" --jq .html_url 2>"$RUNNER_TEMP/err.txt")"; then
+            echo "${GITHUB_REF_NAME} is already published (${url}): tag a new version instead" >&2
+            exit 1
+          fi
+          grep -q "HTTP 404" "$RUNNER_TEMP/err.txt" || { cat "$RUNNER_TEMP/err.txt" >&2; exit 1; }
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.26"
@@ -62,9 +79,14 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # A re-run finds the draft of the failed run and keeps it.
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            echo "release $GITHUB_REF_NAME exists, reusing it"
+          # A re-run finds the draft of the failed run and keeps it. A
+          # published release is never reused.
+          if draft="$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft 2>/dev/null)"; then
+            if [ "$draft" != "true" ]; then
+              echo "release $GITHUB_REF_NAME is published, not rebuilding it" >&2
+              exit 1
+            fi
+            echo "draft $GITHUB_REF_NAME exists, reusing it"
             exit 0
           fi
           flags=""
@@ -223,6 +245,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # --clobber replaces the assets of a re-run's draft, never of a
+          # published release.
+          draft="$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft)"
+          if [ "$draft" != "true" ]; then
+            echo "release $GITHUB_REF_NAME is not a draft, not replacing its assets" >&2
+            exit 1
+          fi
           gh release upload "$GITHUB_REF_NAME" dist/*.tar.gz \
             dist/checksums.txt dist/checksums.txt.sigstore.json --clobber
       - name: Ready for review

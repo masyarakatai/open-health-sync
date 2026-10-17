@@ -160,6 +160,13 @@ release may change the API, the configuration or the database schema.
 - MCP `get_coverage` without `start` reports the last 30 days. On years of Apple Health history
   it answered with over a megabyte of JSON, more than an agent can read.
 
+### Security
+
+- The release workflow builds only a version tag on a commit of `main`, and never rebuilds a
+  published release: re-pushing its tag stops before anything is built, signed or uploaded.
+  The image build context is an allowlist of what `go build` needs, so a local `.env`, a dump
+  in `backups/` or a health export never reaches a builder.
+
 ## [0.1.0] - 2026-10-13
 
 Eleven new sources, FHIR R4 and Open mHealth output, CSV and Parquet exports, outgoing
