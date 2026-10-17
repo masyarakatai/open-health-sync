@@ -49,7 +49,7 @@ panels on top. The CSP of both pages allows inline styles and nothing else. */}}
   .foliage { left: -40%; top: -40%; width: 180%; height: 180%; transform: rotate(-17deg); opacity: .94;
              -webkit-mask-image: linear-gradient(90deg, transparent 22%, #000 44%); mask-image: linear-gradient(90deg, transparent 22%, #000 44%); }
   .mist { inset: 0; background: linear-gradient(98deg, rgb(206 207 201) 0%, rgb(178 180 172 / 88%) 13%, rgb(126 131 120 / 42%) 29%, transparent 45%); }
-  .prism { border-radius: 50%; filter: blur(26px); mix-blend-mode: screen; opacity: .62;
+  .sheen { border-radius: 50%; filter: blur(26px); mix-blend-mode: screen; opacity: .62;
            background: linear-gradient(118deg, transparent 8%, #ff6fd6 26%, #ffd86e 40%, #70ffb4 54%, #66c8ff 68%, #b78dff 82%, transparent 96%); }
   .p1 { left: 15%; top: -14%; width: 27%; height: 46%; transform: rotate(-12deg); }
   .p2 { left: 27%; bottom: -16%; width: 22%; height: 30%; transform: rotate(8deg); opacity: .5; }
@@ -96,8 +96,8 @@ panels on top. The CSP of both pages allows inline styles and nothing else. */}}
     <feGaussianBlur stdDeviation="2.5"/>
   </filter><rect width="100%" height="100%" filter="url(#foliage)"/></svg>
   <div class="mist"></div>
-  <div class="prism p1"></div>
-  <div class="prism p2"></div>
+  <div class="sheen p1"></div>
+  <div class="sheen p2"></div>
   <svg class="dissolve" focusable="false">
     <linearGradient id="dissolve-fade" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#fff"/><stop offset=".56" stop-color="#000"/></linearGradient>
     <filter id="specks-light" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
