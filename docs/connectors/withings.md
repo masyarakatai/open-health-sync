@@ -124,3 +124,15 @@ Withings measure codes the connector does not know are skipped with a warning in
 Rate limits (HTTP 429) defer the connection's job until `Retry-After`.
 If Withings refuses the refresh token the connection becomes `needs_reauth` and the user must
 connect again.
+
+## Provenance
+
+Every record has provider `withings`, source slug `withings` and source name `Withings`. The
+device (`DeviceID`) is the `deviceid` Withings returns with the record itself: it fills the
+device for quantity samples (from the measure groups), the daily activity samples, intraday
+series and ECG recordings. It is the opaque identifier Withings gives the device, not a product
+name (invented values like `fake-device-1` stand in for it in the connector tests).
+
+Sleep sessions and workouts have no device: Withings returns no `deviceid` for either, so their
+`DeviceID` stays empty. FHIR output carries the provider, source and device as
+[Provenance](../fhir.md#provenance) like any other source.

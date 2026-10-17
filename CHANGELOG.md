@@ -181,6 +181,9 @@ release may change the API, the configuration or the database schema.
 
 ### Changed
 
+- The Withings guide has a Provenance section: the source slug and name every record gets, where
+  the device id comes from (Withings' own `deviceid` on measure groups, activity, intraday and
+  ECG; sleep sessions and workouts carry none) and how FHIR output carries it. Part of #134.
 - `OHS_CONSOLE=true` now serves the console with its actions. An instance that turned it on for
   the read-only view gets them on upgrade; set `OHS_CONSOLE=read-only` to keep the console
   without any action.
