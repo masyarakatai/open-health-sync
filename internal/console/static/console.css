@@ -430,22 +430,33 @@ p:last-child { margin-bottom: 0; }
 .stage dd.warn, .stage dd.warn a { color: var(--warn); }
 .flow-link { flex: none; align-self: center; display: grid; place-items: center; width: 22px; color: var(--ink-faint); }
 .flow-link .icon { width: 14px; height: 14px; }
-@media (max-width: 1180px) {
-  .pipeline { overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
-  .stage { min-width: 196px; }
+/* Narrower frames (a smaller window, the sidebar beside it) put the stages
+   on two rows, three then two, then on two columns, and a phone stacks them. */
+@container (max-width: 900px) {
+  .pipeline { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+  .pipeline > .stage { grid-column: span 2; }
+  .pipeline > .stage:nth-of-type(n + 4) { grid-column: span 3; }
+  .flow-link { display: none; }
 }
-@media (max-width: 860px) {
-  .pipeline { flex-direction: column; overflow: visible; }
-  .stage { min-width: 0; }
+@container (max-width: 640px) {
+  .pipeline { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pipeline > .stage, .pipeline > .stage:nth-of-type(n + 4) { grid-column: auto; }
+  .pipeline > .stage:nth-of-type(5) { grid-column: 1 / -1; }
+}
+@container (max-width: 440px) {
+  .pipeline { display: flex; flex-direction: column; gap: 0; }
   .stage-role { min-height: 0; }
-  .flow-link { width: auto; height: 20px; }
+  .flow-link { display: grid; width: auto; height: 20px; }
   .flow-link .icon { transform: rotate(90deg); }
 }
 
 /* The band: a short frame at the top of a provider's page */
 
+/* The band follows its own width, not the window's: beside the sidebar a
+   1000 px window leaves it little room. */
+.frame.band { container-type: inline-size; }
 .band-row.tiles-1 { --tiles: 1; }
-.band-row { display: grid; grid-template-columns: minmax(0, 1fr) repeat(var(--tiles, 2), minmax(150px, 210px)); gap: 12px; }
+.band-row { display: grid; grid-template-columns: minmax(0, 1fr) repeat(var(--tiles, 2), minmax(150px, 200px)); gap: 12px; }
 .band-main { display: flex; align-items: center; gap: 18px; padding: 22px 24px; min-width: 0; }
 .band-main h1 { font-size: 36px; }
 .band-main .sub { margin: 8px 0 0; color: var(--ink-muted); max-width: 56ch; }
@@ -454,8 +465,14 @@ p:last-child { margin-bottom: 0; }
 .band-tile .numeral { font-size: 48px; }
 .band-text { min-width: 0; }
 .tile-foot { margin-top: 10px; color: var(--ink-muted); font-size: 12.5px; }
-@media (max-width: 960px) { .band-row { grid-template-columns: 1fr 1fr; } .band-main { grid-column: 1 / -1; } }
-@media (max-width: 560px) { .band-main { flex-direction: column; align-items: flex-start; } }
+@container (max-width: 860px) {
+  .band-row:not(.tiles-1) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .band-row:not(.tiles-1) .band-main { grid-column: 1 / -1; }
+}
+@container (max-width: 560px) {
+  .band-row.tiles-1 { grid-template-columns: minmax(0, 1fr); }
+}
+@container (max-width: 520px) { .band-main { flex-direction: column; align-items: flex-start; } }
 
 /* Cards */
 
@@ -495,6 +512,7 @@ p:last-child { margin-bottom: 0; }
 .facts { display: grid; grid-template-columns: minmax(130px, max-content) 1fr; gap: 12px 28px; margin: 0; }
 .facts dt { font: 500 11px/1.6 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); padding-top: 1px; }
 .facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+p + .facts { margin-top: 16px; }
 
 /* Stats: a row of tiles with a display numeral each */
 
