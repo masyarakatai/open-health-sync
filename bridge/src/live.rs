@@ -36,8 +36,8 @@ pub fn heart_rate(v: &[u8]) -> Option<HeartRate> {
     }
     let mut rr_ms = Vec::new();
     if flags & 0x10 != 0 {
-        for pair in v.get(i..)?.chunks_exact(2) {
-            rr_ms.push(u16::from_le_bytes([pair[0], pair[1]]) as f64 * 1000.0 / 1024.0);
+        for pair in v.get(i..)?.as_chunks::<2>().0 {
+            rr_ms.push(u16::from_le_bytes(*pair) as f64 * 1000.0 / 1024.0);
         }
     }
     Some(HeartRate {
