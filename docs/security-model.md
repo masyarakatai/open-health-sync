@@ -17,7 +17,8 @@ checklist see [hardening.md](hardening.md); to report a problem see
 | Webhook signing secrets (`whsec_`) | `ohs_core.webhook_endpoints` | AES-256-GCM under `OHS_ENCRYPTION_KEY`, bound to the endpoint |
 | OAuth `state` values | `ohs_sync.oauth_states` | SHA-256 hash only, single use, 10 minute lifetime |
 | Share link files | `ohs_sync.shares` | A JWE (AES-256-GCM) under a key held only in the link; the manifest id as a SHA-256 hash, the passcode as a PBKDF2-SHA256 hash |
-| `OHS_ENCRYPTION_KEY` and provider client secrets | The process environment | Not stored by the application; the operator's job |
+| Provider keys saved in the [console](console.md) | `ohs_core.provider_settings` | AES-256-GCM under `OHS_ENCRYPTION_KEY`, bound to the provider; the API never returns a secret's value |
+| `OHS_ENCRYPTION_KEY` and provider keys set by environment | The process environment | Not stored by the application; the operator's job |
 
 ## Actors and trust boundaries
 

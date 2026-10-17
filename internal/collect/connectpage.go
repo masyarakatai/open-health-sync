@@ -527,18 +527,27 @@ func expiresIn(d time.Duration) string {
 // providerNames are the display names of the providers whose name is not
 // their slug capitalized.
 var providerNames = map[string]string{
-	"dexcom":        "Dexcom",
-	"fitbit":        "Fitbit",
-	"intervals_icu": "intervals.icu",
-	"omron":         "OMRON",
-	"oura":          "Oura",
-	"polar":         "Polar",
-	"strava":        "Strava",
-	"suunto":        "Suunto",
-	"ultrahuman":    "Ultrahuman",
-	"whoop":         "WHOOP",
-	"withings":      "Withings",
+	"activity_files": "Activity files",
+	"apple_health":   "Apple Health",
+	"dexcom":         "Dexcom",
+	"fitbit":         "Fitbit",
+	"health_connect": "Health Connect",
+	"intervals_icu":  "intervals.icu",
+	"omron":          "OMRON",
+	"oura":           "Oura",
+	"polar":          "Polar",
+	"self_report":    "Self reports",
+	"strava":         "Strava",
+	"suunto":         "Suunto",
+	"ultrahuman":     "Ultrahuman",
+	"whoop":          "WHOOP",
+	"withings":       "Withings",
+	"xiaomi":         "Xiaomi",
 }
+
+// ProviderName is how the pages and the console name a provider: its display
+// name when known, else its slug.
+func ProviderName(slug string) string { return providerName(slug) }
 
 // providerName is how the pages name a provider: its display name when
 // known, else its slug.

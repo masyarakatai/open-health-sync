@@ -28,6 +28,7 @@ from .models import (
     CreateTimeTagRequest,
     CreateUserRequest,
     CreateWebhookRequest,
+    CreatedAPIKey,
     CreatedShare,
     DailySummary,
     DailySummaryPage,
@@ -38,6 +39,7 @@ from .models import (
     ECGRecording,
     ECGRecordingDetail,
     ECGRecordingPage,
+    ETLJob,
     FHIRBundle,
     FHIRCapabilityStatement,
     FHIRDevice,
@@ -59,8 +61,11 @@ from .models import (
     ListConnectionsResponse,
     ListConsentHistoryResponse,
     ListConsentsResponse,
+    ListETLJobsResponse,
+    ListKeysResponse,
     ListProvidersResponse,
     ListSyncRunsResponse,
+    ListTenantSyncRunsResponse,
     ListUsersResponse,
     ListWebhookDeliveriesResponse,
     ListWebhooksResponse,
@@ -71,10 +76,13 @@ from .models import (
     NutritionLogPage,
     OMHDataPoint,
     OMHDataPointPage,
+    Pipeline,
     PutSourcePrioritiesRequest,
     RRInterval,
     RRIntervalPage,
     ReadyzResponse,
+    RetryParkedETLJobsRequest,
+    RetryParkedETLJobsResponse,
     RotateWebhookSecretResponse,
     RoutePoint,
     RoutePointPage,
@@ -98,6 +106,8 @@ from .models import (
     StartConnectionResponse,
     SyncConnectionRequest,
     SyncRun,
+    Tenant,
+    TenantSyncRun,
     TestWebhookRequest,
     TimeTag,
     TimeTagPage,
@@ -2482,6 +2492,201 @@ class OpenHealthSync:
             },
             data=body,
             content_type="application/gzip",
+        )
+
+    def get_tenant(self) -> Tenant:
+        """The tenant of the calling key.
+
+        ``GET /v1/tenant``
+
+        The tenant the key belongs to, whether it is the instance admin (the one tenant whose keys
+        manage the providers, see /v1/admin/providers) and which key is calling.
+        """
+        return self._request(
+            "GET",
+            "/v1/tenant",
+        )
+
+    def list_keys(self) -> ListKeysResponse:
+        """The tenant's API keys.
+
+        ``GET /v1/keys``
+
+        Every key of the tenant, revoked ones included, newest first. Only the prefix of a key is
+        stored in clear; the secret itself was shown once, when the key was created.
+        """
+        return self._request(
+            "GET",
+            "/v1/keys",
+        )
+
+    def create_key(self, body: Optional[Dict[str, Any]] = None) -> CreatedAPIKey:
+        """Create an API key for the tenant.
+
+        ``POST /v1/keys``
+
+        A new key of the calling key's tenant, as `ohs admin key create` makes. The whole key is in
+        this answer only. To rotate: deploy the new key, then revoke the old one. Recorded in the
+        audit log as `key.create`.
+        """
+        return self._request(
+            "POST",
+            "/v1/keys",
+            json_body=body,
+        )
+
+    def revoke_key(self, key_id: str) -> None:
+        """Revoke an API key.
+
+        ``DELETE /v1/keys/{key_id}``
+
+        Every call with the key is refused from now on. A key cannot revoke itself (409): revoke it
+        with another key of the tenant. Revoking a revoked key changes nothing. Recorded in the
+        audit log as `key.revoke`.
+        """
+        return self._request(
+            "DELETE",
+            f"/v1/keys/{_path(key_id)}",
+            expect="none",
+        )
+
+    def get_pipeline(self) -> Pipeline:
+        """The tenant's pipeline, stage by stage.
+
+        ``GET /v1/pipeline``
+
+        Counts of the tenant's work at each stage, in the order data flows: the sources (providers
+        that are on, and any provider still holding the tenant's connections), the sync runs, the
+        processing jobs, the raw archive and the webhook deliveries. Counts only, never a health
+        value. The console's overview is this answer.
+        """
+        return self._request(
+            "GET",
+            "/v1/pipeline",
+        )
+
+    def list_tenant_sync_runs(
+        self,
+        *,
+        status: Optional[Literal["queued", "running", "retrying", "rate_limited", "succeeded", "failed", "cancelled"]] = None,
+        provider: Optional[str] = None,
+        limit: Optional[int] = None,
+        cursor: Optional[str] = None,
+    ) -> ListTenantSyncRunsResponse:
+        """Sync runs of every user of the tenant.
+
+        ``GET /v1/pipeline/sync-runs``
+
+        The sync runs of all the tenant's users, newest first, each with its user. Filter by
+        `status` (for example `failed`, the runs that gave up) and by provider.
+
+        Args:
+            provider: Only this provider's runs.
+            cursor: The next_cursor of the previous page.
+        """
+        return self._request(
+            "GET",
+            "/v1/pipeline/sync-runs",
+            query={
+                "status": status,
+                "provider": provider,
+                "limit": limit,
+                "cursor": cursor,
+            },
+        )
+
+    def iter_tenant_sync_runs(
+        self,
+        *,
+        status: Optional[Literal["queued", "running", "retrying", "rate_limited", "succeeded", "failed", "cancelled"]] = None,
+        provider: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> Iterator[TenantSyncRun]:
+        """Every item of :meth:`list_tenant_sync_runs`, page after page, following ``next_cursor``."""
+        return paginate(
+            lambda cursor: self.list_tenant_sync_runs(
+                status=status,
+                provider=provider,
+                limit=limit,
+                cursor=cursor,
+            )
+        )
+
+    def list_etl_jobs(
+        self,
+        *,
+        status: Optional[Literal["parked", "pending", "running"]] = None,
+        provider: Optional[str] = None,
+        limit: Optional[int] = None,
+        cursor: Optional[str] = None,
+    ) -> ListETLJobsResponse:
+        """Processing jobs of the tenant.
+
+        ``GET /v1/pipeline/etl-jobs``
+
+        The jobs that turn stored raw payloads into records, newest first. `parked` (the default)
+        lists the jobs that failed 5 times and wait for a retry; `pending` and `running` list the
+        work in flight. Done jobs are summed up by each user's coverage report.
+
+        Args:
+            provider: Only this provider's jobs.
+            cursor: The next_cursor of the previous page.
+        """
+        return self._request(
+            "GET",
+            "/v1/pipeline/etl-jobs",
+            query={
+                "status": status,
+                "provider": provider,
+                "limit": limit,
+                "cursor": cursor,
+            },
+        )
+
+    def iter_etl_jobs(
+        self,
+        *,
+        status: Optional[Literal["parked", "pending", "running"]] = None,
+        provider: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> Iterator[ETLJob]:
+        """Every item of :meth:`list_etl_jobs`, page after page, following ``next_cursor``."""
+        return paginate(
+            lambda cursor: self.list_etl_jobs(
+                status=status,
+                provider=provider,
+                limit=limit,
+                cursor=cursor,
+            )
+        )
+
+    def retry_parked_etl_jobs(
+        self,
+        body: Optional[RetryParkedETLJobsRequest] = None,
+    ) -> RetryParkedETLJobsResponse:
+        """Retry every parked processing job.
+
+        ``POST /v1/pipeline/etl-jobs/retry``
+
+        Queues every parked job of the tenant again with fresh attempts, or only one provider's. A
+        job that fails for the same reason parks again after 5 attempts.
+        """
+        return self._request(
+            "POST",
+            "/v1/pipeline/etl-jobs/retry",
+            json_body=body,
+        )
+
+    def retry_etl_job(self, job_id: int) -> ETLJob:
+        """Retry one parked processing job.
+
+        ``POST /v1/pipeline/etl-jobs/{job_id}/retry``
+
+        Queues the job again with fresh attempts. Only a parked job can be retried (409 otherwise).
+        """
+        return self._request(
+            "POST",
+            f"/v1/pipeline/etl-jobs/{_path(job_id)}/retry",
         )
 
     def list_audit_events(

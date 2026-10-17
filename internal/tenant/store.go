@@ -66,6 +66,10 @@ type Tenant struct {
 	ID        uuid.UUID
 	Name      string
 	CreatedAt time.Time
+	// Admin marks the instance admin tenant: its API keys may change
+	// instance-wide settings (the /v1/admin routes). The first tenant of an
+	// instance is the admin.
+	Admin bool
 }
 
 // User is an end user of a tenant.
@@ -122,8 +126,8 @@ func (s *Store) EnsureTenant(ctx context.Context, name string) (Tenant, string, 
 	}
 	var t Tenant
 	err = tx.QueryRow(ctx,
-		`SELECT id, name, created_at FROM ohs_core.tenants WHERE name = $1 ORDER BY created_at, id LIMIT 1`, name,
-	).Scan(&t.ID, &t.Name, &t.CreatedAt)
+		`SELECT id, name, created_at, admin FROM ohs_core.tenants WHERE name = $1 ORDER BY created_at, id LIMIT 1`, name,
+	).Scan(&t.ID, &t.Name, &t.CreatedAt, &t.Admin)
 	if err == nil {
 		return t, "", nil
 	}
@@ -187,6 +191,33 @@ func (s *Store) CreateFirstTenant(ctx context.Context, name string, ev *audit.Ev
 	return t, full, nil
 }
 
+// SetAdmin marks the tenant as the instance admin, or clears the mark. An
+// unknown tenant is ErrNotFound. Several tenants may be admins.
+func (s *Store) SetAdmin(ctx context.Context, tenantID uuid.UUID, admin bool) error {
+	tag, err := s.pool.Exec(ctx, `UPDATE ohs_core.tenants SET admin = $2 WHERE id = $1`, tenantID, admin)
+	if err != nil {
+		return fmt.Errorf("tenant: set admin: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// GetTenant returns one tenant. An unknown id is ErrNotFound.
+func (s *Store) GetTenant(ctx context.Context, tenantID uuid.UUID) (Tenant, error) {
+	var t Tenant
+	err := s.pool.QueryRow(ctx, `SELECT id, name, created_at, admin FROM ohs_core.tenants WHERE id = $1`, tenantID).
+		Scan(&t.ID, &t.Name, &t.CreatedAt, &t.Admin)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Tenant{}, ErrNotFound
+	}
+	if err != nil {
+		return Tenant{}, fmt.Errorf("tenant: get tenant: %w", err)
+	}
+	return t, nil
+}
+
 // HasTenants reports whether the instance has at least one tenant.
 func (s *Store) HasTenants(ctx context.Context) (bool, error) {
 	var exists bool
@@ -205,6 +236,9 @@ func lockTenantCreation(ctx context.Context, tx pgx.Tx) error {
 	return nil
 }
 
+// insertTenant creates a tenant and its first API key. The first tenant of
+// the instance is its admin: creations are serialized by the tenant creation
+// lock, so exactly one tenant is ever created first.
 func insertTenant(ctx context.Context, tx pgx.Tx, name string) (Tenant, string, error) {
 	if err := lockTenantCreation(ctx, tx); err != nil {
 		return Tenant{}, "", err
@@ -215,8 +249,9 @@ func insertTenant(ctx context.Context, tx pgx.Tx, name string) (Tenant, string, 
 	}
 	var t Tenant
 	if err := tx.QueryRow(ctx,
-		`INSERT INTO ohs_core.tenants (name) VALUES ($1) RETURNING id, name, created_at`, name,
-	).Scan(&t.ID, &t.Name, &t.CreatedAt); err != nil {
+		`INSERT INTO ohs_core.tenants (name, admin) VALUES ($1, NOT EXISTS (SELECT 1 FROM ohs_core.tenants))
+		 RETURNING id, name, created_at, admin`, name,
+	).Scan(&t.ID, &t.Name, &t.CreatedAt, &t.Admin); err != nil {
 		return Tenant{}, "", fmt.Errorf("tenant: insert tenant: %w", err)
 	}
 	if _, err := tx.Exec(ctx,
@@ -455,13 +490,15 @@ func (s *Store) LookupKey(ctx context.Context, hash string) (auth.Principal, err
 		tenantID uuid.UUID
 		keyID    uuid.UUID
 		stale    bool
+		admin    bool
 	)
 	err := s.pool.QueryRow(ctx,
-		`SELECT tenant_id, id,
-		        last_used_at IS NULL OR last_used_at < now() - $2::interval
-		 FROM ohs_core.api_keys WHERE key_hash = $1 AND revoked_at IS NULL`,
+		`SELECT k.tenant_id, k.id,
+		        k.last_used_at IS NULL OR k.last_used_at < now() - $2::interval, t.admin
+		 FROM ohs_core.api_keys k JOIN ohs_core.tenants t ON t.id = k.tenant_id
+		 WHERE k.key_hash = $1 AND k.revoked_at IS NULL`,
 		hash, fmt.Sprintf("%d microseconds", touchEvery.Microseconds()),
-	).Scan(&tenantID, &keyID, &stale)
+	).Scan(&tenantID, &keyID, &stale, &admin)
 	if err == nil {
 		if stale {
 			// Best effort, and at most once a minute per key.
@@ -469,7 +506,7 @@ func (s *Store) LookupKey(ctx context.Context, hash string) (auth.Principal, err
 				slog.DebugContext(ctx, "tenant: touch api key", "error", terr)
 			}
 		}
-		return auth.Principal{TenantID: tenantID, KeyID: keyID.String()}, nil
+		return auth.Principal{TenantID: tenantID, KeyID: keyID.String(), Admin: admin}, nil
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return auth.Principal{}, fmt.Errorf("tenant: lookup key: %w", err)

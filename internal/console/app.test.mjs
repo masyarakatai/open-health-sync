@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // Tests of the console's pure helpers: node --test internal/console/app.test.mjs
-// (no dependency, no DOM; the module only starts the page when document exists).
+// (no dependency, no DOM; app.mjs only starts the page when document exists).
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -9,25 +9,57 @@ import assert from "node:assert/strict";
 import {
   ApiError,
   ReadOnlyError,
+  STAGE_STATES,
+  absTime,
   apiPath,
+  attention,
   classifyConnection,
   classifyDelivery,
   classifyFreshness,
+  classifyProvider,
+  classifyRun,
   classifyWebhook,
+  confirmMatches,
+  filenameFrom,
   formatAgo,
+  formatBytes,
+  formatCount,
   formatTime,
+  formatWindow,
+  humanize,
+  initials,
+  keysPatch,
+  makeApi,
   makeGet,
   parseRoute,
-} from "./static/app.mjs";
+  pipelineStages,
+  providerLabel,
+  providerStatusLabel,
+  relTime,
+  webhookLabel,
+} from "./static/lib.mjs";
 
-function fakeFetch(status = 200, body = { data: [] }) {
+function fakeFetch(status = 200, body = { data: [] }, headers = {}) {
   const calls = [];
   const impl = async (url, init) => {
     calls.push({ url, init });
-    return { ok: status >= 200 && status < 300, status, json: async () => body };
+    return {
+      ok: status >= 200 && status < 300,
+      status,
+      headers: { get: (h) => headers[h] ?? null },
+      json: async () => {
+        if (body === undefined) throw new SyntaxError("no body");
+        return body;
+      },
+      blob: async () => ({ size: 3 }),
+    };
   };
   return { impl, calls };
 }
+
+test("app.mjs loads without a DOM", async () => {
+  await import("./static/app.mjs");
+});
 
 test("get refuses every method but GET, before any request", async () => {
   const f = fakeFetch();
@@ -98,6 +130,36 @@ test("formatTime", () => {
   assert.equal(formatTime("not a date", now), "not a date");
 });
 
+test("absTime, relTime and formatWindow", () => {
+  const now = Date.parse("2026-10-13T12:00:00Z");
+  assert.equal(absTime("2026-10-13T09:00:00Z"), "2026-10-13 09:00 UTC");
+  assert.equal(absTime(null), "-");
+  assert.equal(relTime("2026-10-13T11:59:40Z", now), "just now");
+  assert.equal(relTime("2026-10-13T11:48:00Z", now), "12 min ago");
+  assert.equal(relTime("2026-10-13T09:00:00Z", now), "3 h ago");
+  assert.equal(relTime("2026-10-09T12:00:00Z", now), "4 d ago");
+  assert.equal(relTime("2026-10-13T12:05:00Z", now), "in 5 min");
+  assert.equal(relTime("2026-08-01T12:00:00Z", now), "2026-08-01");
+  assert.equal(relTime("soon", now), "soon");
+  assert.equal(formatWindow("2026-10-16T03:33:00Z", "2026-10-16T04:33:00Z"), "2026-10-16 03:33 to 04:33");
+  assert.equal(formatWindow("2026-10-16T22:00:00Z", "2026-10-17T00:00:00Z"), "2026-10-16 22:00 to 2026-10-17 00:00");
+});
+
+test("humanize, initials and providerLabel", () => {
+  assert.equal(humanize("needs_reauth"), "Needs reconnecting");
+  assert.equal(humanize("rate_limited"), "Rate limited");
+  assert.equal(humanize("succeeded"), "Succeeded");
+  assert.equal(humanize(null), "-");
+  assert.equal(humanize("constructor"), "Constructor", "no prototype lookup");
+  assert.equal(initials("Apple Health"), "AH");
+  assert.equal(initials("intervals.icu"), "I");
+  assert.equal(initials("self_report"), "SR");
+  assert.equal(initials(""), "?");
+  assert.equal(providerLabel({ oura: "Oura" }, "oura"), "Oura");
+  assert.equal(providerLabel({}, "apple_health"), "Apple health");
+  assert.equal(providerLabel(null, "toString"), "ToString");
+});
+
 test("classifyFreshness: stale, failing and needs_reauth are red", () => {
   assert.equal(classifyFreshness({ state: "fresh", consecutive_failures: 0 }), "ok");
   assert.equal(classifyFreshness({ state: "fresh", consecutive_failures: 1 }), "warn");
@@ -107,6 +169,12 @@ test("classifyFreshness: stale, failing and needs_reauth are red", () => {
   assert.equal(classifyFreshness({ state: "needs_reauth" }), "bad");
   assert.equal(classifyFreshness({ state: "disconnected" }), "off");
   assert.equal(classifyFreshness({ state: "something new" }), "warn");
+});
+
+test("webhookLabel agrees with the endpoint's color", () => {
+  assert.equal(webhookLabel({ status: "active", failing_since: null }), "Active");
+  assert.equal(webhookLabel({ status: "active", failing_since: "2026-10-13T09:00:00Z" }), "Failing");
+  assert.equal(webhookLabel({ status: "disabled", failing_since: "2026-10-13T09:00:00Z" }), "Turned off");
 });
 
 test("classifyConnection, classifyWebhook, classifyDelivery", () => {
@@ -132,10 +200,162 @@ test("apiPath escapes ids and drops empty query values", () => {
 });
 
 test("parseRoute", () => {
-  assert.deepEqual(parseRoute(""), { view: "overview" });
-  assert.deepEqual(parseRoute("#/users"), { view: "users" });
-  assert.deepEqual(parseRoute("#/users/abc%2F1"), { view: "user", id: "abc/1" });
-  assert.deepEqual(parseRoute("#/webhooks/w1"), { view: "webhook", id: "w1" });
-  assert.deepEqual(parseRoute("#/nope"), { view: "overview" });
-  assert.deepEqual(parseRoute("#/users/%E0"), { view: "user", id: "%E0" });
+  assert.deepEqual(parseRoute(""), { view: "overview", section: "overview" });
+  assert.deepEqual(parseRoute("#/users"), { view: "users", section: "users" });
+  assert.deepEqual(parseRoute("#/users/abc%2F1"), { view: "user", section: "users", id: "abc/1" });
+  assert.deepEqual(parseRoute("#/webhooks/w1"), { view: "webhook", section: "webhooks", id: "w1" });
+  assert.deepEqual(parseRoute("#/providers/oura"), { view: "provider", section: "providers", id: "oura" });
+  assert.deepEqual(parseRoute("#/jobs/x"), { view: "jobs", section: "jobs" });
+  assert.deepEqual(parseRoute("#/keys"), { view: "keys", section: "keys" });
+  assert.deepEqual(parseRoute("#/audit"), { view: "audit", section: "audit" });
+  assert.deepEqual(parseRoute("#/nope"), { view: "overview", section: "overview" });
+  assert.deepEqual(parseRoute("#/constructor"), { view: "overview", section: "overview" });
+  assert.deepEqual(parseRoute("#/users/%E0"), { view: "user", section: "users", id: "%E0" });
+});
+
+test("api sends writes as JSON with the key, and only the methods it knows", async () => {
+  const f = fakeFetch(201, { id: "u1" });
+  const api = makeApi(f.impl, () => "ohs_sk_test");
+  assert.deepEqual(await api("/v1/users", { method: "post", body: { external_ref: "r" } }), { id: "u1" });
+  const { init } = f.calls[0];
+  assert.equal(init.method, "POST");
+  assert.equal(init.body, JSON.stringify({ external_ref: "r" }));
+  assert.equal(init.headers["Content-Type"], "application/json");
+  assert.equal(init.headers.Authorization, "Bearer ohs_sk_test");
+  assert.equal(init.credentials, "omit");
+  for (const method of ["PATCH", "PUT", "DELETE"]) {
+    await api("/v1/x", { method });
+  }
+  assert.equal(f.calls.length, 4);
+  assert.equal(f.calls[1].init.body, undefined, "no body, no Content-Type");
+  assert.equal(f.calls[1].init.headers["Content-Type"], undefined);
+  for (const method of ["OPTIONS", "HEAD", "TRACE", "CONNECT"]) {
+    await assert.rejects(api("/v1/users", { method }), ReadOnlyError, method);
+  }
+  await assert.rejects(api("/v1/users", { body: {} }), ReadOnlyError, "a GET carries no body");
+  await assert.rejects(api("https://evil.example/v1/users", { method: "POST" }), ReadOnlyError);
+  assert.equal(f.calls.length, 4);
+});
+
+test("api in read-only mode sends GET only", async () => {
+  const f = fakeFetch();
+  const api = makeApi(f.impl, () => "k", { readOnly: true });
+  for (const method of ["POST", "PATCH", "PUT", "DELETE"]) {
+    await assert.rejects(api("/v1/users", { method, body: {} }), ReadOnlyError, method);
+  }
+  await api("/v1/users");
+  assert.equal(f.calls.length, 1);
+});
+
+test("api reads 204 as null and downloads as a blob with a safe name", async () => {
+  const none = fakeFetch(204, undefined);
+  assert.equal(await makeApi(none.impl, () => "k")("/v1/keys/1", { method: "DELETE" }), null);
+  const file = fakeFetch(200, undefined, { "Content-Disposition": 'attachment; filename="samples-u1.csv"' });
+  const got = await makeApi(file.impl, () => "k")("/v1/users/u1/exports/samples", { download: true });
+  assert.equal(got.filename, "samples-u1.csv");
+  assert.equal(got.blob.size, 3);
+  assert.equal(file.calls[0].init.headers.Accept, "*/*");
+});
+
+test("filenameFrom", () => {
+  assert.equal(filenameFrom('attachment; filename="a b/../c.zip"'), "a_b_.._c.zip");
+  assert.equal(filenameFrom(null), "download");
+  assert.equal(filenameFrom('attachment; filename=".."'), "download");
+  assert.equal(filenameFrom("attachment; filename=x.json"), "x.json");
+});
+
+test("formatCount and formatBytes", () => {
+  assert.equal(formatCount(0), "0");
+  assert.equal(formatCount(1234567), "1,234,567");
+  assert.equal(formatCount(null), "-");
+  assert.equal(formatBytes(0), "0 B");
+  assert.equal(formatBytes(950), "950 B");
+  assert.equal(formatBytes(1500), "1.5 kB");
+  assert.equal(formatBytes(12_000_000), "12 MB");
+  assert.equal(formatBytes(undefined), "-");
+});
+
+test("classifyProvider, providerStatusLabel and classifyRun", () => {
+  assert.equal(classifyProvider({ status: "active" }), "ok");
+  assert.equal(classifyProvider({ status: "built_in" }), "ok");
+  assert.equal(classifyProvider({ status: "error" }), "bad");
+  assert.equal(classifyProvider({ status: "not_configured" }), "off");
+  assert.equal(classifyProvider({ status: "off" }), "off");
+  assert.equal(providerStatusLabel("not_configured"), "Not configured");
+  assert.equal(providerStatusLabel("new_one"), "new_one");
+  assert.equal(classifyRun({ status: "failed" }), "bad");
+  assert.equal(classifyRun({ status: "rate_limited" }), "warn");
+  assert.equal(classifyRun({ status: "succeeded" }), "ok");
+  assert.equal(classifyRun({ status: "cancelled" }), "off");
+});
+
+const quiet = {
+  users: { active: 2, deleting: 0 },
+  sources: [{ slug: "oura", name: "Oura", kinds: ["oauth"], enabled: true, connections: { active: 2 }, broken: 0, paused_until: null }],
+  sync: { queued: 1, running: 0, retrying: 0, rate_limited: 0, failed_24h: 0, succeeded_24h: 40 },
+  processing: { pending: 0, running: 0, parked: 0, rejected_records: 0 },
+  storage: { raw_objects_24h: 12, raw_bytes_24h: 2_500_000 },
+  delivery: { endpoints: 1, endpoints_failing: 0, endpoints_disabled: 0, pending: 0, parked: 0 },
+};
+
+test("pipelineStages: five stages, each with its state", () => {
+  const stages = pipelineStages(quiet);
+  assert.deepEqual(stages.map((s) => s.key), ["sources", "sync", "processing", "storage", "delivery"]);
+  assert.deepEqual(stages.map((s) => s.cls), ["ok", "ok", "ok", "ok", "ok"]);
+  assert.equal(stages[3].figures[0].value, "2.5 MB");
+  assert.ok(stages.every((s) => s.role && STAGE_STATES[s.cls]));
+
+  const busy = structuredClone(quiet);
+  busy.sources[0].connections.needs_reauth = 1;
+  busy.sync.failed_24h = 3;
+  busy.processing.rejected_records = 4;
+  busy.delivery.endpoints = 0;
+  const s = pipelineStages(busy);
+  assert.deepEqual(s.map((x) => x.cls), ["bad", "bad", "warn", "ok", "off"]);
+  assert.equal(s[1].figures[3].cls, "bad");
+  assert.equal(s[1].figures[3].href, "#/jobs");
+  assert.equal(pipelineStages({ ...quiet, sources: [] })[0].cls, "warn", "no provider on");
+});
+
+test("attention: what needs the operator, worst first", () => {
+  assert.deepEqual(attention(quiet), []);
+  const p = structuredClone(quiet);
+  p.sources.push({ slug: "withings", name: "Withings", kinds: ["oauth", "push"], enabled: false, connections: { active: 3 }, paused_until: null });
+  p.sources[0].connections.needs_reauth = 1;
+  p.processing.parked = 2;
+  p.delivery.endpoints_failing = 1;
+  const items = attention(p);
+  assert.deepEqual(items.map((a) => a.cls), ["bad", "bad", "warn", "warn"]);
+  assert.match(items[0].text, /1 user needs to reconnect Oura/);
+  assert.match(items[1].text, /2 processing jobs are parked after 5 failed attempts/);
+  assert.equal(items[1].href, "#/jobs");
+  assert.match(items.map((a) => a.text).join("\n"), /Withings is off but 3 connections are kept/);
+  assert.match(attention({ ...quiet, sources: [] })[0].text, /No cloud provider is on/);
+  const devices = { ...quiet, sources: [{ slug: "apple_health", name: "Apple Health", kinds: ["device"], enabled: true, connections: {} }] };
+  assert.match(attention(devices)[0].text, /No cloud provider is on/, "app uploads do not count");
+});
+
+test("keysPatch sends only what changed", () => {
+  const fields = [
+    { name: "CLIENT_ID", secret: false, set: true, value: "abc", input: "abc", clear: false },
+    { name: "CLIENT_SECRET", secret: true, set: true, value: null, input: "", clear: false },
+    { name: "REGION", secret: false, set: false, value: null, input: "", clear: false },
+  ];
+  assert.equal(keysPatch(fields), null, "nothing typed: nothing changes");
+  fields[0].input = " new-id ";
+  fields[1].input = "s3cret";
+  assert.deepEqual(keysPatch(fields), { CLIENT_ID: "new-id", CLIENT_SECRET: "s3cret" });
+  fields[0].input = "abc";
+  fields[1].input = "";
+  fields[1].clear = true;
+  fields[2].clear = true;
+  assert.deepEqual(keysPatch(fields), { CLIENT_SECRET: null }, "clearing an unset key sends nothing");
+});
+
+test("confirmMatches", () => {
+  assert.equal(confirmMatches("oura", "oura"), true);
+  assert.equal(confirmMatches(" oura ", "oura"), true);
+  assert.equal(confirmMatches("Oura", "oura"), false);
+  assert.equal(confirmMatches("", ""), false);
+  assert.equal(confirmMatches(undefined, "x"), false);
 });

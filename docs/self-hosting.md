@@ -163,11 +163,11 @@ Environment variables only, documented line by line in `.env.example`.
 | `OHS_PUBLIC_URL` | `http://localhost:8080` | Public base URL, used for OAuth callbacks, notification URLs and [share links](share-links.md). Use your https address |
 | `OHS_RAW_STORE` | `file:///var/lib/ohs/raw` | `file:///path` or `s3://bucket?endpoint=&region=&path_style=true` |
 | `OHS_ROLES` | `api,collect,etl` | Roles this process runs |
-| `OHS_BOOTSTRAP_TENANT` | none | Creates this tenant at first start and logs its API key once |
+| `OHS_BOOTSTRAP_TENANT` | none | Creates this tenant at first start and logs its API key once. It is an [instance admin](console.md#the-instance-admin) |
 | `OHS_LISTEN` | `:8080` | Listen address |
 | `OHS_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error`; logs are JSON on stderr |
-| `OHS_CONSOLE` | `false` | `true` serves the read-only [admin console](console.md) on `/console`. It asks for a tenant API key and reads the API with it; off, the route is not mounted (404) |
-| `OHS_SETUP_TOKEN` | none | 16 characters or more (`openssl rand -hex 32`). Turns on the browser [first-run setup](setup.md): with `OHS_CONSOLE=true`, `/console/setup` creates the first tenant and shows its API key once, for whoever types this token, while the instance has no tenant. Unset, `/v1/setup` is not mounted |
+| `OHS_CONSOLE` | `false` | `true` serves the [admin console](console.md) on `/console`, where you run the pipeline and turn providers on; `read-only` serves it without any action. It asks for a tenant API key and calls the API with it; off, the route is not mounted (404) |
+| `OHS_SETUP_TOKEN` | none | 16 characters or more (`openssl rand -hex 32`). Turns on the browser [first-run setup](setup.md): with `OHS_CONSOLE` on, `/console/setup` creates the first tenant and shows its API key once, for whoever types this token, while the instance has no tenant. Unset, `/v1/setup` is not mounted |
 | `OHS_METRICS` | `true` | Serve Prometheus metrics on `/metrics` (see [Metrics](self-hosting.md#metrics)) |
 | `OHS_METRICS_TOKEN` | none | Bearer token a scrape of `/metrics` presents, 16 characters or more (`openssl rand -hex 32`). Without it the API listener refuses every scrape |
 | `OHS_METRICS_LISTEN` | none | Serve `/metrics` on this address instead of the API listener, for example `127.0.0.1:9464`; the token is then asked for only when set |
@@ -183,7 +183,7 @@ Environment variables only, documented line by line in `.env.example`.
 | `OHS_RATE_LIMIT_INBOUND_PROVIDER` | `300/600` | Notification requests per provider, whatever the address; `0` disables |
 | `OHS_RATE_LIMIT_OAUTH` | `2/20` | OAuth callback requests per client address, and in buckets of their own `POST /v1/setup` requests and share link manifest and file requests; `0` disables |
 | `OHS_TRUSTED_PROXIES` | none | Comma-separated CIDRs (or addresses) of your reverse proxies. Only a request from one of them has its client address read from `X-Forwarded-For` |
-| `OHS_<PROVIDER>_CLIENT_ID`, `_CLIENT_SECRET` | none | Keys of a provider; its connector is on when they are set. Every process that runs `collect` or `etl` needs them (see below) |
+| `OHS_<PROVIDER>_CLIENT_ID`, `_CLIENT_SECRET` | none | Keys of a provider; its connector is on when they are set. Every process that runs `collect` or `etl` needs them (see below). Or save them from the [console](console.md#where-provider-keys-come-from) instead; set here, they win |
 
 ### Database pool size
 
@@ -215,6 +215,10 @@ The `collect` role pulls and subscribes; the `etl` role carries out user deletio
 grants and unsubscribe notifications at the provider. Give the provider keys to every process
 that runs either role. A process without them cannot call that provider: it logs a warning, and
 a deletion it carries out still deletes the data but leaves the grant valid at the provider.
+
+Keys saved from the [console](console.md) need none of this: they are stored in the database,
+sealed with `OHS_ENCRYPTION_KEY`, and every process reads them within 30 seconds. Each process
+still needs the same `OHS_ENCRYPTION_KEY`.
 
 Put a reverse proxy with TLS in front of port 8080; the bearer secrets travel in headers.
 [hardening.md](hardening.md) is the full production checklist, and
@@ -342,8 +346,8 @@ archive, a cron example, the S3 raw store, restore steps and how to verify a bac
   old one in `OHS_PREVIOUS_ENCRYPTION_KEYS`, restart every process, run `ohs admin rekey`, then
   remove the old key once `ohs doctor` says nothing uses it. The whole procedure, and what
   happens when a step is skipped, is in [rotating the encryption key](key-rotation.md). Replacing
-  the key without keeping the old one leaves the stored OAuth tokens and webhook secrets
-  unreadable: each user must connect the provider again. Uploads and stored data are not
+  the key without keeping the old one leaves the stored OAuth tokens, webhook secrets and
+  provider keys saved in the console unreadable: each user must connect the provider again. Uploads and stored data are not
   affected.
 - **Provider secrets.** See the Withings note under operating notes below.
 - **`POSTGRES_PASSWORD`** only applies when the database volume is first created. To change it

@@ -19,6 +19,10 @@ import (
 // auditTimeout bounds the write of one audit event.
 const auditTimeout = 2 * time.Second
 
+// auditPathValues are the path values an audit event keeps in its detail:
+// identifiers, never a value read or written.
+var auditPathValues = []string{"provider", "key_id", "job_id"}
+
 func (s *server) mountAudit(mux *http.ServeMux) {
 	s.tenantRoute(mux, "GET /v1/audit", s.listAudit)
 }
@@ -44,6 +48,15 @@ func (s *server) audit(r *http.Request, p auth.Principal, code int) {
 		ev.User = p.UserID
 	} else if u, err := uuid.Parse(r.PathValue("id")); err == nil {
 		ev.User = &u
+	}
+	// The route pattern hides which provider, key or job a request named.
+	for _, name := range auditPathValues {
+		if v := r.PathValue(name); v != "" && len(v) <= 64 {
+			if ev.Detail == nil {
+				ev.Detail = map[string]any{}
+			}
+			ev.Detail[name] = v
+		}
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), auditTimeout)
 	defer cancel()

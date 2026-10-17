@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // Package rekey walks every sealed secret stored in the database (OAuth
-// tokens, webhook signing secrets): Run re-seals each one under the active
-// encryption key, Inspect counts which key each one is sealed with.
+// tokens, webhook signing secrets, provider keys saved in the console): Run
+// re-seals each one under the active encryption key, Inspect counts which key
+// each one is sealed with.
 package rekey
 
 import (
@@ -16,6 +17,7 @@ import (
 
 	"github.com/soma-intelligence/open-health-sync/internal/collect"
 	"github.com/soma-intelligence/open-health-sync/internal/crypto"
+	"github.com/soma-intelligence/open-health-sync/internal/providerset"
 	"github.com/soma-intelligence/open-health-sync/internal/webhook"
 )
 
@@ -71,6 +73,13 @@ var tables = []table{
 			}
 			return webhook.SecretAAD(id), nil
 		},
+	},
+	{
+		name:   "ohs_core.provider_settings",
+		key:    []string{"slug"},
+		types:  []string{"text"},
+		sealed: []string{"keys_sealed"},
+		aad:    func(k []string) ([]byte, error) { return providerset.KeysAAD(k[0]), nil },
 	},
 }
 

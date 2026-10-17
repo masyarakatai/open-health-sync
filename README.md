@@ -126,7 +126,7 @@ Provider deletions are honored too.
 | ✅ | Background sync and `/freshness` | ✅ | Health app export import |
 | ✅ | Prometheus metrics and OpenTelemetry traces, off by default ([docs](docs/observability.md)) | | |
 | ✅ | A merged view across sources, with priorities per user and metric ([docs](docs/api.md#several-sources-of-one-metric-the-merged-view)) | | |
-| ✅ | Read-only admin console at `/console` ([docs](docs/console.md)) | | |
+| ✅ | Admin console at `/console`: run the pipeline and turn providers on from the browser ([docs](docs/console.md)) | | |
 | ✅ | Consent per user, source and category, with a revocation webhook ([docs](docs/consent.md)) | | |
 | ✅ | Complete per-user archive for data portability ([docs](docs/exports.md#complete-user-archive-data-portability)) | | |
 | ✅ | Append-only audit log of every authenticated request, read with `GET /v1/audit` ([docs](docs/audit-log.md)) | | |
@@ -684,7 +684,7 @@ Health Connect reading in the Kotlin SDK, then health records (EHR) through SMAR
 - [Background sync](docs/background-sync.md): webhooks, backstop pulls, freshness.
 - [Backup and restore](docs/backup-and-restore.md): one archive with the database and raw store, and how to put it back.
 - [Connect page](docs/connect-page.md): a hosted page where your users connect their sources, then return to your app.
-- [Admin console](docs/console.md): a read-only page for users, connections, freshness and webhook deliveries.
+- [Admin console](docs/console.md): run the pipeline from the browser: providers and their keys, users and connections, sync and processing jobs, webhooks, API keys and the audit log.
 - [Recipes](docs/recipes/README.md): personal setup and small tools on your own data.
 - [RR intervals and HRV](docs/hrv.md): beat-to-beat intervals and the HRV derived from them.
 - [Menstrual cycles](docs/menstrual-cycles.md): cycles derived from recorded flow, without predictions.

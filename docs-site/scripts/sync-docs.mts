@@ -115,7 +115,7 @@ const sources: Record<string, Target[]> = {
     {
       page: "(guides)/self-hosting/console",
       title: "Admin console",
-      description: "A read-only page for operators: users, connections, freshness and webhook deliveries.",
+      description: "Run the pipeline from a browser: providers and their keys, users, jobs, webhooks, API keys and the audit log.",
     },
   ],
   "docs/setup.md": [

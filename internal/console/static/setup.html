@@ -5,50 +5,51 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
 <title>Set up Open Health Sync</title>
 <link rel="stylesheet" href="/console/console.css">
 <script type="module" src="/console/setup.mjs"></script>
 </head>
 <body>
-<header class="bar">
-  <span class="brand">Open Health Sync setup</span>
-</header>
-<main id="main">
-  <section id="setup">
-    <h1>Set up this instance</h1>
-    <p id="setup-loading" class="muted">Checking this instance...</p>
+<main id="main" class="auth">
+  <section id="setup" class="auth-card">
+    <div class="auth-brand"><span class="logo"><svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8.5h3l1.8-4.5 3.4 9 1.8-4.5h3"/></svg></span>Open Health Sync</div>
+    <div class="auth-panel">
+      <h1>Set up this instance</h1>
+      <p id="setup-loading" class="lead">Checking this instance...</p>
 
-    <div id="setup-done" hidden>
-      <p>This instance is already set up.</p>
-      <p><a href="/console">Open the console</a></p>
-    </div>
+      <div id="setup-done" hidden>
+        <p class="lead">This instance is already set up.</p>
+        <p><a href="/console">Open the console</a></p>
+      </div>
 
-    <div id="setup-off" hidden>
-      <p>The first-run setup is off on this instance: <code>OHS_SETUP_TOKEN</code> is not set.
-      Create a tenant with <code>ohs admin tenant create</code>, or set the token and restart.</p>
-      <p><a href="/console">Open the console</a></p>
-    </div>
+      <div id="setup-off" hidden>
+        <p class="lead">The first-run setup is off on this instance: <code>OHS_SETUP_TOKEN</code> is not set.
+        Create a tenant with <code>ohs admin tenant create</code>, or set the token and restart.</p>
+        <p><a href="/console">Open the console</a></p>
+      </div>
 
-    <form id="setup-form" autocomplete="off" hidden>
-      <p>This instance has no tenant yet. Enter its setup token (<code>OHS_SETUP_TOKEN</code>; on an
-      app store it is the app's password) to create the first tenant and its API key. This works
-      once.</p>
-      <label for="setup-token">Setup token</label>
-      <input id="setup-token" name="setup-token" type="password" autocomplete="off" spellcheck="false" required>
-      <label for="tenant-name">Tenant name (optional)</label>
-      <input id="tenant-name" name="tenant-name" type="text" autocomplete="off" spellcheck="false" maxlength="100" placeholder="default">
-      <button id="setup-submit" type="submit">Create the tenant</button>
-    </form>
+      <form id="setup-form" autocomplete="off" hidden>
+        <p class="lead">This instance has no tenant yet. Enter its setup token (<code>OHS_SETUP_TOKEN</code>; on an
+        app store it is the app's password) to create the first tenant and its API key. This works
+        once, and the first tenant is the instance admin.</p>
+        <label for="setup-token">Setup token</label>
+        <input id="setup-token" name="setup-token" class="mono" type="password" autocomplete="off" spellcheck="false" required>
+        <label for="tenant-name">Tenant name (optional)</label>
+        <input id="tenant-name" name="tenant-name" type="text" autocomplete="off" spellcheck="false" maxlength="100" placeholder="default">
+        <button id="setup-submit" type="submit" class="primary">Create the tenant</button>
+      </form>
 
-    <p id="setup-error" class="bad" role="alert"></p>
+      <p id="setup-error" class="form-error" role="alert"></p>
 
-    <div id="setup-result" hidden>
-      <p class="warn"><strong>Store this API key now: it will not be shown again.</strong></p>
-      <p>Tenant <code id="result-tenant"></code></p>
-      <p class="key-line"><code id="result-key"></code></p>
-      <p><button id="copy-key" type="button">Copy the key</button> <span id="copy-status" class="muted" role="status"></span></p>
-      <p>This tab is signed in to the console with it until the tab closes.</p>
-      <p><a href="/console">Open the console</a></p>
+      <div id="setup-result" hidden>
+        <div class="notice warn"><div><strong>Store this API key now: it will not be shown again.</strong></div></div>
+        <p class="muted small">Tenant <code id="result-tenant"></code></p>
+        <p class="key-line"><code id="result-key"></code></p>
+        <p><button id="copy-key" type="button">Copy the key</button> <span id="copy-status" class="muted" role="status"></span></p>
+        <p class="muted">This tab is signed in to the console with it until the tab closes.</p>
+        <p><a href="/console">Open the console</a></p>
+      </div>
     </div>
   </section>
 </main>
