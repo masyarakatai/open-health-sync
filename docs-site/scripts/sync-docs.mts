@@ -272,6 +272,14 @@ const sources: Record<string, Target[]> = {
       description: "Let a person share a window of their own data through an encrypted, expiring SMART Health Link.",
     },
   ],
+  "docs/bridge.md": [
+    {
+      page: "(guides)/guides/desktop-bridge",
+      title: "Desktop bridge",
+      description:
+        "ohs-bridge sends what Bluetooth health devices and USB-mounted watches record, from a computer or a Raspberry Pi.",
+    },
+  ],
   "docs/server-sdks.md": [
     {
       page: "(guides)/guides/server-sdks",
@@ -370,6 +378,7 @@ const icons: Record<string, string> = {
   "(guides)/guides/time-tags": "Tag",
   "(guides)/guides/self-reports": "Smile",
   "(guides)/guides/share-links": "Share2",
+  "(guides)/guides/desktop-bridge": "Bluetooth",
   "(guides)/recipes/index": "Sparkles",
   "(guides)/recipes/sleep-report": "Moon",
   "(guides)/recipes/heart-trend": "HeartPulse",
