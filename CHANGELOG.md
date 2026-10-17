@@ -152,6 +152,12 @@ release may change the API, the configuration or the database schema.
 
 ### Fixed
 
+- Apple Health basal and active energy recorded in `Cal` (HealthKit's large calorie, a
+  kilocalorie) is stored as is. An export written with Calories as the energy unit spells those
+  records `Cal`, and their values were stored 1,000 times too low (read as the small calorie),
+  so a derived day's `total_kcal` was close to its active energy alone. Values already stored
+  stay wrong: erase the Apple Health data (`DELETE /v1/users/{id}/data/apple_health`) and
+  import the export again.
 - Disconnecting or deleting a user now revokes the Oura access token (`GET /oauth/revoke`),
   like WHOOP, Strava and Polar.
 - A provider deletion notice (Oura, WHOOP, Strava) now updates the connection's
