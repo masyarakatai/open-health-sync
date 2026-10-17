@@ -429,6 +429,20 @@ flowchart LR
 
 Details: [architecture](docs/architecture.md), [API guide](docs/api.md).
 
+### A user connects their sources
+
+Your app creates a connect session and sends its user to the link. The user picks Oura, WHOOP
+and Withings one after the other and allows access at each. `ohs` exchanges the code, stores the
+grant encrypted, pulls the history in the background and normalizes it. The console then shows
+each source active and fresh, with the records that landed per day.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/demo/flow-dark.gif">
+  <img src="docs/demo/flow-light.gif" width="100%" alt="Browser recording. The hosted connect page of an app called Sleep Diary lists Oura, WHOOP, Withings, Polar and Strava. The user connects Oura: a consent screen marked as a test server lists the scopes, Allow leads to Oura is connected, and the page now shows Oura as connected. WHOOP and Withings follow. In the read-only console, signed in with the tenant key, the overview lists the providers enabled on the instance, and the user's page shows oura, whoop and withings active and fresh, with 28, 31 and 23 records over 2, 5 and 3 days.">
+</picture>
+
+<sub>Recorded on this repository with synthetic data. The connect page, the code exchange, the encrypted grant, the background pulls, the normalization and the console are the real ones; the provider side (consent screen and API) is played by the test servers of the connector tests. How it was made: <a href="docs/demo/README.md#provider-flow">docs/demo</a>.</sub>
+
 ### See it run
 
 These are real captures, not mockups: `ohs` 0.0.1 built from this repository, run natively

@@ -1,4 +1,9 @@
-# README demo
+# README demos
+
+Two recordings in the [README](../../README.md): the quickstart in a terminal, and a user
+connecting their sources in a browser.
+
+## Quickstart
 
 `demo-dark.gif` and `demo-light.gif` are terminal recordings of the [quickstart](../../README.md#quickstart),
 made with [VHS](https://github.com/charmbracelet/vhs). Nothing in them is mocked: the commands are
@@ -15,7 +20,7 @@ What it shows, in about a minute:
    and `/omh/data-points` (`omh:heart-rate`).
 5. `tools/list` on the read-only MCP server at `/mcp`.
 
-## Files
+### Files
 
 | File | Role |
 |---|---|
@@ -23,7 +28,7 @@ What it shows, in about a minute:
 | `dark.tape`, `light.tape` | The colors and the output file of each variant, then `Source demo.tape`. |
 | `demo-dark.gif`, `demo-light.gif` | The recordings. The README picks one with `prefers-color-scheme`. |
 
-## Render it again
+### Render it again
 
 You need [VHS](https://github.com/charmbracelet/vhs#installation) (it brings `ttyd` and `ffmpeg`),
 Docker with Compose v2.24 or later, `curl`, `jq`, `openssl` and the
@@ -47,3 +52,35 @@ for the one the seed prints, since that one is shown only once). On Linux as roo
 
 After a change to the API or to the seed, render both variants and check that every command
 still fits in the frame.
+
+## Provider flow
+
+`flow-dark.gif` and `flow-light.gif` are browser recordings of the
+[hosted connect page](../connect-page.md) and the [console](../console.md), made with Playwright
+against `ohs` built from this repository (`scripts/image-without-buildx.sh`), with Postgres and
+TimescaleDB from `deploy/docker-compose.yml` and `OHS_CONSOLE=true`.
+
+What it shows, in about 40 seconds:
+
+1. An app called Sleep Diary creates a connect session for its user `user-42`
+   (`POST /v1/users/{id}/connect-sessions` with its name and logo) and opens the link.
+2. The user connects Oura, then WHOOP, then Withings. Each **Connect** goes to the provider's
+   consent screen with the scopes `ohs` asks for, **Allow** comes back to the callback, and the
+   page shows the source as connected.
+3. The console, signed in with the tenant key: the providers enabled on the instance, the users,
+   then the user's page with each connection active and fresh, when its backfill started, and
+   the records that landed per provider and day.
+
+What is real and what stands in:
+
+- Real: the connect session and page, the redirect with its `state` and scopes, the callback and
+  the code exchange, the sealed tokens, the background backfill, the ETL and the console.
+- Standing in: the providers. The test servers of the connector tests
+  (`connectors/oura/ourafake`, `connectors/whoop/whoopfake`, `connectors/withings/withingsfake`)
+  answer the token and data calls, behind a local TLS proxy that `ohs` trusts through
+  `HTTPS_PROXY` and `SSL_CERT_FILE`. Their fixture dates were moved into the last 30 days so the
+  backfill picks them up. The consent screen is a plain page that says it is a test server.
+- Invented: the user, Sleep Diary and its logo.
+
+The captions were added afterwards with `ffmpeg`, timed on the page changes. The scripts that
+record it are not in the repository yet.
