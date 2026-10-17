@@ -53,15 +53,6 @@ func (r *reader) s16() (int, error) {
 	return int(int16(uint16(v))), err
 }
 
-func (r *reader) u24() (int, error) {
-	if err := r.need(3); err != nil {
-		return 0, err
-	}
-	v := int(r.b[r.off]) | int(r.b[r.off+1])<<8 | int(r.b[r.off+2])<<16
-	r.off += 3
-	return v, nil
-}
-
 func (r *reader) skip(n int) error {
 	if err := r.need(n); err != nil {
 		return err

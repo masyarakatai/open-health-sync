@@ -479,6 +479,8 @@ func TestSource(t *testing.T) {
 		{"", "TICKR 7F21", "", "wahoo", "", "TICKR"},
 		{"A&D Medical", "A&D_UA-651", "UA-651BLE", "and", "A&D UA-651BLE", "A&D_UA-651"},
 		{"Nordic Semiconductor", "Thermo", "", Slug, "", "Thermo"},
+		{"Garmin", "Edge 1040", "", "garmin", "", "Edge 1040"},
+		{"", "Thermo 123456", "", Slug, "", "Thermo"},
 		{"", "", "", Slug, "", ""},
 	} {
 		s := sourceOf(device{Manufacturer: tc.manufacturer, Name: tc.name, Model: tc.model})

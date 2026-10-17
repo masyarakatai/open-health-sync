@@ -71,7 +71,7 @@ with the `upload` scope, the headers `X-OHS-Type` (always `gatt`), `X-OHS-Day`, 
 `X-OHS-Part`, and a gzip NDJSON body of at most 64 MiB. One line per value received:
 
 ```json
-{"at":"2026-10-16T21:04:05.120+02:00","char":"2a37","value":"1048000433030004","session":"9f2c4e1a7b3d5c60","device":{"name":"Polar H10 0A1B2C3D","manufacturer":"Polar Electro Oy","model":"H10","firmware":"5.0.0"}}
+{"at":"2026-10-16T21:04:05.120+02:00","char":"2a37","value":"1048000433030004","session":"9f2c4e1a7b3d5c60","device":{"name":"Polar H10","manufacturer":"Polar Electro Oy","model":"H10","firmware":"5.0.0"}}
 ```
 
 | Field | Required | Meaning |
@@ -83,7 +83,10 @@ with the `upload` scope, the headers `X-OHS-Type` (always `gatt`), `X-OHS-Day`, 
 | `device` | no | `name` (advertised name), `manufacturer`, `model`, `firmware` (Device Information service), at most 128 characters each |
 | `device_user` | no | This person's user index (0 to 254) on a shared device |
 
-Never send a device address or a serial number: the format has no field for them. `ohs-bridge`
+Never send a device address or a serial number: the format has no field for them. Many devices
+advertise a name that ends in a serial (`Polar H10 0A1B2C3D`): `ohs-bridge` and the SDKs drop a
+last word of at least six hex digits, or four with a letter among them, and the server applies
+the same rule to what it stores (`Edge 1040` is kept). `ohs-bridge`
 sends `X-OHS-Day` as the UTC day of a part's first line, a batch `bt1-<install id>-<sequence>`
 and part 0, and keeps each part's bytes until it gets a 200, so a retry is answered
 `duplicate: true`.

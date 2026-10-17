@@ -69,9 +69,10 @@ func sourceOf(d device) source {
 }
 
 // cleanName drops the last word of an advertised name when it looks like a
-// serial number (four or more hex digits after a space or an underscore):
-// "Polar H10 0A1B2C3D" is "Polar H10". The serial identifies one device and
-// is not kept.
+// serial number: hex digits after a space or an underscore, at least six, or
+// at least four with a letter among them. "Polar H10 0A1B2C3D" is "Polar
+// H10"; "Edge 1040", a model number, is kept. The serial identifies one
+// device and is not kept. The clients apply the same rule before sending.
 func cleanName(name string) string {
 	name = strings.TrimSpace(name)
 	i := strings.LastIndexAny(name, " _")
@@ -79,13 +80,18 @@ func cleanName(name string) string {
 		return name
 	}
 	tail := name[i+1:]
-	if len(tail) < 4 {
-		return name
-	}
+	letter := false
 	for _, r := range tail {
-		if !(r >= '0' && r <= '9' || r >= 'a' && r <= 'f' || r >= 'A' && r <= 'F') {
+		switch {
+		case r >= '0' && r <= '9':
+		case r >= 'a' && r <= 'f' || r >= 'A' && r <= 'F':
+			letter = true
+		default:
 			return name
 		}
+	}
+	if len(tail) < 4 || len(tail) < 6 && !letter {
+		return name
 	}
 	return strings.TrimSpace(name[:i])
 }
