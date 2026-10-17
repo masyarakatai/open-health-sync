@@ -180,6 +180,9 @@ func (c *Connector) Enabled(cfg connector.Config) bool {
 	return cfg[KeyClientID] != "" && cfg[KeyClientSecret] != ""
 }
 
+// OptionalKeys lists the keys it also reads and runs without: VERIFICATION_TOKEN (webhooks).
+func (c *Connector) OptionalKeys() []string { return []string{KeyVerificationToken} }
+
 // Configure hands the connector its keys (the OHS_OURA_* values of the
 // process configuration). It may be called again; the last call wins. Both
 // keys are required; VERIFICATION_TOKEN turns webhooks on.

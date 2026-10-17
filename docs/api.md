@@ -128,8 +128,10 @@ pull still running when the job is due delays it until the pull ends. The `data.
 
 ## Connecting a provider
 
-`GET /v1/providers` lists the connectors enabled on this instance and how they work:
-`oauth` (the server pulls), `push` (the provider notifies), `device` (an SDK uploads).
+`GET /v1/providers` lists the connectors enabled on this instance, with their display `name`
+and how they work: `oauth` (the server pulls), `push` (the provider notifies), `device` (an SDK
+uploads). An instance admin turns providers on and saves their keys from the
+[console](console.md), or with the `OHS_<PROVIDER>_*` environment variables.
 
 For an OAuth provider, your server asks for a consent URL and sends the user there:
 
@@ -549,6 +551,38 @@ source (the others are revoked), `DELETE` revokes them all, `GET /v1/users/{id}/
 grant are not stored, and a revoked category's stored records are deleted. Details:
 [consent.md](consent.md).
 
+## Running the instance
+
+These routes back the [admin console](console.md); a script can call them too. All take a tenant
+API key and are recorded in the audit log.
+
+| Route | Purpose |
+|---|---|
+| `GET /v1/tenant` | The tenant of the key: `id`, `name`, `admin`, and the `id` and `prefix` of the key in use |
+| `GET /v1/keys`, `POST /v1/keys` | The tenant's API keys (revoked ones included, `current` marks the one in use); create one, its full `key` is in the 201 answer only (`Cache-Control: no-store`) |
+| `DELETE /v1/keys/{key_id}` | Revoke a key; 409 for the key making the call |
+| `GET /v1/pipeline` | The tenant's pipeline in one answer: users, sources (connections per provider and status, rate limit pauses), sync runs, processing jobs, rejected records, raw data stored in the last 24 hours, webhook endpoints and deliveries |
+| `GET /v1/pipeline/sync-runs` | Sync runs across the tenant's users, newest first; filters `status` and `provider`, paged with `cursor` and `limit` |
+| `GET /v1/pipeline/etl-jobs` | Processing jobs; `status` is `parked` (default), `pending` or `running`; filter `provider`, paged with `cursor` and `limit` |
+| `POST /v1/pipeline/etl-jobs/{job_id}/retry` | Queue a parked job again with fresh attempts; 409 when it is not parked |
+| `POST /v1/pipeline/etl-jobs/retry` | Queue again every parked job of the tenant, or of one `provider` in the body; answers `{"retried": n}` |
+
+Provider settings are instance wide, so their routes need a key of an
+[instance admin](console.md#the-instance-admin) tenant (403 otherwise):
+
+| Route | Purpose |
+|---|---|
+| `GET /v1/admin/providers` | Every connector of the binary: `status` (`active`, `off`, `not_configured`, `error`, `built_in`), where its keys come from (`env`, `console`), each key (required, secret, set, and its value only when it is not a secret), and the redirect and notification URLs to register at the provider |
+| `GET /v1/admin/providers/{provider}` | One of them |
+| `PATCH /v1/admin/providers/{provider}` | `{"keys": {"CLIENT_ID": "...", "CLIENT_SECRET": "..."}, "enabled": true}`; a `null` key removes it. The connector checks the keys before they are stored (422 with its message). 409 when the provider's keys come from the environment and the body changes keys |
+| `DELETE /v1/admin/providers/{provider}` | Forget the keys and the on/off choice saved in the console; 404 when nothing was saved |
+
+```sh
+curl -s -X PATCH $OHS/v1/admin/providers/oura -H "Authorization: Bearer $KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"keys":{"CLIENT_ID":"...","CLIENT_SECRET":"..."},"enabled":true}'
+```
+
 ## MCP
 
 `POST /mcp` speaks the Model Context Protocol for AI agents, read only. See [mcp.md](mcp.md).
@@ -567,7 +601,7 @@ grant are not stored, and a revoked category's stored records are deleted. Detai
 | `GET /readyz` | Readiness: database ping and raw store check, 503 when either fails |
 | `GET /metrics` | Prometheus text format; absent when `OHS_METRICS=false` |
 | `GET /v1/setup`, `POST /v1/setup` | The browser [first-run setup](setup.md): creates the first tenant and its key with `OHS_SETUP_TOKEN`, once; only when that is set |
-| `GET /console` | Read-only admin console (HTML), only when `OHS_CONSOLE=true`; see [console.md](console.md) |
+| `GET /console` | The [admin console](console.md) (HTML), only when `OHS_CONSOLE` is `true` or `read-only` |
 
 The OAuth callback, the notification routes and the share link manifest and file routes take
 no credential and are rate limited per client address (and the notification routes per provider): over a limit they answer 429 with a

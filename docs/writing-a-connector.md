@@ -26,7 +26,8 @@ several at once; the registry checks which ones it implements.
 | `NotifiedFetcher` | `FetchNotified` | pull only what a notification names (its `InboundEvent.DataType`), to spare the provider's rate limit |
 | `DeviceConnector` | `ParseUpload` | on-device stores uploaded by an SDK |
 | `KeyedConnector` | `RequiredKeys` | operator keys: the connector is off until each is set |
-| `Configurable` | `Configure` | receives its keys once at startup |
+| `OptionalKeyed` | `OptionalKeys` | keys it reads but runs without (a webhook secret, a region), listed in the [console](console.md) |
+| `Configurable` | `Configure` | receives its keys at startup, and again when the console saves new ones: validate before changing anything, and be safe to call while the connector runs |
 | `PostConnectHook` | `AfterConnect` | work after a user connects, such as subscribing to notifications |
 
 Rules that matter:

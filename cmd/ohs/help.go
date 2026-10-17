@@ -85,8 +85,16 @@ paste into .env.
 `,
 	"admin": `usage: ohs admin <command>
 
-  tenant create --name <name>    create a tenant and print its first API key
-  tenant list                    list the tenants, with their ids
+  tenant create --name <name> [--admin]
+                                 create a tenant and print its first API key;
+                                 the first tenant of an instance, or one made
+                                 with --admin, is an instance admin
+  tenant list                    list the tenants, with their ids and which
+                                 ones are instance admins
+  tenant admin --tenant <id> [--off]
+                                 make a tenant an instance admin (its keys may
+                                 turn providers on from the console), or with
+                                 --off stop it being one
   key create --tenant <id>       add an API key to a tenant (rotation)
   key list --tenant <id>         list a tenant's keys by prefix, with last use
   key revoke --tenant <id> --key <key or prefix>
@@ -101,8 +109,9 @@ paste into .env.
                                  key, or with another --person for a second
                                  person of the household
 
-  rekey [--batch <rows>]         re-seal every stored OAuth token and webhook
-                                 secret under OHS_ENCRYPTION_KEY, after a key
+  rekey [--batch <rows>]         re-seal every stored OAuth token, webhook
+                                 secret and provider key saved in the console
+                                 under OHS_ENCRYPTION_KEY, after a key
                                  rotation (docs/key-rotation.md); prints counts
                                  and leaves a value no key opens as it is
 

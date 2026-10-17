@@ -166,6 +166,9 @@ func (c *Connector) Enabled(cfg connector.Config) bool {
 	return cfg[KeyClientID] != "" && cfg[KeyClientSecret] != ""
 }
 
+// OptionalKeys lists the keys it also reads and runs without: ENVIRONMENT (default production).
+func (c *Connector) OptionalKeys() []string { return []string{KeyEnvironment} }
+
 // Configure hands the connector its keys. An unknown environment is an
 // error.
 func (c *Connector) Configure(cfg connector.Config) error {

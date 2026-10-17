@@ -9,6 +9,37 @@ release may change the API, the configuration or the database schema.
 
 ### Added
 
+- Admin console for the whole pipeline. `/console` now runs the instance, not only shows it: an
+  overview of the five pipeline stages (sources, sync, processing, storage, delivery) with what
+  needs attention, providers turned on and their keys saved from the browser, users created and
+  sent a connection link, a sync started, parked processing jobs retried, webhook endpoints and
+  deliveries managed, API keys created and revoked, and the audit log. Each action is a call to a
+  documented route with the tenant key and asks for a confirmation first. Light and dark, works
+  on a phone. See [docs/console.md](docs/console.md).
+- Providers turned on without a restart. An instance admin saves a provider's keys and turns it
+  on or off with `PATCH /v1/admin/providers/{provider}` (also `GET`, `DELETE`, and
+  `GET /v1/admin/providers` with each provider's state, keys and the URLs to register at the
+  provider). Keys are checked by the connector before they are stored, sealed with
+  `OHS_ENCRYPTION_KEY` in the new `ohs_core.provider_settings`, re-sealed by `ohs admin rekey`,
+  and picked up by every process within 30 seconds. A provider's `OHS_<PROVIDER>_*` variables,
+  when set, still win; the on/off switch applies to both. Secrets are write only: the API never
+  returns their value.
+- Instance admin tenants: the first tenant of an instance, the `OHS_BOOTSTRAP_TENANT` tenant and
+  the one of `ohs admin personal setup` are admins. `ohs admin tenant create --admin` and
+  `ohs admin tenant admin --tenant <id> [--off]` set the mark, `ohs admin tenant list` shows it,
+  and `tenant.admin` is audited. Only admin keys reach `/v1/admin/*`.
+- `GET /v1/tenant` (the tenant of the key), `GET /v1/keys`, `POST /v1/keys` and
+  `DELETE /v1/keys/{key_id}`: a tenant manages its own API keys over the API, as
+  `ohs admin key` does from a shell. A key cannot revoke itself (409).
+- `GET /v1/pipeline` (the tenant's pipeline counts in one answer), `GET /v1/pipeline/sync-runs`
+  (sync runs across users, with `status` and `provider` filters), `GET /v1/pipeline/etl-jobs`
+  (parked, pending or running processing jobs), and `POST /v1/pipeline/etl-jobs/{job_id}/retry`
+  and `POST /v1/pipeline/etl-jobs/retry` to queue parked jobs again with fresh attempts.
+- `GET /v1/providers` gives each provider its display `name`.
+- Audit events of a route that names a provider, an API key or a processing job in its path keep
+  that `provider`, `key_id` or `job_id` in `detail`.
+- Migration 0038 adds `tenants.admin`, `provider_settings` and two indexes for the console's
+  lists of failed runs and parked jobs.
 - Bluetooth devices: heart rate straps, blood pressure cuffs, scales, glucose meters,
   thermometers and pulse oximeters that implement the standard Bluetooth SIG health profiles
   send their readings straight to the server, with no vendor account and no phone. The new
@@ -139,6 +170,14 @@ release may change the API, the configuration or the database schema.
 
 ### Changed
 
+- `OHS_CONSOLE=true` now serves the console with its actions. An instance that turned it on for
+  the read-only view gets them on upgrade; set `OHS_CONSOLE=read-only` to keep the console
+  without any action.
+- Migration 0038 makes the only tenant of a single-tenant instance its instance admin, so the
+  console can turn providers on after the upgrade. An instance with several tenants gets no admin
+  until one is named with `ohs admin tenant admin`.
+- A connector can list the keys it runs without (`connector.OptionalKeyed`), and `Configure` may
+  be called again while the connector runs, when the console saves new keys.
 - The hosted connect page and its result page are redesigned: frosted glass panels on a
   background the page draws itself, with no image or web font. Each source is one row and one
   button, with a line on what it shares (from the data its connector reads) and a "Connected" or

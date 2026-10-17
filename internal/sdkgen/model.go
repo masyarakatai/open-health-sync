@@ -29,6 +29,11 @@ var skipped = map[string]string{
 	"shareFile":              "a share link's reader downloads the file here",
 	"shareViewer":            "the reader's browser opens the viewer",
 	"shareViewerAsset":       "the viewer page loads its script and stylesheet",
+
+	"listAdminProviders":  "the instance admin sets providers up in the console, see docs/console.md",
+	"getAdminProvider":    "the instance admin sets providers up in the console, see docs/console.md",
+	"updateAdminProvider": "the instance admin sets providers up in the console, see docs/console.md",
+	"forgetAdminProvider": "the instance admin sets providers up in the console, see docs/console.md",
 }
 
 // API is the part of the OpenAPI document the emitters need, in document

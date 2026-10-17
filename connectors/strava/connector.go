@@ -187,6 +187,9 @@ func (c *Connector) Enabled(cfg connector.Config) bool {
 	return cfg[KeyClientID] != "" && cfg[KeyClientSecret] != ""
 }
 
+// OptionalKeys lists the keys it also reads and runs without: VERIFY_TOKEN and SUBSCRIPTION_ID (push subscription).
+func (c *Connector) OptionalKeys() []string { return []string{KeyVerifyToken, KeySubscriptionID} }
+
 // Configure hands the connector its keys (the OHS_STRAVA_* values of the
 // process configuration). It may be called again; the last call wins. Client
 // id and secret are required.

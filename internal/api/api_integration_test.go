@@ -31,6 +31,7 @@ import (
 	"github.com/soma-intelligence/open-health-sync/internal/db"
 	"github.com/soma-intelligence/open-health-sync/internal/deletion"
 	"github.com/soma-intelligence/open-health-sync/internal/etl/automation"
+	"github.com/soma-intelligence/open-health-sync/internal/providerset"
 	"github.com/soma-intelligence/open-health-sync/internal/rawstore"
 	"github.com/soma-intelligence/open-health-sync/internal/tenant"
 )
@@ -64,11 +65,13 @@ func newEnv(t *testing.T, tweak ...func(*api.Deps)) *env {
 	b, keyB, err := st.CreateTenant(ctx, "Other")
 	require.NoError(t, err)
 	m := &automation.Metrics{}
+	providers, err := providerset.New(ctx, providerset.Options{Connectors: []connector.Connector{applehealth.New()}})
+	require.NoError(t, err)
 	deps := api.Deps{
 		Pool:      pool,
 		Store:     st,
 		Raw:       raw,
-		Providers: []connector.Connector{applehealth.New()},
+		Providers: providers,
 		Device:    applehealth.New(),
 		// The Health Connect route shares the upload handler.
 		HealthConnect: healthconnect.New(),
@@ -666,7 +669,7 @@ func TestProvidersAndOps(t *testing.T) {
 	e := newEnv(t)
 	r := e.do("GET", "/v1/providers", e.keyA, nil)
 	require.Equal(t, http.StatusOK, r.code, string(r.body))
-	assert.JSONEq(t, `{"data":[{"slug":"apple_health","kinds":["device"]}]}`, string(r.body))
+	assert.JSONEq(t, `{"data":[{"slug":"apple_health","name":"Apple Health","kinds":["device"]}]}`, string(r.body))
 	r = e.do("GET", "/v1/providers", "", nil)
 	assert.Equal(t, http.StatusUnauthorized, r.code)
 

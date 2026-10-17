@@ -183,6 +183,9 @@ func (c *Connector) RequiredKeys() []string {
 	return []string{KeyClientID, KeyClientSecret, KeySubscriptionKey}
 }
 
+// OptionalKeys lists the keys it also reads and runs without: NOTIFICATION_SECRET (notifications).
+func (c *Connector) OptionalKeys() []string { return []string{KeyNotificationSecret} }
+
 // Enabled reports whether cfg holds every required key.
 func (c *Connector) Enabled(cfg connector.Config) bool {
 	return cfg[KeyClientID] != "" && cfg[KeyClientSecret] != "" && cfg[KeySubscriptionKey] != ""
