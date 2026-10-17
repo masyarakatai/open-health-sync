@@ -35,10 +35,11 @@ var archiveFolders = map[string]string{
 		"Tokens and sealed values are never included.",
 	"canonical/": "Every record of each list of the REST API, one JSON object per line (NDJSON), " +
 		"the same JSON as the list items: samples, category-samples, sleep, sleep-phases, workouts, " +
-		"workout-routes, nutrition, daily. Times are RFC 3339 in UTC, values in canonical units.",
+		"workout-routes, nutrition, daily, and ecg (each ECG recording with its voltage samples, as " +
+		"GET /v1/users/{id}/ecg/{ecg_id} returns it). Times are RFC 3339 in UTC, values in canonical units.",
 	"fhir/": "bundle.json: a FHIR R4 Bundle of type collection holding every Observation the FHIR " +
 		"endpoints serve for the user (quantity samples, blood pressure panels, sleep sessions, " +
-		"workouts, daily summaries).",
+		"workouts, daily summaries, ECG recordings).",
 	"omh/": "data-points.ndjson: the records that have an Open mHealth schema, as Open mHealth data " +
 		"points, one per line.",
 	"raw/": "Every raw payload providers and devices sent for the user, byte for byte as stored, " +
@@ -46,8 +47,9 @@ var archiveFolders = map[string]string{
 }
 
 // archiveLists are the canonical files, in archive order: each REST list,
-// and the two lists that belong to a parent (sleep phases, route points)
-// read session by session and workout by workout.
+// the two lists that belong to a parent (sleep phases, route points) read
+// session by session and workout by workout, and the ECG recordings, each
+// read with its samples.
 var archiveLists = []struct {
 	name  string
 	write archiveWrite
@@ -60,6 +62,16 @@ var archiveLists = []struct {
 	{"workout-routes", archiveChildren(read.Workouts, func(w read.Workout) int64 { return w.ID }, read.WorkoutRoute)},
 	{"nutrition", archiveList(read.Nutrition)},
 	{"daily", archiveList(read.Daily)},
+	{"ecg", archiveChildren(read.ECGRecordings, func(e read.ECGRecording) int64 { return e.ID }, ecgDetail)},
+}
+
+// ecgDetail is the one-record list of an ECG recording with its samples.
+func ecgDetail(ctx context.Context, db read.Querier, tenantID, user uuid.UUID, id int64, _ read.Query) (read.Page[read.ECGRecordingDetail], error) {
+	rec, err := read.ECGRecordingByID(ctx, db, tenantID, user, id)
+	if err != nil {
+		return read.Page[read.ECGRecordingDetail]{}, err
+	}
+	return read.Page[read.ECGRecordingDetail]{Records: []read.ECGRecordingDetail{rec}}, nil
 }
 
 func (s *server) mountArchive(mux *http.ServeMux) {

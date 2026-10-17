@@ -24,7 +24,7 @@ test:
 # The admin console's and the setup page's pure JavaScript helpers (Node 22+, no
 # npm install).
 test-js:
-	node --test internal/console/app.test.mjs internal/console/setup.test.mjs
+	node --test internal/console/app.test.mjs internal/console/setup.test.mjs internal/shl/viewer/view.test.mjs
 
 # golangci-lint v2 with .golangci.yml (the integration suites included). CI
 # runs the same version: go install

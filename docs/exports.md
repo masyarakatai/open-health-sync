@@ -26,13 +26,14 @@ below, is a 404; errors are `application/problem+json` like the rest of the API.
 | `workouts` | workouts, by start | `GET /v1/users/{id}/workouts` |
 | `nutrition` | nutrition logs, by start | `GET /v1/users/{id}/nutrition` |
 | `daily` | daily summaries, by date | `GET /v1/users/{id}/daily` |
+| `ecg` | ECG recordings, by start, metadata only (the voltage samples are in the archive) | `GET /v1/users/{id}/ecg` |
 
 | Parameter | Meaning |
 |---|---|
 | `format` | `csv` (the default) or `parquet` |
 | `type` | the canonical type to keep, for `samples`, `category-samples` and `workouts`; a quantity type outside the catalog is a 400 |
 | `start`, `end` | RFC 3339 or `YYYY-MM-DD`; `start` <= the record's time < `end`. Both optional: without them the file holds everything. |
-| `view` | `merged` (the default) or `all`, as in the [API](api.md#several-sources-of-one-metric-the-merged-view); a full backup passes `all`. Nutrition logs have no merge. |
+| `view` | `merged` (the default) or `all`, as in the [API](api.md#several-sources-of-one-metric-the-merged-view); a full backup passes `all`. Nutrition logs and ECG recordings have no merge. |
 
 An export is not paged: `cursor` and `limit` are a 400.
 
@@ -112,6 +113,7 @@ canonical/workouts.ndjson
 canonical/workout-routes.ndjson the route points of every workout (each names its workout_id)
 canonical/nutrition.ndjson
 canonical/daily.ndjson          daily summaries
+canonical/ecg.ndjson            ECG recordings, each with its voltage samples
 fhir/bundle.json                one FHIR R4 Bundle, type collection
 omh/data-points.ndjson          Open mHealth data points
 raw/<provider>/<day>/<file>     every raw payload, byte for byte
@@ -127,10 +129,12 @@ raw/<provider>/<day>/<file>     every raw payload, byte for byte
   `created_at` and `updated_at`. Tokens and other sealed values never leave the database.
 - **`canonical/`**: one JSON object per line, the same JSON as the items of the REST lists
   (`GET /v1/users/{id}/samples`, `/sleep`, `/sleep/{session_id}/phases`...), in the same order.
-  An empty list is an empty file.
+  An empty list is an empty file. `ecg.ndjson` holds each ECG recording as
+  `GET /v1/users/{id}/ecg/{ecg_id}` returns it, with its voltage samples (at most 100000 per
+  recording, `samples.truncated` beyond).
 - **`fhir/bundle.json`**: a Bundle of type `collection` with every Observation the FHIR
   endpoints serve (quantity samples, blood pressure panels, sleep sessions, workouts, daily
-  summaries), as described in [fhir.md](fhir.md). Each `fullUrl` is the Observation's URL on
+  summaries, ECG recordings with their waveform), as described in [fhir.md](fhir.md). Each `fullUrl` is the Observation's URL on
   the instance. A user without records gets a Bundle without `entry`.
 - **`omh/data-points.ndjson`**: the records that have an Open mHealth schema, as
   `GET /v1/users/{id}/omh/data-points` serves them; see [open-mhealth.md](open-mhealth.md).
@@ -164,5 +168,5 @@ manifest counts what was written.
 - Sleep phases and route points (each belongs to one session or workout; read them with
   `GET /v1/users/{id}/sleep/{session_id}/phases` and `GET /v1/users/{id}/workouts/{workout_id}/route`).
 - Exports of several users at once, scheduled exports and exports to object storage.
-- ECG recordings and heartbeat (RR) series in `canonical/` and `fhir/` of the user archive:
-  they have no read route yet, so the archive holds them only as the raw payloads they came in.
+- Heartbeat (RR) series in `canonical/` and `fhir/` of the user archive: the archive holds
+  them only as the raw payloads they came in.

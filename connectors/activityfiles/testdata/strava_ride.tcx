@@ -1,0 +1,45 @@
+      <?xml version="1.0" encoding="UTF-8"?>
+<TrainingCenterDatabase xsi:schemaLocation="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2 http://www.garmin.com/xmlschemas/TrainingCenterDatabasev2.xsd" xmlns:ns5="http://www.garmin.com/xmlschemas/ActivityGoals/v1" xmlns:ns3="http://www.garmin.com/xmlschemas/ActivityExtension/v2" xmlns:ns2="http://www.garmin.com/xmlschemas/UserProfile/v2" xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+ <Activities>
+  <Activity Sport="Biking">
+   <Id>2026-03-04T06:30:00Z</Id>
+   <Lap StartTime="2026-03-04T06:30:00Z">
+    <TotalTimeSeconds>6</TotalTimeSeconds>
+    <DistanceMeters>48.0</DistanceMeters>
+    <MaximumSpeed>8.2</MaximumSpeed>
+    <Calories>3</Calories>
+    <Intensity>Active</Intensity>
+    <TriggerMethod>Manual</TriggerMethod>
+    <Track>
+     <Trackpoint>
+      <Time>2026-03-04T06:30:00Z</Time>
+      <Position><LatitudeDegrees>45.7</LatitudeDegrees><LongitudeDegrees>6.7</LongitudeDegrees></Position>
+      <AltitudeMeters>700.0</AltitudeMeters>
+      <DistanceMeters>0.0</DistanceMeters>
+      <HeartRateBpm><Value>118</Value></HeartRateBpm>
+      <Cadence>80</Cadence>
+      <Extensions><ns3:TPX><ns3:Speed>7.9</ns3:Speed><ns3:Watts>190</ns3:Watts></ns3:TPX></Extensions>
+     </Trackpoint>
+     <Trackpoint>
+      <Time>2026-03-04T06:30:03Z</Time>
+      <Position><LatitudeDegrees>45.7001</LatitudeDegrees><LongitudeDegrees>6.7001</LongitudeDegrees></Position>
+      <AltitudeMeters>700.5</AltitudeMeters>
+      <DistanceMeters>24.0</DistanceMeters>
+      <HeartRateBpm><Value>120</Value></HeartRateBpm>
+      <Cadence>82</Cadence>
+      <Extensions><ns3:TPX><ns3:Speed>8.1</ns3:Speed><ns3:Watts>195</ns3:Watts></ns3:TPX></Extensions>
+     </Trackpoint>
+     <Trackpoint>
+      <Time>2026-03-04T06:30:06Z</Time>
+      <Position><LatitudeDegrees>45.7002</LatitudeDegrees><LongitudeDegrees>6.7002</LongitudeDegrees></Position>
+      <AltitudeMeters>701.0</AltitudeMeters>
+      <DistanceMeters>48.0</DistanceMeters>
+      <HeartRateBpm><Value>122</Value></HeartRateBpm>
+      <Cadence>84</Cadence>
+      <Extensions><ns3:TPX><ns3:Speed>8.2</ns3:Speed><ns3:Watts>200</ns3:Watts></ns3:TPX></Extensions>
+     </Trackpoint>
+    </Track>
+   </Lap>
+  </Activity>
+ </Activities>
+</TrainingCenterDatabase>

@@ -78,6 +78,13 @@ type sleepArgs struct {
 	pageArgs
 }
 
+type ecgArgs struct {
+	userArgs
+	RecordingID int64 `json:"recording_id,omitempty" jsonschema:"when set, a summary of this ECG recording (id from a previous result) instead of the list"`
+	windowArgs
+	pageArgs
+}
+
 type routeArgs struct {
 	userArgs
 	WorkoutID int64 `json:"workout_id" jsonschema:"the workout (id from get_workouts)"`
@@ -220,6 +227,11 @@ func addTools(s *sdk.Server, t *tools) {
 		func(ctx context.Context, a listArgs) (any, error) {
 			return listTool(ctx, t, a.userArgs, read.Query{}, a.windowArgs, a.pageArgs, read.MenstrualCycles)
 		})
+	add(s, "get_ecg_recordings", "ECG recordings made by the user's devices (Apple Watch, Withings), by start time, "+
+		"metadata only: time, average heart rate, sampling frequency, and the classification the recording device made "+
+		"(the device's own label, passed through as recorded, not computed by this server). With recording_id, a summary "+
+		"of that recording's stored voltage samples (count, first and last offset, lowest and highest voltage); "+
+		"the voltage samples themselves are served by the REST API and FHIR, not here.", t.ecg)
 	add(s, "get_sample_stats", "Count, sum, mean, min and max of one quantity type per hour or per local day, by default from the best ranked source of each interval so nothing counts twice; view all gives one series per provider and source. Prefer it to get_samples for trends over weeks or months.", t.sampleStats)
 	add(s, "get_coverage", "What has been synced: records per provider per local day with per metric counts, and the processing jobs and provider pulls still pending. Without start, the last 30 days.", t.coverage)
 	add(s, "get_tags", "Time tags of the user: intervals that give context to the data (illness, injury, travel, jet lag, "+
@@ -486,6 +498,22 @@ func (t *tools) sampleStats(ctx context.Context, a statsArgs) (any, error) {
 		return nil, readErr(err, errUserNotFound)
 	}
 	return st, nil
+}
+
+func (t *tools) ecg(ctx context.Context, a ecgArgs) (any, error) {
+	if a.RecordingID == 0 {
+		return listTool(ctx, t, a.userArgs, read.Query{}, a.windowArgs, a.pageArgs, read.ECGRecordings)
+	}
+	id, err := t.user(a.userArgs)
+	if err != nil {
+		return nil, err
+	}
+	s, err := read.ECGRecordingSummary(ctx, t.d.DB, t.p.TenantID, id, a.RecordingID)
+	if err != nil {
+		// An unknown user and a recording that is not the user's read alike.
+		return nil, readErr(err, "ECG recording not found")
+	}
+	return s, nil
 }
 
 func (t *tools) connections(ctx context.Context, a userArgs) (any, error) {

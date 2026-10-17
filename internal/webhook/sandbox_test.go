@@ -83,6 +83,15 @@ func TestSampleData(t *testing.T) {
 	assert.Equal(t, "needs_reauth", SampleData(ConnectionRestored, now)["previous_reason"])
 	assert.Equal(t, uuid.Nil.String(), SampleData(TagCreated, now)["tag_id"])
 	assert.Equal(t, "oura", SampleData(DataErased, now)["provider"])
+	sc := SampleData(ShareCreated, now)
+	assert.Equal(t, uuid.Nil.String(), sc["share_id"])
+	assert.Equal(t, []string{"heart", "sleep"}, sc["categories"])
+	assert.Equal(t, true, sc["passcode"])
+	assert.Equal(t, "owner", SampleData(ShareRevoked, now)["reason"])
+	assert.Equal(t, uuid.Nil.String(), SampleData(ShareAccessed, now)["share_id"])
+	for _, typ := range []string{ShareCreated, ShareRevoked, ShareAccessed} {
+		assert.True(t, KnownType(typ), typ)
+	}
 }
 
 func TestPayloadTestFlag(t *testing.T) {

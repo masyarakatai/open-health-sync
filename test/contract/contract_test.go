@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -28,6 +29,7 @@ import (
 	"github.com/soma-intelligence/open-health-sync/internal/app"
 	"github.com/soma-intelligence/open-health-sync/internal/config"
 	"github.com/soma-intelligence/open-health-sync/internal/db"
+	"github.com/soma-intelligence/open-health-sync/internal/shl"
 	"github.com/soma-intelligence/open-health-sync/internal/tenant"
 )
 
@@ -311,6 +313,20 @@ func TestQuickstartMatchesOpenAPI(t *testing.T) {
 			user.ID, at, "contract-hb-"+strconv.Itoa(i))
 		require.NoError(t, err)
 	}
+	// An ECG recording with invented samples, written the same way.
+	var ecgID int64
+	ecgAt := time.Date(2026, 1, 10, 9, 0, 0, 0, time.UTC)
+	require.NoError(t, pool.QueryRow(context.Background(), `INSERT INTO ohs_data.ecg_recordings
+		(tenant_id, user_id, provider, source_slug, start_date, end_date, classification, symptoms_status,
+		 average_heart_rate, sampling_frequency, number_of_measurements, content_hash)
+		SELECT tenant_id, id, 'apple_health', 'apple_health', $2, $3, 1, 1, 61, 512, 32, 'contract-ecg'
+		FROM ohs_core.end_users WHERE id = $1 RETURNING id`, user.ID, ecgAt, ecgAt.Add(time.Second)).Scan(&ecgID))
+	_, err = pool.Exec(context.Background(), `INSERT INTO ohs_data.ecg_samples
+		(tenant_id, user_id, ecg_id, ts, time_since_sample_start, voltage_uv, content_hash)
+		SELECT u.tenant_id, u.id, $2::bigint, $3::timestamptz + make_interval(secs => g / 512.0), g / 512.0,
+			(g % 8) * 2.5 - 5, 'contract-ecg-' || g::text
+		FROM ohs_core.end_users u, generate_series(0, 31) AS g WHERE u.id = $1`, user.ID, ecgID, ecgAt)
+	require.NoError(t, err)
 	pool.Close()
 	for _, p := range []string{u + "/rr-intervals?limit=5", u + "/hrv", u + "/hrv?series_id=contract-series&start=2026-01-10"} {
 		r := c.json("GET", p, key, "")
@@ -318,6 +334,25 @@ func TestQuickstartMatchesOpenAPI(t *testing.T) {
 		assert.Contains(t, string(r.body), "contract-series", p)
 	}
 	assert.Equal(t, 400, c.json("GET", u+"/hrv?cursor=nope", key, "").status)
+
+	// ECG recordings: the list, one recording with its samples, its FHIR
+	// Observation, and the export.
+	ecgPath := strconv.FormatInt(ecgID, 10)
+	for _, p := range []string{
+		u + "/ecg",
+		u + "/ecg?limit=1&start=2026-01-10&end=2026-01-11",
+		u + "/ecg/" + ecgPath,
+		u + "/fhir/Observation/ecg-" + ecgPath,
+		u + "/fhir/Observation?code=http://loinc.org%7C11524-6",
+		u + "/exports/ecg",
+		u + "/exports/ecg?format=parquet",
+	} {
+		r := c.json("GET", p, key, "")
+		assert.Equal(t, 200, r.status, "%s: %s", p, r.body)
+	}
+	assert.Equal(t, 404, c.json("GET", u+"/ecg/999999999", key, "").status)
+	assert.Equal(t, 404, c.json("GET", u+"/fhir/Observation/ecg-999999999", key, "").status)
+	assert.Equal(t, 400, c.json("GET", u+"/ecg?cursor=%25%25", key, "").status)
 
 	// Page through heart rate with a small limit to exercise next_cursor.
 	r = c.json("GET", u+"/samples?type=heart_rate&limit=100", key, "")
@@ -526,6 +561,102 @@ func TestQuickstartMatchesOpenAPI(t *testing.T) {
 	assert.Equal(t, 400, c.json("POST", u+"/tags", key, `{"kind":"travel","start_at":"2026-01-08","timezone":"Mars/Base"}`).status)
 	assert.Equal(t, 204, c.json("DELETE", u+"/tags/"+tag.ID, key, "").status)
 	assert.Equal(t, 404, c.json("GET", u+"/tags/"+tag.ID, key, "").status)
+
+	// Self reports: a rating (with a replay), the same from the user's own
+	// app (a duplicate), a refusal, then the rating read back as a sample and
+	// as a FHIR survey Observation once processed.
+	feeling := `{"reports":[{"id":"0192f1a2-0000-7000-8000-00000000c0de","kind":"feeling","value":4,
+		"start_at":"2026-01-10T07:30:00Z","timezone":"Europe/Paris"}]}`
+	for range 2 {
+		r = c.do("POST", u+"/self-reports", key, strings.NewReader(feeling),
+			map[string]string{"Content-Type": "application/json", "Idempotency-Key": "self-report-1"})
+		require.Equal(t, 202, r.status, "%s", r.body)
+	}
+	r = c.json("POST", u+"/self-reports", tok.Token, feeling)
+	require.Equal(t, 202, r.status, "%s", r.body)
+	assert.Contains(t, string(r.body), `"duplicate":true`)
+	assert.Equal(t, 400, c.json("POST", u+"/self-reports", key,
+		`{"reports":[{"kind":"feeling","value":9,"start_at":"2026-01-10T07:30:00Z"}]}`).status)
+	deadline = time.Now().Add(60 * time.Second)
+	for {
+		r = c.json("GET", u+"/samples?type=reported_feeling", key, "")
+		require.Equal(t, 200, r.status, "%s", r.body)
+		if strings.Contains(string(r.body), "0192f1a2-0000-7000-8000-00000000c0de") {
+			break
+		}
+		require.True(t, time.Now().Before(deadline), "self report not processed: %s", r.body)
+		time.Sleep(200 * time.Millisecond)
+	}
+	r = c.json("GET", u+"/fhir/Observation?category=survey", key, "")
+	require.Equal(t, 200, r.status, "%s", r.body)
+	assert.Contains(t, string(r.body), `"performer"`)
+
+	// Share links: make two, list and read them, then open one as its reader
+	// would (a wrong passcode, the file at a location, the file), revoke it,
+	// and the refusals. The public routes take four requests per address.
+	shares := u + "/shares"
+	expires := time.Now().Add(48 * time.Hour).UTC().Format(time.RFC3339)
+	r = c.json("POST", shares, key, `{"categories":["sleep","heart"],"start":"2026-01-01","end":"2026-02-01",
+		"expires_at":"`+expires+`","passcode":"invented-passcode","label":"Contract reader"}`)
+	require.Equal(t, 201, r.status, "%s", r.body)
+	var share struct {
+		ID           string `json:"id"`
+		URI          string `json:"uri"`
+		Observations int    `json:"observations"`
+	}
+	r.json(t, &share)
+	assert.Positive(t, share.Observations)
+	r = c.json("POST", shares, key, `{"categories":["activity"],"start":"2026-01-10","end":"2026-01-11","expires_at":"`+expires+`"}`)
+	require.Equal(t, 201, r.status, "%s", r.body)
+	assert.Equal(t, 400, c.json("POST", shares, key, `{"categories":["location"],"start":"2026-01-01","end":"2026-02-01","expires_at":"`+expires+`"}`).status)
+	assert.Equal(t, 400, c.json("POST", shares, key, `{"categories":["heart"],"start":"2026-01-01","end":"2026-02-01","expires_at":"2026-01-01"}`).status)
+	assert.Equal(t, 403, c.json("GET", shares, tok.Token, "").status)
+	r = c.json("GET", shares+"?limit=1", key, "")
+	require.Equal(t, 200, r.status, "%s", r.body)
+	r.json(t, &page)
+	require.NotNil(t, page.NextCursor)
+	assert.Equal(t, 200, c.json("GET", shares+"?limit=1&cursor="+*page.NextCursor, key, "").status)
+	assert.Equal(t, 400, c.json("GET", shares+"?cursor=nope", key, "").status)
+	assert.Equal(t, 404, c.json("GET", shares+"/00000000-0000-4000-8000-000000000000", key, "").status)
+
+	raw, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(share.URI, shl.Prefix))
+	require.NoError(t, err)
+	var payload shl.Payload
+	require.NoError(t, json.Unmarshal(raw, &payload))
+	require.NoError(t, payload.Validate())
+	assert.Equal(t, shl.FlagPasscode, payload.Flag)
+	manifest := strings.TrimPrefix(payload.URL, base)
+	require.True(t, strings.HasPrefix(manifest, "/shl/"), "the link's url %q under OHS_PUBLIC_URL", payload.URL)
+	assert.Equal(t, 204, c.do("OPTIONS", manifest, "", nil, map[string]string{
+		"Origin": "https://viewer.invalid", "Access-Control-Request-Method": "POST"}).status)
+	r = c.json("POST", manifest, "", `{"recipient":"Contract reader","passcode":"not-the-passcode"}`)
+	assert.Equal(t, 401, r.status, "%s", r.body)
+	assert.Contains(t, string(r.body), `"remainingAttempts":9`)
+	r = c.json("POST", manifest, "", `{"recipient":"Contract reader","passcode":"invented-passcode","embeddedLengthMax":0}`)
+	require.Equal(t, 200, r.status, "%s", r.body)
+	var mf struct {
+		Files []struct {
+			Location string `json:"location"`
+		} `json:"files"`
+	}
+	r.json(t, &mf)
+	require.Len(t, mf.Files, 1)
+	r = c.json("GET", strings.TrimPrefix(mf.Files[0].Location, base), "", "")
+	require.Equal(t, 200, r.status, "%s", r.body)
+	key32, err := shl.DecodeKey(payload.Key)
+	require.NoError(t, err)
+	plainFile, hdr, err := shl.Decrypt(key32, string(r.body), 64<<20)
+	require.NoError(t, err)
+	assert.Equal(t, shl.ContentFHIR, hdr.Cty)
+	assert.Contains(t, string(plainFile), `"resourceType":"Bundle"`)
+	assert.Equal(t, 200, c.json("GET", shares+"/"+share.ID, key, "").status)
+	assert.Equal(t, 204, c.json("DELETE", shares+"/"+share.ID, key, "").status)
+	assert.Equal(t, 204, c.json("DELETE", shares+"/"+share.ID, key, "").status, "revoking twice changes nothing")
+	assert.Equal(t, 404, c.json("POST", manifest, "", `{"recipient":"Contract reader","passcode":"invented-passcode"}`).status)
+	assert.Equal(t, 429, c.json("POST", manifest, "", `{"recipient":"Contract reader"}`).status, "over the share rate limit")
+	assert.Equal(t, 200, c.json("GET", "/shl/view", "", "").status)
+	assert.Equal(t, 200, c.json("GET", "/shl/view/view.mjs", "", "").status)
+	assert.Equal(t, 404, c.json("GET", "/shl/view/missing.js", "", "").status)
 
 	// Refusals are documented problems too.
 	assert.Equal(t, 401, c.json("GET", "/v1/users", "", "").status)

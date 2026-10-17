@@ -16,6 +16,7 @@ checklist see [hardening.md](hardening.md); to report a problem see
 | User tokens (`ohs_ut_`) | `ohs_core.user_tokens` | SHA-256 hash only, scoped, expiring |
 | Webhook signing secrets (`whsec_`) | `ohs_core.webhook_endpoints` | AES-256-GCM under `OHS_ENCRYPTION_KEY`, bound to the endpoint |
 | OAuth `state` values | `ohs_sync.oauth_states` | SHA-256 hash only, single use, 10 minute lifetime |
+| Share link files | `ohs_sync.shares` | A JWE (AES-256-GCM) under a key held only in the link; the manifest id as a SHA-256 hash, the passcode as a PBKDF2-SHA256 hash |
 | `OHS_ENCRYPTION_KEY` and provider client secrets | The process environment | Not stored by the application; the operator's job |
 
 ## Actors and trust boundaries
@@ -43,6 +44,8 @@ checklist see [hardening.md](hardening.md); to report a problem see
   `upload`, `connect` and `read`.
 - **Providers.** Call the unauthenticated routes `GET /oauth/{provider}/callback` and
   `POST /inbound/{provider}`. Anyone on the internet can call them too.
+- **Share link readers.** Whoever holds a share link: they call `POST /shl/{manifest_id}` and
+  `GET /shl/file/{ticket}` with no credential, from any origin. So can anyone on the internet.
 - **Webhook receivers.** URLs a tenant registers; `ohs` posts to them from the `etl` role.
 - **Database and raw store.** Trusted storage (see limitations).
 
@@ -92,6 +95,46 @@ checklist see [hardening.md](hardening.md); to report a problem see
   database read or queued pull, counted in `ohs_rate_limited_total`. `X-Forwarded-For` is read
   only from the proxies listed in `OHS_TRUSTED_PROXIES` (`internal/api/ratelimit.go`, see
   [self-hosting.md](self-hosting.md#rate-limits)).
+
+### Share links
+
+A share link is a way out of the instance for one user's data, readable by whoever holds it
+([share-links.md](share-links.md), `internal/shl/`).
+
+- **Database theft.** The file is a JWE (`dir`, `A256GCM`) under a 256-bit key that exists only
+  in the link; the instance stores the ciphertext, the SHA-256 of the 256-bit manifest id and a
+  PBKDF2-SHA256 hash (100000 iterations, random salt) of the passcode. A copy of the database
+  opens no file and rebuilds no link. The key never reaches the instance after the create
+  answer: it sits in the address fragment, which browsers do not send, and the create answer is
+  `Cache-Control: no-store` and never kept for idempotency.
+- **Guessing a link.** 256 random bits for the manifest id and for a file location; every
+  inactive case (unknown, revoked, disabled, expired) answers the same 404.
+- **Guessing a passcode.** 10 wrong passcodes per link over its whole life, counted under a row
+  lock, then the link is disabled and its file removed; and the public routes sit behind a
+  token bucket per client address (`route_group="share"`).
+- **A leaked link.** It works until it expires (at most 365 days, chosen by the person) or is
+  revoked; a passcode sent another way protects it. Revocation is immediate. A consent change
+  that refuses a category, and an erasure of a provider's data, revoke the links holding those
+  records in the same transaction as the change. A link is made in a transaction that holds
+  the user and their consent lock, so a change or an erasure under way cannot miss it.
+- **What a link holds.** Only the categories the person chose and the consent allows, figure by
+  figure: a sleep session's resting heart rate is `heart` data, left out of a `sleep` link.
+- **Exhausting the instance through one link.** The passcode check (PBKDF2) runs before any
+  lock and holds no database connection; the public routes wait 2 seconds at most for a lock,
+  then answer 503. A link that no longer works adds one row a day to its access history.
+- **Copies made by the reader.** Out of reach: revocation stops later reads only.
+- **A file location used twice.** A location is single use, lives 15 minutes, and refuses HEAD,
+  so a link preview does not spend it.
+- **The viewer.** Served by the instance with a Content-Security-Policy that allows its own
+  script and stylesheet and calls to its own origin only, no inline code, no framing;
+  `Referrer-Policy: no-referrer` on every share route. It renders the file as text, never as
+  HTML, and drops the link from the address bar and the history once read.
+- **Accountability.** Each manifest request on a known link and each download is a
+  `share.access` audit event (actor `share_link`) with the outcome; the reader's self-declared
+  name is kept with the link's access history, which goes with the user, never in the audit
+  log or a log line.
+- **Who can make one.** A tenant key only, so the decision stays in the tenant's backend; a user
+  token scope is an open question ([spec](specs/share-links.md)).
 
 ### Stored provider tokens
 
@@ -180,7 +223,9 @@ checklist see [hardening.md](hardening.md); to report a problem see
   tokens and webhook secrets do not open: users must reconnect and webhook secrets must be
   rotated. A leaked key exposes the tokens of a stolen database until they are re-sealed.
 - **Rate limits are per instance and in memory.** Each replica counts on its own and a restart
-  empties the buckets. Only the provider-facing routes and the first-run setup are limited:
+  empties the buckets, though the 10 passcode attempts of a share link are counted in the
+  database. Only the provider-facing routes, the share link routes and the first-run setup are
+  limited:
   authenticated API routes are not, and floods larger than one instance can absorb belong at
   the proxy.
 - **OAuth state is not bound to a browser session.** Whoever completes a consent link connects
@@ -198,8 +243,10 @@ checklist see [hardening.md](hardening.md); to report a problem see
 - **Provider revocation on deletion is best effort.** If a provider is unreachable, or the
   process carrying out the deletion lacks that provider's keys, the data is still deleted but the
   grant may stay valid at the provider.
-- **Deletion does not reach copies.** Backups, bucket object versions, webhook receivers and
-  anything a tenant already read keep what they hold.
+- **Deletion does not reach copies.** Backups, bucket object versions, webhook receivers,
+  readers of a share link and anything a tenant already read keep what they hold.
+- **A share link's reader is not identified.** The name sent with a manifest request is what the
+  reader typed. The link, and the passcode if any, are the only proof of anything.
 - **The bootstrap key is logged.** `OHS_BOOTSTRAP_TENANT` logs the new tenant's API key once, at
   first start. Treat that log line as a secret, or create tenants with `ohs admin tenant create`.
 - **Transport security is external.** `ohs` serves plain HTTP; TLS terminates at a reverse

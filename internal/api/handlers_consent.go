@@ -17,6 +17,7 @@ import (
 	"github.com/soma-intelligence/open-health-sync/internal/auth"
 	"github.com/soma-intelligence/open-health-sync/internal/connector"
 	"github.com/soma-intelligence/open-health-sync/internal/consent"
+	"github.com/soma-intelligence/open-health-sync/internal/shl"
 	"github.com/soma-intelligence/open-health-sync/internal/tenant"
 	"github.com/soma-intelligence/open-health-sync/internal/webhook"
 )
@@ -149,6 +150,18 @@ func (s *server) setConsent(w http.ResponseWriter, r *http.Request, req putConse
 	}
 	changes, err := consent.Set(ctx, tx, p.TenantID, user, provider, req.Granted, p.KeyID, req.Evidence)
 	if err != nil {
+		internalError(w, r, "api: set consent", err)
+		return
+	}
+	// A share link that holds records of a category the source no longer
+	// grants stops working, in the same transaction.
+	var refused []string
+	for _, c := range consent.Categories {
+		if !slices.Contains(req.Granted, c) {
+			refused = append(refused, c)
+		}
+	}
+	if _, err := shl.RevokeSources(ctx, tx, p.TenantID, user, provider, refused); err != nil {
 		internalError(w, r, "api: set consent", err)
 		return
 	}

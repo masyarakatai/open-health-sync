@@ -22,6 +22,7 @@ var exportDatasets = map[string]func(s *server, w http.ResponseWriter, r *http.R
 	"workouts":         exportRoute(read.Workouts),
 	"nutrition":        exportRoute(read.Nutrition),
 	"daily":            exportRoute(read.Daily),
+	"ecg":              exportRoute(read.ECGRecordings),
 }
 
 func (s *server) mountExports(mux *http.ServeMux) {

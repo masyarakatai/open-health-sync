@@ -1,0 +1,57 @@
+name: no-ai-attribution
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Reject Claude authorship and trailers
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          fail=0
+          for c in $(git rev-list "$BASE..$HEAD"); do
+            who=$(git log -1 --format='%an <%ae>%n%cn <%ce>' "$c")
+            if echo "$who" | grep -qiE 'claude|anthropic'; then
+              echo "::error::$c has a Claude author or committer: $(echo $who)"
+              fail=1
+            fi
+            if git log -1 --format='%B' "$c" | grep -qiE '^\s*(co-authored-by:\s*claude|claude-session:)|generated with \[claude code\]'; then
+              echo "::error::$c has a Claude attribution line in its message"
+              fail=1
+            fi
+          done
+          if [ "$fail" -ne 0 ]; then
+            echo "Rewrite these commits without Claude attribution (author, committer or trailer)."
+            exit 1
+          fi
+          echo "No Claude attribution found."
+
+      - name: Reject Claude in the branch name and the PR description
+        env:
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          fail=0
+          if echo "$BRANCH" | grep -qi 'claude'; then
+            echo "::error::The branch name contains \"claude\": push the commits to a neutral name (feat/..., fix/..., docs/...)."
+            fail=1
+          fi
+          if printf '%s' "$BODY" | grep -qiE 'generated (with|by) \[?claude|claude\.ai/code|claude-projects-attribution|🤖'; then
+            echo "::error::The PR description carries an AI footer, a claude.ai link or a robot emoji. Remove it and save the description."
+            fail=1
+          fi
+          [ "$fail" -eq 0 ] && echo "Branch name and description are clean."
+          exit "$fail"

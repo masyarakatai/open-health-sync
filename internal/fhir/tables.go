@@ -2,7 +2,11 @@
 
 package fhir
 
-import "slices"
+import (
+	"slices"
+
+	"github.com/soma-intelligence/open-health-sync/internal/model"
+)
 
 // vitalSign is how a quantity type meets an R4 vital signs profile.
 type vitalSign struct {
@@ -89,6 +93,19 @@ var activity = map[string]bool{
 	"workout_strain":                    true,
 }
 
+// survey are the quantity types a person answers about themselves (the self
+// report ratings): HL7 files assessment answers under survey.
+var survey = map[string]bool{
+	model.QTReportedFeeling:        true,
+	model.QTReportedMood:           true,
+	model.QTReportedStress:         true,
+	model.QTReportedEnergy:         true,
+	model.QTReportedSleepQuality:   true,
+	model.QTReportedMuscleSoreness: true,
+	model.QTReportedExertion:       true,
+	model.QTReportedPain:           true,
+}
+
 // category is the observation category of a quantity type, or "" for the
 // types none of the HL7 categories describes (body composition, heart rate
 // variability, provider indices...): no category is better than a wrong one.
@@ -101,6 +118,8 @@ func category(qt string) string {
 		return CategoryLaboratory
 	case activity[qt]:
 		return CategoryActivity
+	case survey[qt]:
+		return CategorySurvey
 	}
 	return ""
 }
@@ -141,7 +160,7 @@ var ucumUnits = map[string]string{
 // carry category cat.
 func TypesWithCategory(cat string) []string {
 	var out []string
-	for _, m := range []map[string]bool{laboratory, activity} {
+	for _, m := range []map[string]bool{laboratory, activity, survey} {
 		for qt := range m {
 			if category(qt) == cat {
 				out = append(out, qt)

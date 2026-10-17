@@ -51,6 +51,13 @@ docker pull ghcr.io/soma-intelligence/open-health-sync:0.1.0
 
 </div>
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/demo/demo-dark.gif">
+  <img src="docs/demo/demo-light.gif" width="100%" alt="Terminal recording of the quickstart. docker compose up starts ohs and Postgres; ohs seed --demo writes 90 days of synthetic data from Oura, WHOOP, Withings, Fitbit, Polar and Apple Health, 44144 rows. The daily endpoint returns one day with 8132 steps from apple_health, a resting heart rate of 53 and a sleep score of 62 from oura, and the source of every figure. One heart rate reading of 70 bpm comes back from /samples, as a FHIR R4 Observation with LOINC 8867-4 and UCUM /min, and as an Open mHealth heart-rate data point in beats/min. tools/list on the MCP endpoint lists sixteen read-only tools.">
+</picture>
+
+<sub>The quickstart, recorded on v0.1.0 with synthetic data: start the stack, load 90 days from six devices, then read one day of the merged view, one heart rate reading as REST, FHIR R4 and Open mHealth, and the MCP tools. Nothing is mocked; <a href="docs/demo/README.md">the tape</a> renders it again.</sub>
+
 Open Health Sync (`ohs`) is a self-hosted ingestion and normalization layer for health data. It
 pulls from providers, accepts uploads from phones, stores each payload verbatim, maps it to one
 canonical model with one set of units, and serves it over a REST API and a read-only MCP server.
@@ -135,6 +142,11 @@ Provider deletions are honored too.
 | 🔜 | Online rotation of the encryption key ([docs](docs/key-rotation.md)) | | |
 | 🔜 | Hourly and daily statistics per quantity type, in any time zone, over REST and MCP ([docs](docs/api.md#reading-data)) | | |
 | 🔜 | First-run setup in the browser with a one-shot token, rate limited, so app stores need no terminal step ([docs](docs/setup.md)) | | |
+| 🔜 | Xiaomi: Mi Fitness data import, and Health Connect attribution for Xiaomi, Amazfit and RingConn ([guide](docs/connectors/xiaomi.md)) | | |
+| 🔜 | Activity files: FIT, GPX and TCX, and the exports of Garmin, COROS, Wahoo, Suunto, Zwift and Strava, with `ohs import files` ([guide](docs/connectors/activity-files.md)) | | |
+| 🔜 | ECG recordings over REST, FHIR (waveform as SampledData), MCP and exports ([docs](docs/api.md#ecg-recordings)) | | |
+| 🔜 | Self reports: a person's own ratings (feeling, mood, stress, energy, sleep quality and more) next to their synced data ([docs](docs/self-reports.md)) | | |
+| 🔜 | Share links (SMART Health Links): an encrypted FHIR bundle for a doctor or coach, with expiry, passcode and a built-in viewer ([docs](docs/share-links.md)) | | |
 | ✅ | Personal mode (`ohs admin personal setup`) and [eight small Python recipes](docs/recipes/README.md) on your own data | 🛠 | Health records (EHR) through SMART on FHIR |
 | ✅ | [Kotlin, Swift, React Native and Flutter SDKs](docs/sdks/README.md) and example apps | 🛠 | Garmin, Coros |
 
@@ -248,7 +260,8 @@ Open Health Sync is that layer, written once, with the boring parts done properl
 
 ### Sources and outputs
 
-Thirteen sources are in v0.1.0. Every other one is planned: on the roadmap, not built yet.
+Thirteen sources are in v0.1.0. Xiaomi, and Amazfit and RingConn through Health Connect, are on `main` for the next release.
+Every other one is planned: on the roadmap, not built yet.
 Integration paths, vendor programs and tracking issues for each:
 [docs/connectors](docs/connectors/README.md).
 
@@ -268,9 +281,12 @@ Integration paths, vendor programs and tracking issues for each:
 | Health Connect | ✅ Available | your Android app uploads Health Connect records ([contract](docs/connectors/health-connect.md)) |
 | Dexcom | ✅ Available | CGM glucose: OAuth, scheduled pulls ([guide](docs/connectors/dexcom.md)) |
 | OMRON | ✅ Available | blood pressure and weight: partner API, OAuth, scheduled pulls ([guide](docs/connectors/omron.md)) |
+| Xiaomi | 🔜 Next release | `ohs import mi-fitness` loads the Mi Fitness data copy (full history); ongoing data through Health Connect or Apple Health ([guide](docs/connectors/xiaomi.md)) |
+| Activity files | 🔜 Next release | `ohs import files` loads FIT, GPX and TCX files, and Garmin, COROS, Wahoo, Suunto, Zwift and Strava exports ([guide](docs/connectors/activity-files.md)) |
 | FreeStyle Libre | No public API | through Health Connect or Apple Health ([notes](docs/connectors/freestyle-libre.md)) |
 | Coros | 🛠 Planned | cloud API, OAuth |
-| Samsung Health, Zepp / Amazfit | 🛠 Planned, via Health Connect | their apps write to Health Connect on Android |
+| Zepp / Amazfit, RingConn | 🔜 Next release, via Health Connect | their apps write to Health Connect on Android; records keep their own source (`zepp`, `ringconn`) ([details](docs/connectors/README.md)) |
+| Samsung Health | 🛠 Planned, via Health Connect | its app writes to Health Connect on Android |
 | Google Fit | Deprecated by Google | use Health Connect |
 | Eight Sleep | No public API | nothing official to build on |
 
@@ -673,6 +689,8 @@ Health Connect reading in the Kotlin SDK, then health records (EHR) through SMAR
 - [RR intervals and HRV](docs/hrv.md): beat-to-beat intervals and the HRV derived from them.
 - [Menstrual cycles](docs/menstrual-cycles.md): cycles derived from recorded flow, without predictions.
 - [Time tags](docs/time-tags.md): intervals such as an illness or a trip that give context to the data.
+- [Self reports](docs/self-reports.md): a person's own ratings stored next to their synced data (next release).
+- [Share links](docs/share-links.md): SMART Health Links with a built-in viewer (next release).
 
 ## Contributing
 

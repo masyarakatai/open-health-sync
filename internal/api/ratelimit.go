@@ -28,6 +28,7 @@ const (
 	groupInbound       = "inbound"
 	groupOAuthCallback = "oauth_callback"
 	groupSetup         = "setup"
+	groupShare         = "share"
 )
 
 // Limiter bookkeeping: buckets full and idle for idleEvict go at the next

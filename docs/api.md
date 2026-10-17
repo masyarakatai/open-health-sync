@@ -16,8 +16,8 @@ Every call carries `Authorization: Bearer <secret>`.
 
 | Secret | Looks like | Used by | Calls |
 |---|---|---|---|
-| Tenant API key | `ohs_sk_` + 43 characters | your server | tenant routes: users, tokens, connections, reads, time tags |
-| User token | `ohs_ut_` + 43 characters | one end user's app | user routes: uploads (`upload`), reads over MCP and the user archive (`read`) |
+| Tenant API key | `ohs_sk_` + 43 characters | your server | tenant routes: users, tokens, connections, reads, time tags, self reports, share links |
+| User token | `ohs_ut_` + 43 characters | one end user's app | user routes: uploads and self reports (`upload`), reads over MCP and the user archive (`read`) |
 
 The first key comes from `ohs admin tenant create --name <name>` (or `OHS_BOOTSTRAP_TENANT`,
 which logs a key once on first start, or the browser [first-run setup](setup.md)). Both secrets are stored as SHA-256 hashes: a lost one
@@ -57,8 +57,8 @@ configuration. The response is `Cache-Control: no-store`; the token is shown onc
 - **Trace context.** When the operator has turned tracing on, a W3C `traceparent` header is
   honoured: the instance's span for the call joins your trace. Without tracing it is ignored,
   and nothing is added to the response either way. See [observability.md](observability.md).
-- **Idempotency.** Send `Idempotency-Key` (1 to 255 characters) on `POST /v1/users` or
-  `POST /v1/users/{id}/tags`. A retry with the same key and request within
+- **Idempotency.** Send `Idempotency-Key` (1 to 255 characters) on `POST /v1/users`,
+  `POST /v1/users/{id}/tags` or `POST /v1/users/{id}/self-reports`. A retry with the same key and request within
   24 hours gets the first response back with `Idempotent-Replayed: true`. The same key with a
   different request is a 422; a retry while the first call still runs is a 409. Other routes
   ignore the header (token minting would have to store the token, and each connect call mints a
@@ -170,7 +170,11 @@ pull, the last error, and a `state` (`fresh`, `stale`, `failing`, `syncing`, `ne
 scope. The contract (headers, size, idempotency) is in
 [connectors/apple-health.md](connectors/apple-health.md). `POST /v1/ingest/health-connect` takes
 Android Health Connect records the same way; its line format is in
-[connectors/health-connect.md](connectors/health-connect.md). Both routes share the limit of
+[connectors/health-connect.md](connectors/health-connect.md). `POST /v1/ingest/xiaomi` takes the
+rows of a Mi Fitness data copy, as `ohs import mi-fitness` writes them
+([connectors/xiaomi.md](connectors/xiaomi.md)). `POST /v1/ingest/activity-files` takes one FIT, GPX
+or TCX activity file per part, base64 on one line, as `ohs import files` sends them
+([connectors/activity-files.md](connectors/activity-files.md)). The routes share the limit of
 uploads in flight.
 
 ## Reading data
@@ -191,6 +195,8 @@ All reads are `GET /v1/users/{id}/<resource>` with a tenant key, paged as above.
 | `rr-intervals` | `series_id`, `start`, `end` | `timestamp` (the beat) |
 | `hrv` | `series_id`, `start`, `end` (the series' first beat) | the series' first beat |
 | `menstrual-cycles` | `start`, `end` (compared as dates, on the cycle's start) | `start_date` |
+| `ecg` | `start`, `end` | `start_date`, metadata only ([ECG recordings](#ecg-recordings)) |
+| `ecg/{ecg_id}` | none | one recording with its samples, not paged |
 | `coverage` | `provider`, `start`, `end` | not paged |
 
 `view` is `merged` (the default) or `all`; see
@@ -331,6 +337,65 @@ latest cycle is open, with `end_date` and `cycle_length_days` null. Nothing is p
 rules (local days, gaps inside a period, the read limit) are in
 [menstrual-cycles.md](menstrual-cycles.md).
 
+### ECG recordings
+
+`GET /v1/users/{id}/ecg` lists the user's ECG recordings (Apple Watch through Apple Health,
+Withings) by start time, metadata only. `GET /v1/users/{id}/ecg/{ecg_id}` returns one recording
+with its voltage samples. Both take a tenant key, like every read.
+
+```sh
+curl -s "$OHS/v1/users/$USER_ID/ecg/12" -H "Authorization: Bearer $KEY"
+```
+
+```json
+{
+  "id": 12,
+  "start_date": "2026-03-01T08:00:00Z",
+  "end_date": "2026-03-01T08:00:30Z",
+  "classification": "sinus_rhythm",
+  "classification_value": 1,
+  "symptoms_status": "none",
+  "average_heart_rate": 64,
+  "sampling_frequency_hz": 512,
+  "number_of_measurements": 15360,
+  "metadata": { "timezone": "Europe/Paris" },
+  "provider": "apple_health",
+  "source": "apple_health",
+  "device": null,
+  "ingested_at": "2026-03-01T09:15:30.25Z",
+  "samples": {
+    "count": 15360,
+    "truncated": false,
+    "offsets_s": [0, 0.001953125, 0.00390625],
+    "voltages_uv": [12.5, 14.25, 20]
+  }
+}
+```
+
+The arrays are cut to three values here. `offsets_s` is the time of each sample from
+`start_date`, in seconds; `voltages_uv` the voltage of the same sample, in microvolts, single
+lead. Both are as stored, in offset order. One read returns at most 100000 samples (an Apple
+Watch recording holds about 15360, a Withings one about 9000); `truncated` is true when more are
+stored.
+
+`classification` is the label the recording device or its app gave the recording, in its
+maker's vocabulary, passed through as recorded. Open Health Sync does not compute, check or
+interpret it. `classification_value` keeps the stored integer.
+
+| Provider | `classification_value` | `classification` |
+|---|---|---|
+| `apple_health` | HealthKit's `HKElectrocardiogram.Classification`: 0, 1, 2, 3, 4, 5, 6, 100 | `not_set`, `sinus_rhythm`, `atrial_fibrillation`, `inconclusive_low_heart_rate`, `inconclusive_high_heart_rate`, `inconclusive_poor_reading`, `inconclusive_other`, `unrecognized` |
+| `withings` | the recording's AFib result: 0, 1, 2 | `negative`, `positive`, `inconclusive` |
+
+Another value is served with `classification` null. `symptoms_status` is HealthKit's: `not_set`,
+`none` or `present` (Withings recordings are `not_set`).
+
+Recordings are the `ecg` consent category: revoking it deletes the provider's recordings and
+their samples. The same recordings are FHIR Observations with the waveform as `SampledData`
+([fhir.md](fhir.md#ecg-recordings)), the MCP tool `get_ecg_recordings` lists them and
+summarizes one without its samples, and `exports/ecg` and the user archive hold them
+([exports.md](exports.md)).
+
 ### Knowing when an upload is processed
 
 Processing is asynchronous. `GET /v1/users/{id}/coverage` returns record counts per provider and
@@ -366,11 +431,45 @@ curl -s -X POST $OHS/v1/users/$USER_ID/tags -H "Authorization: Bearer $KEY" \
 curl -s "$OHS/v1/users/$USER_ID/tags?start=2026-03-01&end=2026-04-01" -H "Authorization: Bearer $KEY"
 ```
 
+## Self reports
+
+A self report is the person's own rating, a whole number on a fixed scale: `feeling`, `mood`,
+`stress`, `energy`, `sleep_quality` and `muscle_soreness` from 1 to 5, `exertion` and `pain` from
+0 to 10. `POST /v1/users/{id}/self-reports` records 1 to 100 of them (tenant key, or the user's
+own token with scope `upload`) and answers 202; each becomes a quantity sample of type
+`reported_<kind>` from the source `self_report`, read back with `/samples`, `/samples/stats`,
+FHIR (category `survey`) and the exports. A report sent again with the same `id` replaces its
+value. Scales, retries and corrections: [self-reports.md](self-reports.md).
+
+```sh
+curl -s -X POST $OHS/v1/users/$USER_ID/self-reports -H "Authorization: Bearer $KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"reports":[{"kind":"feeling","value":4,"start_at":"2026-03-01T07:30:00Z","timezone":"Europe/Paris"}]}'
+curl -s "$OHS/v1/users/$USER_ID/samples?type=reported_feeling" -H "Authorization: Bearer $KEY"
+```
+
+## Share links
+
+`POST /v1/users/{id}/shares` makes a SMART Health Link: a snapshot of the user's records of some
+categories (`heart`, `sleep`, `activity`...) in a time window, written as a FHIR R4 Bundle,
+encrypted with a fresh key and stored as ciphertext only. The answer holds the link (`uri`,
+`shlink:/...`) and the built-in viewer's link (`viewer_url`), once: the server keeps no key.
+`expires_at` is required, a `passcode` optional. `GET /v1/users/{id}/shares` lists the user's
+links (never a key or a link), `GET .../shares/{share_id}` adds who opened one, and `DELETE`
+revokes it. The reader's viewer calls the public `POST /shl/{manifest_id}` with no credential.
+Categories, the reader's side, revocation and limits: [share-links.md](share-links.md).
+
+```sh
+curl -s -X POST $OHS/v1/users/$USER_ID/shares -H "Authorization: Bearer $KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"categories":["heart","sleep"],"start":"2026-09-01","end":"2026-10-01","expires_at":"2026-10-21T00:00:00Z"}'
+```
+
 ## FHIR R4
 
 `GET /v1/users/{id}/fhir/Observation` serves the same quantity samples, blood pressure readings
-(a systolic and a diastolic sample paired into one panel), sleep sessions, workouts and daily
-summaries as FHIR R4 Observations, in one `searchset` Bundle (`application/fhir+json`) in time
+(a systolic and a diastolic sample paired into one panel), sleep sessions, workouts, daily
+summaries and ECG recordings as FHIR R4 Observations, in one `searchset` Bundle (`application/fhir+json`) in time
 order, paged by its `next` link, and `GET /v1/users/{id}/fhir/Observation/{observation_id}` reads
 one back. Filters: `type`, `code` (`http://loinc.org|8867-4`), `category` (`vital-signs`,
 `laboratory`, `activity`), `start`, `end`. The user is `GET /v1/users/{id}/fhir/Patient/{id}`,
@@ -401,7 +500,7 @@ curl -s "$OHS/v1/users/$USER_ID/omh/data-points?schema=omh:blood-pressure&start=
 ## Exports
 
 `GET /v1/users/{id}/exports/{dataset}` streams every record of one list (`samples`,
-`category-samples`, `sleep`, `workouts`, `nutrition` or `daily`) in `[start, end)` as one CSV
+`category-samples`, `sleep`, `workouts`, `nutrition`, `daily` or `ecg`) in `[start, end)` as one CSV
 (`format=csv`, the default) or Parquet (`format=parquet`) file, with the columns of the list's
 JSON records. Not paged. See [exports.md](exports.md).
 
@@ -425,7 +524,7 @@ curl -sOJ "$OHS/v1/users/$USER_ID/archive" -H "Authorization: Bearer $KEY"
 
 Rather than polling coverage, register an endpoint with `POST /v1/webhooks` and be told when a
 sync writes or deletes records, a user is erased, a connection needs the user to sign in
-again or a time tag changes. Requests are signed per Standard Webhooks and retried for about 28 hours. Events,
+again, a time tag changes or a share link is made, stopped or opened. Requests are signed per Standard Webhooks and retried for about 28 hours. Events,
 signature verification and the routes: [webhooks.md](webhooks.md).
 
 ## Audit log
@@ -455,6 +554,8 @@ grant are not stored, and a revoked category's stored records are deleted. Detai
 |---|---|
 | `GET /connect`, `GET /connect/{provider}`, `POST /connect/{provider}` | The [hosted connection page](connect-page.md), for the user's browser |
 | `GET /oauth/{provider}/callback` | OAuth redirect target you register with the provider |
+| `POST /shl/{manifest_id}`, `GET /shl/file/{ticket}` | A [share link](share-links.md)'s manifest and file, for the reader's viewer |
+| `GET /shl/view` | The built-in share link viewer |
 | `POST /inbound/{provider}` | Provider push notifications, verified with the provider's own scheme |
 | `GET /inbound/{provider}` | Notification URL check and subscription challenge |
 | `GET /healthz` | Liveness |
@@ -463,8 +564,8 @@ grant are not stored, and a revoked category's stored records are deleted. Detai
 | `GET /v1/setup`, `POST /v1/setup` | The browser [first-run setup](setup.md): creates the first tenant and its key with `OHS_SETUP_TOKEN`, once; only when that is set |
 | `GET /console` | Read-only admin console (HTML), only when `OHS_CONSOLE=true`; see [console.md](console.md) |
 
-The OAuth callback and the notification routes take no credential and are rate limited per
-client address (and the notification routes per provider): over a limit they answer 429 with a
+The OAuth callback, the notification routes and the share link manifest and file routes take
+no credential and are rate limited per client address (and the notification routes per provider): over a limit they answer 429 with a
 problem body and `Retry-After` in seconds, before any work. Limits and the reverse proxy
 setting are in [self-hosting.md](self-hosting.md#rate-limits).
 

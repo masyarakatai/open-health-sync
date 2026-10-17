@@ -14,7 +14,7 @@ chose. Open Health Sync does not show consent screens itself.
 
 | Category | What it covers |
 |---|---|
-| `activity` | Steps, distances, energy, floors, workouts, daily summaries, speed and power |
+| `activity` | Steps, distances, energy, floors, workouts, daily summaries, speed and power, reported exertion and muscle soreness |
 | `location` | Workout GPS routes |
 | `heart` | Heart rate, resting and walking heart rate, HRV, RR intervals, rhythm events |
 | `ecg` | Electrocardiograms and their voltage samples |
@@ -22,11 +22,11 @@ chose. Open Health Sync does not show consent screens itself.
 | `glucose` | Blood glucose (CGM included), insulin delivery |
 | `respiratory` | Respiratory rate, SpO2, VO2 max, lung function, inhaler use |
 | `body` | Weight, height, body composition, body and skin temperature |
-| `sleep` | Sleep sessions, phases and scores |
+| `sleep` | Sleep sessions, phases and scores, reported sleep quality |
 | `nutrition` | Food, drinks, water, caffeine |
 | `reproductive` | Menstrual cycle, ovulation, basal body temperature, sexual activity, pregnancy |
-| `mental` | Mindfulness, state of mind, mood, stress |
-| `other` | Anything no category above describes |
+| `mental` | Mindfulness, state of mind, mood, stress, reported feeling, mood, stress and energy |
+| `other` | Anything no category above describes, reported pain included |
 
 A record goes with its parent: route points are `location` but also go when `activity` is not
 granted (no workout, no route), and sleep phases go with their session. `GET /v1/users/{id}/consents`
@@ -89,6 +89,13 @@ nothing. The audit log records each call as `consent.read` or `consent.write`
 
 A first consent announces its grants only: the categories it leaves out were never granted.
 See [webhooks.md](webhooks.md) for signatures and retries.
+
+## Share links
+
+A consent change that refuses a category of a source revokes, in the same transaction, every
+[share link](share-links.md) of the user holding that source's records of that category
+(`share.revoked`, reason `consent`). A new share link leaves out the records of a refused
+category, and of one whose purge is still pending.
 
 ## Erasure
 

@@ -20,7 +20,7 @@ info:
     `start` and `end` take an RFC 3339 time or a `YYYY-MM-DD` date (midnight UTC).
 
     **FHIR.** `GET /v1/users/{id}/fhir/Observation` serves the same quantity samples, blood
-    pressure readings, sleep sessions, workouts and daily summaries as FHIR R4 Observations
+    pressure readings, sleep sessions, workouts, daily summaries and ECG recordings as FHIR R4 Observations
     (`application/fhir+json`), the user as a Patient, the devices the records came from as
     Devices, who produced each Observation as its Provenance, and all of them in one paged
     Bundle with `GET /v1/users/{id}/fhir/Patient/{id}/$everything`; see docs/fhir.md.
@@ -31,6 +31,11 @@ info:
     time window as a single CSV or Parquet file, and `GET /v1/users/{id}/archive` everything
     held about one user as a single zip file (data portability); see docs/exports.md.
 
+    **Share links.** `POST /v1/users/{id}/shares` makes a SMART Health Link: an encrypted
+    snapshot of the user's records that the person gives to whoever they choose. The
+    reader's viewer calls the public `POST /shl/{manifest_id}` with no credential; see
+    docs/share-links.md.
+
     **Errors** are RFC 9457 `application/problem+json`. A user, workout or sleep session
     of another tenant is a 404, never a 403.
 
@@ -39,7 +44,7 @@ info:
     `request_id`, and the server logs carry it too.
 
     **Idempotency.** `Idempotency-Key` (1 to 255 characters) is honoured on
-    `POST /v1/users` and `POST /v1/users/{id}/tags`: a retry with the same key and the same request within 24 hours gets the first response back, with
+    `POST /v1/users`, `POST /v1/users/{id}/tags` and `POST /v1/users/{id}/self-reports`: a retry with the same key and the same request within 24 hours gets the first response back, with
     `Idempotent-Replayed: true`. The same key with another request is a 422; a retry while
     the first call still runs is a 409. Token minting ignores the header (replaying it would
     mean storing the token); device uploads are idempotent by their own headers.
@@ -58,6 +63,8 @@ tags:
   - name: consent
   - name: read
   - name: tags
+  - name: self-reports
+  - name: shares
   - name: fhir
   - name: omh
   - name: exports
@@ -1329,6 +1336,60 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /v1/users/{id}/ecg:
+    parameters:
+      - $ref: "#/components/parameters/UserID"
+    get:
+      tags: [read]
+      operationId: listECGRecordings
+      summary: ECG recordings, metadata only
+      description: |
+        The user's ECG recordings (Apple Watch, Withings) by start time, then id, without their
+        voltage samples: read one recording for those. `classification` is the label the recording
+        device gave, in its maker's vocabulary, passed through as recorded: Open Health Sync does
+        not compute or check it. `start` and `end` bound `start_date`. See docs/api.md.
+      parameters:
+        - $ref: "#/components/parameters/Start"
+        - $ref: "#/components/parameters/End"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: One page, by start_date.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ECGRecordingPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/users/{id}/ecg/{ecg_id}:
+    parameters:
+      - $ref: "#/components/parameters/UserID"
+      - name: ecg_id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      tags: [read]
+      operationId: getECGRecording
+      summary: One ECG recording with its voltage samples
+      description: |
+        One recording and its stored voltage samples, in offset order, as two parallel arrays:
+        `offsets_s` (seconds from `start_date`) and `voltages_uv` (microvolts), single lead. At
+        most 100000 samples are returned (a recording holds about 15360); `truncated` is true when
+        more are stored. A recording that is not the user's, or a user of another tenant, is a 404.
+      responses:
+        "200":
+          description: The recording.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ECGRecordingDetail" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /v1/users/{id}/source-priorities:
     parameters:
       - $ref: "#/components/parameters/UserID"
@@ -1541,6 +1602,158 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /v1/users/{id}/self-reports:
+    parameters:
+      - $ref: "#/components/parameters/UserID"
+    post:
+      tags: [self-reports]
+      operationId: createSelfReports
+      summary: Record the user's own ratings
+      description: |
+        1 to 100 self reports: how the person feels, their mood, stress, energy, sleep
+        quality, muscle soreness, the effort of a session or pain, each a whole number on the
+        kind's scale (docs/self-reports.md). Each report is stored as a quantity sample of type
+        `reported_<kind>` from the source `self_report`, read back like any other sample
+        (`/samples`, `/samples/stats`, FHIR with category `survey`, exports). Sending a report
+        again with the same `id` replaces its value, also when `start_at` moved. The reports
+        go through the same processing as an upload, so the answer is 202. A tenant key records
+        reports for any user of the tenant; a user token with scope `upload` only for its own
+        user, and another user is a 404. Values are health data: never logged, never quoted in
+        an error. While the user's self reports are being deleted the answer is 409 and nothing
+        is kept.
+      security:
+        - tenantKey: []
+        - userToken: [upload]
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateSelfReportsRequest" }
+      responses:
+        "202":
+          description: Stored, and queued for processing.
+          headers:
+            Idempotent-Replayed: { $ref: "#/components/headers/IdempotentReplayed" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SelfReportsResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: The user's self reports are being deleted, or an idempotent request with this key is in progress.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "413": { $ref: "#/components/responses/TooLarge" }
+        "422": { $ref: "#/components/responses/IdempotencyMismatch" }
+
+  /v1/users/{id}/shares:
+    parameters:
+      - $ref: "#/components/parameters/UserID"
+    post:
+      tags: [shares]
+      operationId: createShare
+      summary: Make a share link of the user's records
+      description: |
+        A SMART Health Link (HL7 FHIR IG "SMART Health Cards and Links", STU1) that the person
+        gives to whoever they choose. The server reads the user's records of `categories` in
+        `[start, end)` (the merged view, as the FHIR routes serve them), writes them as one
+        FHIR R4 `collection` Bundle (a Patient with no identifier, the Observations, the
+        Devices), compresses it (DEFLATE) and encrypts it as a compact JWE (`alg` `dir`,
+        `enc` `A256GCM`) with a fresh random 256-bit key. It stores the ciphertext only. The
+        answer holds the link (`uri`) and the built-in viewer's link (`viewer_url`), each
+        carrying the key, this once: the server keeps neither and cannot show them again.
+
+        A category holds every metric the consent model files under it. Records of a source
+        whose consent refuses the category, or whose purge is pending, are left out. The
+        snapshot is fixed when it is made (no `L` flag): later records are not added. At most
+        50000 records; more is a 400. A sleep session's, a workout's or a daily summary's
+        figures of another category (a resting heart rate is `heart`) are kept only on the
+        terms of their own category. The records are read and the share stored in one
+        transaction that holds the user and their consent: a consent change or an erasure
+        that starts meanwhile waits, then revokes the share if it holds what they remove.
+
+        The route takes no `Idempotency-Key`: a stored response would keep the key. Sent with
+        `Cache-Control: no-store`. See docs/share-links.md.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateShareRequest" }
+      responses:
+        "201":
+          description: "The share and its link, shown only this once. Sent with `Cache-Control: no-store`."
+          headers:
+            Location:
+              schema: { type: string }
+              description: /v1/users/{id}/shares/{share_id}
+            Cache-Control: { schema: { type: string, const: no-store } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreatedShare" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "413": { $ref: "#/components/responses/TooLarge" }
+    get:
+      tags: [shares]
+      operationId: listShares
+      summary: The user's share links
+      description: |
+        Oldest first, every status. Never a link, a key or a passcode: the server does not
+        keep them.
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: One page, by created_at.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SharePage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/users/{id}/shares/{share_id}:
+    parameters:
+      - $ref: "#/components/parameters/UserID"
+      - $ref: "#/components/parameters/ShareID"
+    get:
+      tags: [shares]
+      operationId: getShare
+      summary: One share link, with its latest accesses
+      description: |
+        The share and its 50 latest manifest requests, newest first, each with the name the
+        reader gave and the outcome.
+      responses:
+        "200":
+          description: The share.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShareDetail" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [shares]
+      operationId: revokeShare
+      summary: Revoke a share link
+      description: |
+        The link stops working at once and its file is removed; the share stays listed as
+        `revoked` (reason `owner`). Revoking a share that is no longer active changes nothing.
+      responses:
+        "204": { description: "Revoked, or no longer active." }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /v1/users/{id}/fhir/Observation:
     parameters:
       - $ref: "#/components/parameters/UserID"
@@ -1552,11 +1765,13 @@ paths:
         The user's records as one FHIR R4 (4.0.1) `searchset` Bundle of Observations,
         `Content-Type: application/fhir+json`: quantity samples (`qs-` ids), blood pressure
         panels pairing a systolic and a diastolic sample (`bp-`), sleep sessions (`sleep-`),
-        workouts (`workout-`) and daily summaries (`daily-`), merged in time order (a
-        sample's start, a bedtime, a workout's start, a day at midnight UTC), then by kind
-        and id. Paged like every list: the Bundle's `next` link carries the cursor, and
-        there is no `next` link on the last page; `total` is left out. A blood pressure pair
-        is never split across pages, and its two samples are not listed on their own.
+        workouts (`workout-`), daily summaries (`daily-`) and ECG recordings with their
+        voltage samples (`ecg-`), merged in time order (a sample's start, a bedtime, a
+        workout's start, a day at midnight UTC, a recording's start), then by kind and id.
+        Paged like every list: the Bundle's `next` link carries the cursor, and there is no
+        `next` link on the last page; `total` is left out. A blood pressure pair is never
+        split across pages, and its two samples are not listed on their own. A page holds at
+        most 100 ECG recordings: one that reaches them ends there, with a `next` link.
         Vital signs meet the R4 vital signs profiles they claim in `meta.profile`. The
         mapping (codes, units, categories, provenance and limits) is in docs/fhir.md. In the
         merged view (the default) a record another source covers better is left out, and a
@@ -1576,11 +1791,12 @@ paths:
           description: |
             A FHIR token `system|code` matched against `Observation.code`: a LOINC code
             (`http://loinc.org|8867-4`; 85354-9, 8480-6 and 8462-4 find the blood pressure
-            panels, 93832-4 the sleep sessions, 55411-3 the workouts), a quantity type
+            panels, 93832-4 the sleep sessions, 55411-3 the workouts, 11524-6 the ECG
+            recordings), a quantity type
             (`https://github.com/soma-intelligence/open-health-sync/fhir/CodeSystem/quantity-type|heart_rate`,
             like `type`), or a record type
             (`https://github.com/soma-intelligence/open-health-sync/fhir/CodeSystem/record-type|`
-            `blood_pressure`, `sleep_session`, `workout` or `daily_summary`). One value; other
+            `blood_pressure`, `sleep_session`, `workout`, `daily_summary` or `ecg_recording`). One value; other
             systems are a 400. A code no Observation carries is an empty Bundle.
           schema: { type: string, examples: ["http://loinc.org|8867-4"] }
         - name: category
@@ -1588,8 +1804,9 @@ paths:
           description: |
             An HL7 observation category code, bare or as
             `http://terminology.hl7.org/CodeSystem/observation-category|code`: `vital-signs`,
-            `laboratory` or `activity` (activity samples, workouts and daily summaries). One
-            value. Another code of that system is an empty Bundle; anything else is a 400.
+            `laboratory`, `activity` (activity samples, workouts and daily summaries) or `survey`
+            (self reports). One value. Another code of that system is an empty Bundle; anything
+            else is a 400.
           schema: { type: string, examples: [vital-signs] }
         - $ref: "#/components/parameters/Start"
         - $ref: "#/components/parameters/End"
@@ -1615,8 +1832,8 @@ paths:
         required: true
         description: |
           The Observation id, as the Bundle gives it: `qs-`, `bp-` (the systolic sample's
-          id), `sleep-`, `workout-` or `daily-`, then the stored row id.
-        schema: { type: string, examples: [qs-1234, bp-1235, sleep-77] }
+          id), `sleep-`, `workout-`, `daily-` or `ecg-`, then the stored row id.
+        schema: { type: string, examples: [qs-1234, bp-1235, sleep-77, ecg-12] }
     get:
       tags: [fhir]
       operationId: readFHIRObservation
@@ -1860,7 +2077,7 @@ paths:
         description: The list to export. Another name is a 404.
         schema:
           type: string
-          enum: [samples, category-samples, sleep, workouts, nutrition, daily]
+          enum: [samples, category-samples, sleep, workouts, nutrition, daily, ecg]
     get:
       tags: [exports]
       operationId: exportDataset
@@ -1869,7 +2086,8 @@ paths:
         Every record of one list in `[start, end)`, as one file streamed in a single response
         (`Content-Disposition: attachment`). The columns are the members of the list's JSON
         records, in the same order and with the same names and values: times in UTC, a missing
-        value empty (CSV) or null (Parquet), `metadata` (and the daily `sources`) as JSON text. `samples` holds every
+        value empty (CSV) or null (Parquet), `metadata` (and the daily `sources`) as JSON text. `ecg` holds the
+        recordings' metadata, not their voltage samples (in the archive and the FHIR Observation). `samples` holds every
         quantity type unless `type` names one. The file is not paged: `cursor` and `limit` are
         a 400. A failure once the file has started cuts the connection, so a truncated file
         never looks complete. See docs/exports.md.
@@ -1915,7 +2133,8 @@ paths:
         `user.json` (the user and its provider connections, never a token),
         `canonical/<list>.ndjson` (every record of samples, category-samples, sleep,
         sleep-phases, workouts, workout-routes, nutrition and daily, the same JSON as the list
-        items, one per line), `fhir/bundle.json` (a FHIR R4 `collection` Bundle of every
+        items, one per line, and ecg, each ECG recording with its voltage samples as
+        `GET /v1/users/{id}/ecg/{ecg_id}` returns it), `fhir/bundle.json` (a FHIR R4 `collection` Bundle of every
         Observation), `omh/data-points.ndjson` (the Open mHealth data points) and `raw/...`
         (every raw payload of the user, byte for byte, under its path below the user). A
         tenant key reads any user of the tenant; a user token with scope `read` reads only its
@@ -2038,6 +2257,158 @@ paths:
         - name: X-OHS-Batch
           in: header
           required: true
+          schema: { type: string, maxLength: 128 }
+        - name: X-OHS-Part
+          in: header
+          required: true
+          schema: { type: integer, minimum: 0, maximum: 1000000 }
+      requestBody:
+        required: true
+        content:
+          application/gzip:
+            schema: { type: string, contentEncoding: binary }
+          application/octet-stream:
+            schema: { type: string, contentEncoding: binary }
+      responses:
+        "200":
+          description: Stored (or already stored) and queued for processing.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [key, duplicate]
+                properties:
+                  key: { type: string, description: Raw object key. }
+                  duplicate: { type: boolean }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "410":
+          description: The user started being deleted while this upload was stored (its token was accepted just before); nothing is kept.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "413": { $ref: "#/components/responses/TooLarge" }
+        "503":
+          description: Too many uploads in progress on this instance.
+          headers:
+            Retry-After:
+              schema: { type: integer }
+              description: Seconds to wait before retrying.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /v1/ingest/xiaomi:
+    post:
+      tags: [ingest]
+      operationId: ingestXiaomi
+      summary: Upload one part of a Mi Fitness data copy
+      description: |
+        One gzip NDJSON part (at most 64 MiB, never truncated), one row of the Mi Fitness data
+        copy per line, each a JSON object with a `table` and a `key` (the line format is in
+        docs/connectors/xiaomi.md; `ohs import mi-fitness` writes it). Same headers, limits and
+        answers as the Apple Health upload.
+        Re-sending the same part is safe: the answer is 200 with `duplicate: true`. Other
+        bytes under a (day, batch, part) already stored are a 409, and so is a part sent while
+        this provider's data is being deleted for the user (nothing is kept; send it again
+        once the deletion job is done). Each instance processes a
+        bounded number of uploads at once; above it the answer is 503 with `Retry-After`.
+      security:
+        - userToken: [upload]
+      parameters:
+        - name: X-OHS-Type
+          in: header
+          required: true
+          description: Export table of the lines of the part (fitness_data or sport_record).
+          schema: { type: string, examples: [fitness_data] }
+        - name: X-OHS-Day
+          in: header
+          required: true
+          schema: { type: string, format: date }
+        - name: X-OHS-Batch
+          in: header
+          required: true
+          schema: { type: string, maxLength: 128 }
+        - name: X-OHS-Part
+          in: header
+          required: true
+          schema: { type: integer, minimum: 0, maximum: 1000000 }
+      requestBody:
+        required: true
+        content:
+          application/gzip:
+            schema: { type: string, contentEncoding: binary }
+          application/octet-stream:
+            schema: { type: string, contentEncoding: binary }
+      responses:
+        "200":
+          description: Stored (or already stored) and queued for processing.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [key, duplicate]
+                properties:
+                  key: { type: string, description: Raw object key. }
+                  duplicate: { type: boolean }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "410":
+          description: The user started being deleted while this upload was stored (its token was accepted just before); nothing is kept.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "413": { $ref: "#/components/responses/TooLarge" }
+        "503":
+          description: Too many uploads in progress on this instance.
+          headers:
+            Retry-After:
+              schema: { type: integer }
+              description: Seconds to wait before retrying.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /v1/ingest/activity-files:
+    post:
+      tags: [ingest]
+      operationId: ingestActivityFiles
+      summary: Upload one activity file (FIT, GPX or TCX)
+      description: |
+        One gzip NDJSON part (at most 64 MiB, never truncated) holding one activity file on one
+        line: `{"type":"fit","data":"<base64 of the file>"}`, `type` being `fit`, `gpx` or `tcx`
+        and equal to `X-OHS-Type`. The file is at most 20 MiB once decoded (the line format is in
+        docs/connectors/activity-files.md; `ohs import files` writes it). The part is refused
+        with 400, and nothing is stored, unless the file parses as an activity that starts at
+        most 48 hours from now: a FIT course, settings or monitoring file, a GPX route without
+        times or a file with a broken CRC is refused. Same headers, limits and answers as the
+        Apple Health upload.
+        Re-sending the same part is safe: the answer is 200 with `duplicate: true`. Other
+        bytes under a (day, batch, part) already stored are a 409, and so is a part sent while
+        this provider's data is being deleted for the user (nothing is kept; send it again
+        once the deletion job is done). Each instance processes a
+        bounded number of uploads at once; above it the answer is 503 with `Retry-After`.
+      security:
+        - userToken: [upload]
+      parameters:
+        - name: X-OHS-Type
+          in: header
+          required: true
+          description: Format of the file in the part.
+          schema: { type: string, enum: [fit, gpx, tcx] }
+        - name: X-OHS-Day
+          in: header
+          required: true
+          description: UTC day the activity starts (`ohs import files` sends it; the server does not check it).
+          schema: { type: string, format: date }
+        - name: X-OHS-Batch
+          in: header
+          required: true
+          description: "`ohs import files` sends `af1-` and the first 32 hex digits of the file's SHA-256."
           schema: { type: string, maxLength: 128 }
         - name: X-OHS-Part
           in: header
@@ -2225,6 +2596,152 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
+
+  /shl/{manifest_id}:
+    parameters:
+      - $ref: "#/components/parameters/ManifestID"
+    post:
+      tags: [shares]
+      operationId: shareManifest
+      summary: Manifest request of a share link (SMART Health Links)
+      security: []
+      description: |
+        The `url` of a share link's payload, called by the reader's viewer (the built-in one at
+        `/shl/view` or any other that implements SMART Health Links) with no credential: the
+        manifest id is the secret. Any origin may call it (`Access-Control-Allow-Origin: *`).
+        Every request on a known link is recorded in the audit log (`share.access`, actor
+        `share_link`).
+
+        The answer holds the one file of the share, `application/fhir+json` encrypted as a
+        JWE: `embedded` when it fits `embeddedLengthMax` (or no limit was sent), else a
+        `location` that serves it once, within 15 minutes. A link that is unknown, revoked,
+        disabled or past its expiry is a 404, and the cases cannot be told apart. A wrong or
+        missing passcode is a 401 with `remainingAttempts`; the 10th wrong passcode disables
+        the link for good. A link busy past 2 seconds is a 503 with `Retry-After`. Unknown
+        members of the body are ignored. Rate limited per client address
+        (`OHS_RATE_LIMIT_OAUTH`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShareManifestRequest" }
+      responses:
+        "200":
+          description: The manifest.
+          headers:
+            Access-Control-Allow-Origin: { schema: { type: string, const: "*" } }
+            Cache-Control: { schema: { type: string, const: no-store } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShareManifest" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401":
+          description: The passcode is wrong or missing.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/PasscodeProblem" }
+        "404": { $ref: "#/components/responses/ShareInactive" }
+        "413": { $ref: "#/components/responses/TooLarge" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ShareBusy" }
+    options:
+      tags: [shares]
+      operationId: shareManifestPreflight
+      summary: CORS preflight of a manifest request
+      security: []
+      description: Lets a viewer on any origin post a manifest request with a JSON body.
+      responses:
+        "204":
+          description: Allowed.
+          headers:
+            Access-Control-Allow-Origin: { schema: { type: string, const: "*" } }
+            Access-Control-Allow-Methods: { schema: { type: string, const: POST } }
+            Access-Control-Allow-Headers: { schema: { type: string, const: Content-Type } }
+            Access-Control-Max-Age: { schema: { type: string } }
+
+  /shl/file/{ticket}:
+    parameters:
+      - name: ticket
+        in: path
+        required: true
+        description: The last path segment of a manifest's `location`.
+        schema: { type: string }
+    get:
+      tags: [shares]
+      operationId: shareFile
+      summary: The file at a manifest's location, once
+      security: []
+      description: |
+        Serves the encrypted file (a compact JWE) of a manifest's `location` once, within 15
+        minutes of the manifest request. A used or expired location, or one of a share that
+        stopped since, is a 404. HEAD is refused (405), so a link checker never uses the
+        location up. Rate limited with the manifest route. Recorded in the audit log
+        (`share.access`, outcome `file`).
+      responses:
+        "200":
+          description: The JWE.
+          headers:
+            Access-Control-Allow-Origin: { schema: { type: string, const: "*" } }
+            Cache-Control: { schema: { type: string, const: no-store } }
+          content:
+            application/jose:
+              schema: { type: string }
+        "404": { $ref: "#/components/responses/ShareInactive" }
+        "405":
+          description: A method other than GET.
+          headers:
+            Allow: { schema: { type: string, const: GET } }
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ShareBusy" }
+
+  /shl/view:
+    get:
+      tags: [shares]
+      operationId: shareViewer
+      summary: The built-in share link viewer
+      security: []
+      description: |
+        A page that opens a share link given in its address fragment
+        (`/shl/view#shlink:/...`), so the key never reaches a server. It asks the reader's name
+        (and the passcode when the link needs one), sends the manifest request to this
+        instance, decrypts the file in the browser (WebCrypto) and shows one table per metric
+        with its unit, time and source. It shows the records as recorded, with no
+        interpretation. Its own script and stylesheet only (`/shl/view/view.mjs`,
+        `/shl/view/view.css`), under a Content-Security-Policy that allows nothing else.
+      responses:
+        "200":
+          description: The page.
+          content:
+            text/html:
+              schema: { type: string }
+
+  /shl/view/{asset}:
+    get:
+      tags: [shares]
+      operationId: shareViewerAsset
+      summary: The viewer's script or stylesheet
+      security: []
+      parameters:
+        - name: asset
+          in: path
+          required: true
+          schema: { type: string, enum: [view.mjs, view.css] }
+      responses:
+        "200":
+          description: The file.
+          content:
+            text/javascript:
+              schema: { type: string }
+            text/css:
+              schema: { type: string }
+        "404":
+          description: No such file.
+          content:
+            text/plain:
+              schema: { type: string }
 
   /mcp:
     post:
@@ -2492,6 +3009,20 @@ components:
       required: true
       description: The `id` of a time tag of this user.
       schema: { type: string, format: uuid }
+    ShareID:
+      name: share_id
+      in: path
+      required: true
+      description: The `id` of a share link of this user.
+      schema: { type: string, format: uuid }
+    ManifestID:
+      name: manifest_id
+      in: path
+      required: true
+      description: |
+        The last path segment of a share link's `url`: 43 base64url characters (32 random
+        bytes). The server keeps only its SHA-256 hash.
+      schema: { type: string }
     Provider:
       name: provider
       in: path
@@ -2609,6 +3140,26 @@ components:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
 
+    ShareInactive:
+      description: |
+        The share link is unknown, revoked, disabled, past its expiry, or this location was
+        used already; the cases are not told apart.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    ShareBusy:
+      description: |
+        The share link or its user stayed locked past 2 seconds (a burst of requests on the
+        link, or the user being erased); nothing was recorded.
+      headers:
+        Access-Control-Allow-Origin: { schema: { type: string, const: "*" } }
+        Retry-After:
+          schema: { type: integer, minimum: 1 }
+          description: Seconds to wait before retrying.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+
   schemas:
     SetupStatus:
       type: object
@@ -2703,19 +3254,21 @@ components:
           properties:
             type:
               type: string
-              enum: [api_key, user_token, admin, system]
+              enum: [api_key, user_token, admin, system, share_link]
             id:
               type: string
               description: |
                 The API key's id, the first 16 hex characters of a user token's SHA-256
-                hash, or the command or worker for admin and system events.
+                hash, the command or worker for admin and system events, or the share's id
+                for a share link used by its reader.
         action:
           type: string
           description: |
             data.read, data.export, data.write, user.create, user.read, user.delete,
             user.erased, token.create, connection.read, connection.create,
             connection.delete, connection.sync, webhook.read, webhook.write, audit.read, config.read,
-            config.write, tenant.create, key.create, key.revoke (more may be added).
+            config.write, tenant.create, key.create, key.revoke, share.create, share.read,
+            share.revoke, share.access (more may be added).
         user_id: { type: [string, "null"], format: uuid, description: "The end user the action concerns." }
         method: { type: string, description: "The HTTP method, absent outside a request." }
         route: { type: string, description: "The route pattern, absent outside a request." }
@@ -2795,7 +3348,7 @@ components:
 
     WebhookEventType:
       type: string
-      enum: [data.written, data.deleted, data.erased, user.deleted, connection.needs_reauth, connection.broken, connection.restored, tag.created, tag.updated, tag.deleted, consent.granted, consent.revoked]
+      enum: [data.written, data.deleted, data.erased, user.deleted, connection.needs_reauth, connection.broken, connection.restored, tag.created, tag.updated, tag.deleted, consent.granted, consent.revoked, share.created, share.revoked, share.accessed]
       description: |
         `data.written`: a sync wrote new or changed records. `data.deleted`: records the
         provider deleted were removed. `data.erased`: everything a user held from one provider
@@ -2807,6 +3360,9 @@ components:
         `tag.created`, `tag.updated`, `tag.deleted`: a time tag of the user was created, changed
         or deleted through the API.
         `consent.granted`, `consent.revoked`: a user granted or revoked data categories of a source.
+        `share.created`: a share link of the user was made. `share.revoked`: a share link
+        stopped before its expiry; `reason` says why. `share.accessed`: a share link's file was
+        given to a reader. They name the share, never the link, its key, its label or the reader.
 
     CreateWebhookRequest:
       type: object
@@ -2969,10 +3525,21 @@ components:
             records_deleted: { type: integer, description: data.deleted. }
             job_id: { type: string, format: uuid, description: "data.erased. The deletion job that finished." }
             tag_id: { type: string, format: uuid, description: "tag.created, tag.updated and tag.deleted." }
+            categories:
+              type: array
+              items: { $ref: "#/components/schemas/ConsentCategoryName" }
+              description: consent.granted and consent.revoked, the categories that changed; share.created, the categories shared.
+            share_id: { type: string, format: uuid, description: "share.created, share.revoked and share.accessed." }
+            expires_at: { type: string, format: date-time, description: share.created. }
+            passcode: { type: boolean, description: "share.created. Whether the link needs a passcode." }
             reason:
               type: string
-              enum: [needs_reauth, missing_scope, failing, rate_limited]
-              description: connection.broken.
+              enum: [needs_reauth, missing_scope, failing, rate_limited, owner, consent, provider_erased, passcode_attempts]
+              description: |
+                connection.broken: needs_reauth, missing_scope, failing or rate_limited.
+                share.revoked: owner (revoked through the API), consent (a consent change refused
+                a category it holds), provider_erased (the records of a provider it holds were
+                erased) or passcode_attempts (too many wrong passcodes).
             action: { type: string, enum: [reconnect, wait], description: connection.broken. }
             retry_at: { type: string, format: date-time, description: "connection.broken, rate_limited. When pulls resume." }
             last_error: { type: string, description: "connection.broken, failing. The provider error, made safe to show." }
@@ -3347,6 +3914,65 @@ components:
           items: { $ref: "#/components/schemas/MenstrualFlowDay" }
           description: The period's flow days in order; a gap day without flow is absent.
 
+    ECGRecording:
+      allOf:
+        - $ref: "#/components/schemas/Provenance"
+        - type: object
+          required: [id, start_date, end_date, classification, classification_value, symptoms_status,
+            average_heart_rate, sampling_frequency_hz, number_of_measurements, metadata]
+          properties:
+            id: { type: integer, format: int64 }
+            start_date: { type: string, format: date-time }
+            end_date: { type: [string, "null"], format: date-time }
+            classification:
+              type: [string, "null"]
+              description: |
+                The label the recording device gave, in its maker's vocabulary, passed through as
+                recorded. Apple Health: not_set, sinus_rhythm, atrial_fibrillation,
+                inconclusive_low_heart_rate, inconclusive_high_heart_rate, inconclusive_poor_reading,
+                inconclusive_other, unrecognized. Withings: negative, positive, inconclusive. Null
+                when the stored value is none of these.
+              examples: [sinus_rhythm]
+            classification_value:
+              type: integer
+              description: The stored value the label comes from.
+            symptoms_status:
+              type: [string, "null"]
+              description: Whether the person recorded symptoms with the recording (not_set, none, present).
+            average_heart_rate: { type: [number, "null"], description: "Beats per minute, as the device reported it." }
+            sampling_frequency_hz: { type: number, description: "Samples per second; 0 when the provider gives none." }
+            number_of_measurements: { type: integer, description: The sample count the device reported. }
+            metadata: { $ref: "#/components/schemas/Metadata" }
+
+    ECGSamples:
+      type: object
+      required: [count, truncated, offsets_s, voltages_uv]
+      properties:
+        count: { type: integer, description: Samples returned. }
+        truncated: { type: boolean, description: More samples are stored than the 100000 returned. }
+        offsets_s:
+          type: array
+          items: { type: number }
+          description: Seconds from start_date, in order.
+        voltages_uv:
+          type: array
+          items: { type: number }
+          description: Microvolts, single lead, one per offset.
+
+    ECGRecordingDetail:
+      allOf:
+        - $ref: "#/components/schemas/ECGRecording"
+        - type: object
+          required: [samples]
+          properties:
+            samples: { $ref: "#/components/schemas/ECGSamples" }
+
+    ECGRecordingPage:
+      allOf:
+        - $ref: "#/components/schemas/PageBase"
+        - properties:
+            data: { type: array, items: { $ref: "#/components/schemas/ECGRecording" } }
+
     Coverage:
       type: object
       required: [pending_jobs, parked_jobs, rejected_records, days, truncated]
@@ -3502,6 +4128,79 @@ components:
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 
+    SelfReportKind:
+      type: string
+      enum: [feeling, mood, stress, energy, sleep_quality, muscle_soreness, exertion, pain]
+      description: |
+        The scale of each kind: feeling, mood, stress, energy, sleep_quality and
+        muscle_soreness from 1 to 5; exertion and pain from 0 to 10 (docs/self-reports.md).
+
+    CreateSelfReportsRequest:
+      type: object
+      additionalProperties: false
+      required: [reports]
+      properties:
+        reports:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { $ref: "#/components/schemas/SelfReportInput" }
+
+    SelfReportInput:
+      type: object
+      additionalProperties: false
+      required: [kind, value, start_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: |
+            Your id of the report. Sending it again replaces the stored value. Absent, the
+            server gives one (a retry then records the report twice, unless it carries the
+            same Idempotency-Key).
+        kind: { $ref: "#/components/schemas/SelfReportKind" }
+        value:
+          type: integer
+          minimum: 0
+          maximum: 10
+          description: A whole number on the kind's scale.
+        start_at:
+          type: string
+          format: date-time
+          description: When the rating applies, between 1900 and 2200.
+        end_at:
+          type: [string, "null"]
+          format: date-time
+          description: After `start_at`, for a rating of a period (a training session). Absent or null for an instant.
+        timezone:
+          type: [string, "null"]
+          maxLength: 64
+          description: The IANA time zone the person was in. Empty or null is none.
+
+    SelfReport:
+      type: object
+      required: [id, kind, type, value, start_at, end_at, timezone]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { $ref: "#/components/schemas/SelfReportKind" }
+        type: { type: string, description: "The quantity type it is stored as, `reported_<kind>`.", examples: [reported_feeling] }
+        value: { type: integer }
+        start_at: { type: string, format: date-time }
+        end_at: { type: [string, "null"], format: date-time }
+        timezone: { type: [string, "null"] }
+
+    SelfReportsResponse:
+      type: object
+      required: [reports, duplicate]
+      properties:
+        reports:
+          type: array
+          description: The reports as stored, in request order, each with its id.
+          items: { $ref: "#/components/schemas/SelfReport" }
+        duplicate:
+          type: boolean
+          description: true when these exact reports had already been received.
+
     CreateTimeTagRequest:
       type: object
       additionalProperties: false
@@ -3550,6 +4249,173 @@ components:
         - $ref: "#/components/schemas/PageBase"
         - properties:
             data: { type: array, items: { $ref: "#/components/schemas/TimeTag" } }
+
+    ShareCategory:
+      type: string
+      enum: [activity, heart, blood_pressure, glucose, respiratory, body, sleep, other]
+      description: |
+        The consent categories a share link can hold: those with records in the FHIR view.
+        location, ecg, nutrition, reproductive and mental are refused (400).
+
+    Share:
+      type: object
+      description: A share link as its owner reads it. Never the link, its key or the passcode.
+      required: [id, label, categories, start, end, expires_at, passcode, passcode_failures, status, revoked_at, revoked_reason, observations, file_bytes, accesses, last_accessed_at, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        label: { type: string, maxLength: 80, description: "Shown to the reader; empty for none." }
+        categories:
+          type: array
+          items: { $ref: "#/components/schemas/ShareCategory" }
+        start: { type: string, format: date-time, description: "Inclusive start of the time window." }
+        end: { type: string, format: date-time, description: "Exclusive end of the time window." }
+        expires_at: { type: string, format: date-time, description: "When the link stops working." }
+        passcode: { type: boolean, description: "Whether the link needs a passcode." }
+        passcode_failures:
+          type: integer
+          description: Wrong or missing passcodes so far; the 10th disables the link.
+        status:
+          type: string
+          enum: [active, expired, revoked, disabled]
+          description: |
+            `active`: the link works. `expired`: past `expires_at`. `revoked`: stopped before its
+            expiry (see `revoked_reason`). `disabled`: too many wrong passcodes.
+        revoked_at: { type: [string, "null"], format: date-time }
+        revoked_reason:
+          type: [string, "null"]
+          enum: [owner, consent, provider_erased, passcode_attempts, null]
+        observations: { type: integer, description: "How many Observations the file holds." }
+        file_bytes: { type: integer, description: "The size of the encrypted file when it was made." }
+        accesses: { type: integer, description: "How many manifest requests were served the file." }
+        last_accessed_at: { type: [string, "null"], format: date-time, description: "The latest of them." }
+        created_at: { type: string, format: date-time }
+
+    ShareAccess:
+      type: object
+      required: [at, recipient, outcome]
+      properties:
+        at: { type: string, format: date-time }
+        recipient: { type: string, description: "The name the reader gave, as given." }
+        outcome:
+          type: string
+          enum: [served, wrong_passcode, inactive]
+          description: |
+            `served`: the manifest was answered. `wrong_passcode`: a wrong or missing passcode.
+            `inactive`: the link no longer worked (listed once a day at most; the audit log
+            has every one).
+
+    ShareDetail:
+      allOf:
+        - $ref: "#/components/schemas/Share"
+        - type: object
+          required: [recent_accesses]
+          properties:
+            recent_accesses:
+              type: array
+              description: The 50 latest manifest requests, newest first.
+              items: { $ref: "#/components/schemas/ShareAccess" }
+
+    SharePage:
+      allOf:
+        - $ref: "#/components/schemas/PageBase"
+        - properties:
+            data: { type: array, items: { $ref: "#/components/schemas/Share" } }
+
+    CreateShareRequest:
+      type: object
+      additionalProperties: false
+      required: [categories, start, end, expires_at]
+      properties:
+        categories:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/ShareCategory" }
+        start:
+          description: Inclusive start of the window, RFC 3339 or YYYY-MM-DD.
+          oneOf:
+            - { type: string, format: date-time }
+            - { type: string, format: date }
+        end:
+          description: Exclusive end of the window, after `start`.
+          oneOf:
+            - { type: string, format: date-time }
+            - { type: string, format: date }
+        expires_at:
+          description: When the link stops working, in the future and at most 365 days ahead.
+          oneOf:
+            - { type: string, format: date-time }
+            - { type: string, format: date }
+        passcode:
+          type: [string, "null"]
+          minLength: 6
+          maxLength: 64
+          description: |
+            When set, the reader must give it. 6 to 64 characters, no control character. The
+            server keeps a PBKDF2-SHA256 hash of it only.
+        label:
+          type: string
+          maxLength: 80
+          description: Shown to the reader, for example who the link is for. One line.
+
+    CreatedShare:
+      allOf:
+        - $ref: "#/components/schemas/Share"
+        - type: object
+          required: [uri, viewer_url]
+          properties:
+            uri:
+              type: string
+              description: |
+                The link, `shlink:/` + the base64url payload (`url`, `key`, `exp`, `flag` `P`
+                with a passcode, `label`). It carries the key: shown only this once.
+            viewer_url:
+              type: string
+              description: The built-in viewer with the link in its fragment (`.../shl/view#shlink:/...`).
+
+    ShareManifestRequest:
+      type: object
+      required: [recipient]
+      properties:
+        recipient:
+          type: string
+          minLength: 1
+          maxLength: 256
+          description: Who opens the link, as the reader names themselves; shown to the owner.
+        passcode: { type: string, description: "Required when the link's flag holds P." }
+        embeddedLengthMax:
+          type: integer
+          minimum: 0
+          description: The longest file to embed; a longer one comes as a `location`.
+
+    ShareManifest:
+      type: object
+      required: [status, files]
+      properties:
+        status:
+          type: string
+          const: finalized
+          description: A snapshot never changes.
+        files:
+          type: array
+          items:
+            type: object
+            required: [contentType, lastUpdated]
+            properties:
+              contentType: { type: string, const: application/fhir+json }
+              embedded: { type: string, description: "The file, a compact JWE." }
+              location: { type: string, format: uri, description: "Where to GET the file, once, within 15 minutes." }
+              lastUpdated: { type: string, format: date-time }
+
+    PasscodeProblem:
+      allOf:
+        - $ref: "#/components/schemas/Problem"
+        - type: object
+          required: [remainingAttempts]
+          properties:
+            remainingAttempts:
+              type: integer
+              minimum: 0
+              description: Wrong passcodes the link still takes before it is disabled.
 
     FHIRCoding:
       type: object
@@ -3829,7 +4695,7 @@ components:
       type: object
       description: |
         A FHIR R4 Observation made from one quantity sample, a blood pressure pair, a sleep
-        session, a workout or a daily summary (docs/fhir.md).
+        session, a workout, a daily summary or an ECG recording (docs/fhir.md).
       required: [resourceType, id, status, code, subject]
       properties:
         resourceType: { type: string, const: Observation }
@@ -3872,6 +4738,10 @@ components:
           type: string
           format: date-time
           description: When the record was ingested (the later of a panel's two samples).
+        performer:
+          type: array
+          description: The person, on a self report (category survey); absent otherwise.
+          items: { $ref: "#/components/schemas/FHIRReference" }
         valueQuantity: { $ref: "#/components/schemas/FHIRQuantity" }
         valueCodeableConcept:
           allOf: [{ $ref: "#/components/schemas/FHIRCodeableConcept" }]
@@ -3882,8 +4752,8 @@ components:
           type: array
           minItems: 1
           description: |
-            The two values of a blood pressure panel, or a sleep session's, workout's or daily
-            summary's other fields; a field without a value is left out.
+            The two values of a blood pressure panel, or a sleep session's, workout's, daily
+            summary's or ECG recording's other fields; a field without a value is left out.
           items:
             type: object
             required: [code]
@@ -3891,7 +4761,21 @@ components:
               code: { $ref: "#/components/schemas/FHIRCodeableConcept" }
               valueQuantity: { $ref: "#/components/schemas/FHIRQuantity" }
               valueCodeableConcept: { $ref: "#/components/schemas/FHIRCodeableConcept" }
+              valueSampledData: { $ref: "#/components/schemas/FHIRSampledData" }
               dataAbsentReason: { $ref: "#/components/schemas/FHIRCodeableConcept" }
+    FHIRSampledData:
+      type: object
+      description: |
+        An ECG recording's voltage samples: `data` holds the values, separated by spaces, each
+        `origin + factor * value` in microvolts (factor is absent, so 1), `period` milliseconds
+        apart; `E` marks a value that is not a finite number.
+      required: [origin, period, dimensions, data]
+      properties:
+        origin: { $ref: "#/components/schemas/FHIRQuantity" }
+        period: { type: number, description: Milliseconds between two samples. }
+        factor: { type: number }
+        dimensions: { type: integer, const: 1 }
+        data: { type: string }
     FHIRQuantity:
       type: object
       properties:

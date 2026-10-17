@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx creator="StravaGPX" version="1.1" xmlns="http://www.topografix.com/GPX/1/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v2" xmlns:gpxx="http://www.garmin.com/xmlschemas/GpxExtensions/v3">
+ <metadata>
+  <time>2026-03-03T16:00:00Z</time>
+ </metadata>
+ <trk>
+  <name>Invented ride</name>
+  <type>cycling</type>
+  <trkseg>
+   <trkpt lat="45.4000000" lon="6.4000000">
+    <ele>500.0</ele>
+    <time>2026-03-03T16:00:00Z</time>
+    <extensions>
+     <power>210</power>
+     <gpxtpx:TrackPointExtension>
+      <gpxtpx:hr>125</gpxtpx:hr>
+      <gpxtpx:speed>7.5</gpxtpx:speed>
+     </gpxtpx:TrackPointExtension>
+    </extensions>
+   </trkpt>
+   <trkpt lat="45.4001000" lon="6.4001000">
+    <ele>500.4</ele>
+    <time>2026-03-03T16:00:02Z</time>
+    <extensions>
+     <power>215</power>
+     <gpxtpx:TrackPointExtension>
+      <gpxtpx:hr>126</gpxtpx:hr>
+      <gpxtpx:speed>7.6</gpxtpx:speed>
+     </gpxtpx:TrackPointExtension>
+    </extensions>
+   </trkpt>
+   <trkpt lat="45.4002000" lon="6.4002000">
+    <ele>500.8</ele>
+    <time>2026-03-03T16:00:04Z</time>
+    <extensions>
+     <power>6000</power>
+     <gpxtpx:TrackPointExtension>
+      <gpxtpx:hr>127</gpxtpx:hr>
+     </gpxtpx:TrackPointExtension>
+    </extensions>
+   </trkpt>
+  </trkseg>
+ </trk>
+</gpx>

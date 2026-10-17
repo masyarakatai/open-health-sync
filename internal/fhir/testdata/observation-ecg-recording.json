@@ -1,0 +1,125 @@
+{
+  "resourceType": "Observation",
+  "id": "ecg-11011",
+  "meta": {
+    "source": "https://github.com/soma-intelligence/open-health-sync/fhir/provider/apple_health",
+    "tag": [
+      {
+        "system": "https://github.com/soma-intelligence/open-health-sync/fhir/CodeSystem/source",
+        "code": "apple_health"
+      }
+    ]
+  },
+  "status": "final",
+  "code": {
+    "coding": [
+      {
+        "system": "http://loinc.org",
+        "code": "11524-6"
+      },
+      {
+        "system": "https://github.com/soma-intelligence/open-health-sync/fhir/CodeSystem/record-type",
+        "code": "ecg_recording"
+      }
+    ],
+    "text": "ECG recording"
+  },
+  "subject": {
+    "reference": "Patient/3f0c2f8e-8b8a-4c55-9f5e-2b0f3a1d9c11"
+  },
+  "effectivePeriod": {
+    "start": "2026-03-01T08:00:00Z",
+    "end": "2026-03-01T08:00:30Z"
+  },
+  "issued": "2026-03-01T09:15:30.25Z",
+  "component": [
+    {
+      "code": {
+        "coding": [
+          {
+            "system": "urn:iso:std:iso:11073:10101",
+            "code": "131328",
+            "display": "MDC_ECG_ELEC_POTL"
+          },
+          {
+            "system": "https://github.com/soma-intelligence/open-health-sync/fhir/CodeSystem/observation-component",
+            "code": "voltage"
+          }
+        ],
+        "text": "ECG voltage, single lead"
+      },
+      "valueSampledData": {
+        "origin": {
+          "value": 0,
+          "unit": "uV",
+          "system": "http://unitsofmeasure.org",
+          "code": "uV"
+        },
+        "period": 1.953125,
+        "dimensions": 1,
+        "data": "12.5 14.25 20 31 58.75 120.5 310.125 512 260.5 80 15.5 -20.25 -35 -12.5 0 4.75"
+      }
+    },
+    {
+      "code": {
+        "coding": [
+          {
+            "system": "http://loinc.org",
+            "code": "8867-4"
+          },
+          {
+            "system": "https://github.com/soma-intelligence/open-health-sync/fhir/CodeSystem/observation-component",
+            "code": "average_heart_rate"
+          }
+        ],
+        "text": "average heart rate"
+      },
+      "valueQuantity": {
+        "value": 64,
+        "unit": "bpm",
+        "system": "http://unitsofmeasure.org",
+        "code": "/min"
+      }
+    },
+    {
+      "code": {
+        "coding": [
+          {
+            "system": "https://github.com/soma-intelligence/open-health-sync/fhir/CodeSystem/observation-component",
+            "code": "device_classification"
+          }
+        ],
+        "text": "classification by the recording device"
+      },
+      "valueCodeableConcept": {
+        "coding": [
+          {
+            "system": "https://github.com/soma-intelligence/open-health-sync/fhir/CodeSystem/healthkit-ecg-classification",
+            "code": "sinus_rhythm"
+          }
+        ],
+        "text": "sinus rhythm"
+      }
+    },
+    {
+      "code": {
+        "coding": [
+          {
+            "system": "https://github.com/soma-intelligence/open-health-sync/fhir/CodeSystem/observation-component",
+            "code": "symptoms_status"
+          }
+        ],
+        "text": "symptoms recorded with the ECG"
+      },
+      "valueCodeableConcept": {
+        "coding": [
+          {
+            "system": "https://github.com/soma-intelligence/open-health-sync/fhir/CodeSystem/ecg-symptoms-status",
+            "code": "none"
+          }
+        ],
+        "text": "none"
+      }
+    }
+  ]
+}

@@ -248,6 +248,11 @@ func TestMapDeletionAndUnknown(t *testing.T) {
 
 func TestSourceSlug(t *testing.T) {
 	require.Equal(t, "dexcom", SourceSlug("com.dexcom.g7"))
+	require.Equal(t, "xiaomi", SourceSlug("com.xiaomi.wearable"), "Mi Fitness")
+	require.Equal(t, "xiaomi", SourceSlug("com.mi.health"), "Mi Health")
+	require.Equal(t, "xiaomi", SourceSlug("com.xiaomi.hm.health"), "Zepp Life")
+	require.Equal(t, "zepp", SourceSlug("com.huami.watch.hmwatchmanager"), "Zepp, for Amazfit")
+	require.Equal(t, "ringconn", SourceSlug("com.gdjztech.ringconn"))
 	require.Equal(t, "health_connect", SourceSlug(""))
 	require.Equal(t, "com_example_app", SourceSlug("com.example.app"))
 }

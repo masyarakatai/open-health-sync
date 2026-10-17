@@ -1,0 +1,48 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Known vulnerabilities and action pins, on every change and once a week.
+#
+# govulncheck runs inside the build stage image of deploy/Dockerfile, so it
+# checks the Go standard library that the published image is compiled with,
+# not only the toolchain CI happens to install. It reports a vulnerability
+# only when the code can reach the affected function. The weekly run catches
+# advisories published after the last change: a scheduled failure is mailed
+# to the maintainers.
+#
+# Actions are pinned by commit SHA, the release they resolve to in a comment.
+name: supply-chain
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  govulncheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GOVULNCHECK_VERSION: v1.9.0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: govulncheck with the toolchain of the image build
+        run: |
+          builder="$(sed -nE 's/^FROM (--platform=[^ ]+ )?(golang:[^ ]+) AS build$/\2/p' deploy/Dockerfile)"
+          test -n "$builder" || { echo "no golang build stage in deploy/Dockerfile"; exit 1; }
+          docker run --rm --user "$(id -u):$(id -g)" \
+            -e HOME=/tmp -e GOCACHE=/tmp/go-cache -e GOMODCACHE=/tmp/go-mod -e GOFLAGS=-buildvcs=false \
+            -v "$PWD:/src" -w /src "$builder" \
+            sh -c "go version && go run golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION} ./..."
+
+  pinned-actions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Every action is pinned by a commit SHA
+        run: scripts/check-pinned-actions.sh

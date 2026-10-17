@@ -13,17 +13,20 @@ articles 30 and 32 and comparable health data rules expect one).
 | `ohs admin tenant create`, `key create`, `key revoke` | `tenant.create`, `key.create`, `key.revoke`, actor `admin` |
 | The [first-run setup](setup.md) (`POST /v1/setup`) | `tenant.create`, actor `system` with id `setup`, the key prefix in `detail` |
 | The deletion worker | `user.erased` when a user's data is gone, with the job id, actor `system` |
+| A [share link](share-links.md) opened by its reader | `share.access` for each manifest request on a known link and each file download, actor `share_link`, the outcome in `detail` |
 
 A request without a valid credential (401) is not an audit event: `/metrics` counts those by
 route. Provider-facing routes (`/oauth/...`, `/inbound/...`) take no tenant credential and are
-not recorded either.
+not recorded either. The share link routes (`/shl/...`) take none either, but a request on a
+known link is recorded under the link's own actor (above); one on an unknown link names no
+tenant and is not.
 
 Each event holds:
 
 | Field | Content |
 |---|---|
 | `at` | Server time of the event |
-| `actor.type`, `actor.id` | `api_key` and the key's id (as `ohs admin key list` shows); `user_token` and the first 16 hex characters of the token's SHA-256 hash (the token cannot be recovered from it); `admin` or `system` and the command or worker |
+| `actor.type`, `actor.id` | `api_key` and the key's id (as `ohs admin key list` shows); `user_token` and the first 16 hex characters of the token's SHA-256 hash (the token cannot be recovered from it); `admin` or `system` and the command or worker; `share_link` and the share's id |
 | `action` | What was done, see below |
 | `user_id` | The end user the action concerns: the user of a user token, or the `{id}` of the route |
 | `method`, `route`, `status` | The HTTP method, the route **pattern** (`GET /v1/users/{id}/samples`) and the status code |
@@ -45,6 +48,8 @@ dates or provider codes), a token, a key or an IP address.
 | `connection.read`, `connection.create`, `connection.delete` | The provider connection routes and sync history (`sync-runs`), and creating a hosted connection page link (`connect-sessions`) |
 | `connection.sync` | Asking for an immediate pull (`POST .../connections/{provider}/sync`) |
 | `webhook.read`, `webhook.write` | The webhook endpoint routes |
+| `share.create`, `share.read`, `share.revoke` | Making, listing or reading, and revoking [share links](share-links.md) |
+| `share.access` | A manifest request or a file download on a share link; `detail` holds `share_id` and `outcome` (`served`, `wrong_passcode`, `inactive`, `file`). Never the reader's name |
 | `audit.read` | Reading this log |
 | `config.read`, `config.write` | Anything else (the provider list, for example) |
 

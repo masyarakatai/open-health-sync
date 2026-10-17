@@ -44,13 +44,23 @@ const (
 	// ConsentRevoked: a user revoked data categories of a source; their
 	// stored records are being purged and no new ones are stored.
 	ConsentRevoked = "consent.revoked"
+	// ShareCreated: a share link of a user was created. It names the share,
+	// its categories, its expiry and whether it has a passcode; never the
+	// link, its key, its label or a value.
+	ShareCreated = "share.created"
+	// ShareRevoked: a share link stopped working before its expiry, with
+	// why: owner, consent, provider_erased or passcode_attempts.
+	ShareRevoked = "share.revoked"
+	// ShareAccessed: a share link's file was served to a reader. It names
+	// the share only, never the reader.
+	ShareAccessed = "share.accessed"
 	// Test is sent by POST /v1/webhooks/{id}/test only.
 	Test = "webhook.test"
 )
 
 // Types are the event types an endpoint can subscribe to, in documentation
 // order. Test is not one: it goes to the endpoint it is asked for.
-var Types = []string{DataWritten, DataDeleted, DataErased, UserDeleted, ConnectionNeedsReauth, ConnectionBroken, ConnectionRestored, TagCreated, TagUpdated, TagDeleted, ConsentGranted, ConsentRevoked}
+var Types = []string{DataWritten, DataDeleted, DataErased, UserDeleted, ConnectionNeedsReauth, ConnectionBroken, ConnectionRestored, TagCreated, TagUpdated, TagDeleted, ConsentGranted, ConsentRevoked, ShareCreated, ShareRevoked, ShareAccessed}
 
 // KnownType reports whether t can be subscribed to.
 func KnownType(t string) bool { return slices.Contains(Types, t) }
@@ -168,6 +178,16 @@ func SampleData(typ string, now time.Time) map[string]any {
 		data["broken_seconds"] = int64(2 * time.Hour / time.Second)
 	case TagCreated, TagUpdated, TagDeleted:
 		data["tag_id"] = uuid.Nil.String()
+	case ShareCreated:
+		data["share_id"] = uuid.Nil.String()
+		data["categories"] = []string{"heart", "sleep"}
+		data["expires_at"] = now.UTC().AddDate(0, 0, 30).Truncate(time.Second)
+		data["passcode"] = true
+	case ShareRevoked:
+		data["share_id"] = uuid.Nil.String()
+		data["reason"] = "owner"
+	case ShareAccessed:
+		data["share_id"] = uuid.Nil.String()
 	}
 	return data
 }

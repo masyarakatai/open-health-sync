@@ -279,8 +279,8 @@ func TestStartRegistersRetentionOnlyWhenEnabled(t *testing.T) {
 		}
 		return out
 	}
-	require.Equal(t, []string{"reconciler", "orphans", "drainer", "idempotency", "files"}, names(0))
-	require.Equal(t, []string{"reconciler", "orphans", "drainer", "idempotency", "files", "retention"}, names(30))
+	require.Equal(t, []string{"reconciler", "orphans", "drainer", "idempotency", "shares", "files"}, names(0))
+	require.Equal(t, []string{"reconciler", "orphans", "drainer", "idempotency", "shares", "files", "retention"}, names(30))
 
 	s, err := newScheduler(Deps{Pool: e.pool, Store: e.rs, RetentionDays: 30})
 	require.NoError(t, err)
@@ -294,6 +294,7 @@ func TestStartRegistersRetentionOnlyWhenEnabled(t *testing.T) {
 	require.Equal(t, 24*time.Hour, got["files"])
 	require.Equal(t, 24*time.Hour, got["retention"])
 	require.Equal(t, time.Hour, got["idempotency"])
+	require.Equal(t, time.Hour, got["shares"])
 }
 
 func TestStartRunsJobsAndStopsOnCancel(t *testing.T) {

@@ -46,6 +46,11 @@
       "description": "The Device id, as an Observation's `device.reference` gives it."
     },
     {
+      "key": "ecgId",
+      "value": "1",
+      "description": "The ecg id."
+    },
+    {
       "key": "jobId",
       "value": "",
       "description": "The `job_id` returned by `DELETE /v1/users/{id}`, `DELETE /v1/users/{id}/data/{provider}`\nor `DELETE /v1/users/{id}/connections/{provider}?delete_data=true`."
@@ -53,7 +58,7 @@
     {
       "key": "observationId",
       "value": "qs-1234",
-      "description": "The Observation id, as the Bundle gives it: `qs-`, `bp-` (the systolic sample's\nid), `sleep-`, `workout-` or `daily-`, then the stored row id."
+      "description": "The Observation id, as the Bundle gives it: `qs-`, `bp-` (the systolic sample's\nid), `sleep-`, `workout-`, `daily-` or `ecg-`, then the stored row id."
     },
     {
       "key": "patientId",
@@ -79,6 +84,11 @@
       "key": "sessionId",
       "value": "1",
       "description": "The session id."
+    },
+    {
+      "key": "shareId",
+      "value": "",
+      "description": "The `id` of a share link of this user."
     },
     {
       "key": "tagId",
@@ -1868,6 +1878,88 @@
           }
         },
         {
+          "name": "ECG recordings, metadata only",
+          "request": {
+            "method": "GET",
+            "description": "ECG recordings, metadata only.\n\n`GET /v1/users/{id}/ecg`\n\nThe user's ECG recordings (Apple Watch, Withings) by start time, then id, without their\nvoltage samples: read one recording for those. `classification` is the label the recording\ndevice gave, in its maker's vocabulary, passed through as recorded: Open Health Sync does\nnot compute or check it. `start` and `end` bound `start_date`. See docs/api.md.",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/:id/ecg",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                ":id",
+                "ecg"
+              ],
+              "query": [
+                {
+                  "key": "start",
+                  "value": "2026-01-01T00:00:00Z",
+                  "description": "Inclusive lower bound, RFC 3339 or YYYY-MM-DD.",
+                  "disabled": true
+                },
+                {
+                  "key": "end",
+                  "value": "2026-01-01T00:00:00Z",
+                  "description": "Exclusive upper bound, RFC 3339 or YYYY-MM-DD. Must not be before start.",
+                  "disabled": true
+                },
+                {
+                  "key": "cursor",
+                  "value": "",
+                  "description": "The next_cursor of the previous page.",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "100",
+                  "disabled": true
+                }
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{userId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "One ECG recording with its voltage samples",
+          "request": {
+            "method": "GET",
+            "description": "One ECG recording with its voltage samples.\n\n`GET /v1/users/{id}/ecg/{ecg_id}`\n\nOne recording and its stored voltage samples, in offset order, as two parallel arrays:\n`offsets_s` (seconds from `start_date`) and `voltages_uv` (microvolts), single lead. At\nmost 100000 samples are returned (a recording holds about 15360); `truncated` is true when\nmore are stored. A recording that is not the user's, or a user of another tenant, is a 404.",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/:id/ecg/:ecg_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                ":id",
+                "ecg",
+                ":ecg_id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{userId}}"
+                },
+                {
+                  "key": "ecg_id",
+                  "value": "{{ecgId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
           "name": "The order of sources the merged view ranks by",
           "request": {
             "method": "GET",
@@ -2205,13 +2297,212 @@
       ]
     },
     {
+      "name": "self-reports",
+      "item": [
+        {
+          "name": "Record the user's own ratings",
+          "request": {
+            "method": "POST",
+            "description": "Record the user's own ratings.\n\n`POST /v1/users/{id}/self-reports`\n\n1 to 100 self reports: how the person feels, their mood, stress, energy, sleep\nquality, muscle soreness, the effort of a session or pain, each a whole number on the\nkind's scale (docs/self-reports.md). Each report is stored as a quantity sample of type\n`reported_<kind>` from the source `self_report`, read back like any other sample\n(`/samples`, `/samples/stats`, FHIR with category `survey`, exports). Sending a report\nagain with the same `id` replaces its value, also when `start_at` moved. The reports\ngo through the same processing as an upload, so the answer is 202. A tenant key records\nreports for any user of the tenant; a user token with scope `upload` only for its own\nuser, and another user is a 404. Values are health data: never logged, never quoted in\nan error. While the user's self reports are being deleted the answer is 409 and nothing\nis kept.",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "createSelfReports-0001",
+                "description": "Optional. A retry with the same key and the same request gets the first response back.",
+                "disabled": true
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/:id/self-reports",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                ":id",
+                "self-reports"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{userId}}"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reports\": [\n    {\n      \"end_at\": \"2026-01-01T00:00:00Z\",\n      \"id\": \"00000000-0000-0000-0000-000000000000\",\n      \"kind\": \"feeling\",\n      \"start_at\": \"2026-01-01T00:00:00Z\",\n      \"timezone\": \"example\",\n      \"value\": 0\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "shares",
+      "item": [
+        {
+          "name": "Make a share link of the user's records",
+          "request": {
+            "method": "POST",
+            "description": "Make a share link of the user's records.\n\n`POST /v1/users/{id}/shares`\n\nA SMART Health Link (HL7 FHIR IG \"SMART Health Cards and Links\", STU1) that the person\ngives to whoever they choose. The server reads the user's records of `categories` in\n`[start, end)` (the merged view, as the FHIR routes serve them), writes them as one\nFHIR R4 `collection` Bundle (a Patient with no identifier, the Observations, the\nDevices), compresses it (DEFLATE) and encrypts it as a compact JWE (`alg` `dir`,\n`enc` `A256GCM`) with a fresh random 256-bit key. It stores the ciphertext only. The\nanswer holds the link (`uri`) and the built-in viewer's link (`viewer_url`), each\ncarrying the key, this once: the server keeps neither and cannot show them again.\n\nA category holds every metric the consent model files under it. Records of a source\nwhose consent refuses the category, or whose purge is pending, are left out. The\nsnapshot is fixed when it is made (no `L` flag): later records are not added. At most\n50000 records; more is a 400. A sleep session's, a workout's or a daily summary's\nfigures of another category (a resting heart rate is `heart`) are kept only on the\nterms of their own category. The records are read and the share stored in one\ntransaction that holds the user and their consent: a consent change or an erasure\nthat starts meanwhile waits, then revokes the share if it holds what they remove.\n\nThe route takes no `Idempotency-Key`: a stored response would keep the key. Sent with\n`Cache-Control: no-store`. See docs/share-links.md.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/:id/shares",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                ":id",
+                "shares"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{userId}}"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"categories\": [\n    \"activity\"\n  ],\n  \"end\": \"2026-01-01T00:00:00Z\",\n  \"expires_at\": \"2026-01-01T00:00:00Z\",\n  \"label\": \"example\",\n  \"passcode\": \"example\",\n  \"start\": \"2026-01-01T00:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "The user's share links",
+          "request": {
+            "method": "GET",
+            "description": "The user's share links.\n\n`GET /v1/users/{id}/shares`\n\nOldest first, every status. Never a link, a key or a passcode: the server does not\nkeep them.",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/:id/shares",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                ":id",
+                "shares"
+              ],
+              "query": [
+                {
+                  "key": "cursor",
+                  "value": "",
+                  "description": "The next_cursor of the previous page.",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "100",
+                  "disabled": true
+                }
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{userId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "One share link, with its latest accesses",
+          "request": {
+            "method": "GET",
+            "description": "One share link, with its latest accesses.\n\n`GET /v1/users/{id}/shares/{share_id}`\n\nThe share and its 50 latest manifest requests, newest first, each with the name the\nreader gave and the outcome.",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/:id/shares/:share_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                ":id",
+                "shares",
+                ":share_id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{userId}}"
+                },
+                {
+                  "key": "share_id",
+                  "value": "{{shareId}}",
+                  "description": "The `id` of a share link of this user."
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Revoke a share link",
+          "request": {
+            "method": "DELETE",
+            "description": "Revoke a share link.\n\n`DELETE /v1/users/{id}/shares/{share_id}`\n\nThe link stops working at once and its file is removed; the share stays listed as\n`revoked` (reason `owner`). Revoking a share that is no longer active changes nothing.",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/:id/shares/:share_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                ":id",
+                "shares",
+                ":share_id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{userId}}"
+                },
+                {
+                  "key": "share_id",
+                  "value": "{{shareId}}",
+                  "description": "The `id` of a share link of this user."
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "fhir",
       "item": [
         {
           "name": "The user's records as FHIR R4 Observations",
           "request": {
             "method": "GET",
-            "description": "The user's records as FHIR R4 Observations.\n\n`GET /v1/users/{id}/fhir/Observation`\n\nThe user's records as one FHIR R4 (4.0.1) `searchset` Bundle of Observations,\n`Content-Type: application/fhir+json`: quantity samples (`qs-` ids), blood pressure\npanels pairing a systolic and a diastolic sample (`bp-`), sleep sessions (`sleep-`),\nworkouts (`workout-`) and daily summaries (`daily-`), merged in time order (a\nsample's start, a bedtime, a workout's start, a day at midnight UTC), then by kind\nand id. Paged like every list: the Bundle's `next` link carries the cursor, and\nthere is no `next` link on the last page; `total` is left out. A blood pressure pair\nis never split across pages, and its two samples are not listed on their own.\nVital signs meet the R4 vital signs profiles they claim in `meta.profile`. The\nmapping (codes, units, categories, provenance and limits) is in docs/fhir.md. In the\nmerged view (the default) a record another source covers better is left out, and a\ndaily summary keeps only the figures it owns (see `view`). The\nfilters below combine: a record is listed when it matches all of them. Errors are\n`application/problem+json` like the rest of the API.",
+            "description": "The user's records as FHIR R4 Observations.\n\n`GET /v1/users/{id}/fhir/Observation`\n\nThe user's records as one FHIR R4 (4.0.1) `searchset` Bundle of Observations,\n`Content-Type: application/fhir+json`: quantity samples (`qs-` ids), blood pressure\npanels pairing a systolic and a diastolic sample (`bp-`), sleep sessions (`sleep-`),\nworkouts (`workout-`), daily summaries (`daily-`) and ECG recordings with their\nvoltage samples (`ecg-`), merged in time order (a sample's start, a bedtime, a\nworkout's start, a day at midnight UTC, a recording's start), then by kind and id.\nPaged like every list: the Bundle's `next` link carries the cursor, and there is no\n`next` link on the last page; `total` is left out. A blood pressure pair is never\nsplit across pages, and its two samples are not listed on their own. A page holds at\nmost 100 ECG recordings: one that reaches them ends there, with a `next` link.\nVital signs meet the R4 vital signs profiles they claim in `meta.profile`. The\nmapping (codes, units, categories, provenance and limits) is in docs/fhir.md. In the\nmerged view (the default) a record another source covers better is left out, and a\ndaily summary keeps only the figures it owns (see `view`). The\nfilters below combine: a record is listed when it matches all of them. Errors are\n`application/problem+json` like the rest of the API.",
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/v1/users/:id/fhir/Observation",
@@ -2235,13 +2526,13 @@
                 {
                   "key": "code",
                   "value": "http://loinc.org|8867-4",
-                  "description": "A FHIR token `system|code` matched against `Observation.code`: a LOINC code\n(`http://loinc.org|8867-4`; 85354-9, 8480-6 and 8462-4 find the blood pressure\npanels, 93832-4 the sleep sessions, 55411-3 the workouts), a quantity type\n(`https://github.com/soma-intelligence/open-health-sync/fhir/CodeSystem/quantity-type|heart_rate`,\nlike `type`), or a record type\n(`https://github.com/soma-intelligence/open-health-sync/fhir/CodeSystem/record-type|`\n`blood_pressure`, `sleep_session`, `workout` or `daily_summary`). One value; other\nsystems are a 400. A code no Observation carries is an empty Bundle.",
+                  "description": "A FHIR token `system|code` matched against `Observation.code`: a LOINC code\n(`http://loinc.org|8867-4`; 85354-9, 8480-6 and 8462-4 find the blood pressure\npanels, 93832-4 the sleep sessions, 55411-3 the workouts, 11524-6 the ECG\nrecordings), a quantity type\n(`https://github.com/soma-intelligence/open-health-sync/fhir/CodeSystem/quantity-type|heart_rate`,\nlike `type`), or a record type\n(`https://github.com/soma-intelligence/open-health-sync/fhir/CodeSystem/record-type|`\n`blood_pressure`, `sleep_session`, `workout`, `daily_summary` or `ecg_recording`). One value; other\nsystems are a 400. A code no Observation carries is an empty Bundle.",
                   "disabled": true
                 },
                 {
                   "key": "category",
                   "value": "vital-signs",
-                  "description": "An HL7 observation category code, bare or as\n`http://terminology.hl7.org/CodeSystem/observation-category|code`: `vital-signs`,\n`laboratory` or `activity` (activity samples, workouts and daily summaries). One\nvalue. Another code of that system is an empty Bundle; anything else is a 400.",
+                  "description": "An HL7 observation category code, bare or as\n`http://terminology.hl7.org/CodeSystem/observation-category|code`: `vital-signs`,\n`laboratory`, `activity` (activity samples, workouts and daily summaries) or `survey`\n(self reports). One value. Another code of that system is an empty Bundle; anything\nelse is a 400.",
                   "disabled": true
                 },
                 {
@@ -2318,7 +2609,7 @@
                 {
                   "key": "observation_id",
                   "value": "{{observationId}}",
-                  "description": "The Observation id, as the Bundle gives it: `qs-`, `bp-` (the systolic sample's\nid), `sleep-`, `workout-` or `daily-`, then the stored row id."
+                  "description": "The Observation id, as the Bundle gives it: `qs-`, `bp-` (the systolic sample's\nid), `sleep-`, `workout-`, `daily-` or `ecg-`, then the stored row id."
                 }
               ]
             }
@@ -2668,7 +2959,7 @@
           "name": "One list of the user as a CSV or Parquet file",
           "request": {
             "method": "GET",
-            "description": "One list of the user as a CSV or Parquet file.\n\n`GET /v1/users/{id}/exports/{dataset}`\n\nEvery record of one list in `[start, end)`, as one file streamed in a single response\n(`Content-Disposition: attachment`). The columns are the members of the list's JSON\nrecords, in the same order and with the same names and values: times in UTC, a missing\nvalue empty (CSV) or null (Parquet), `metadata` (and the daily `sources`) as JSON text. `samples` holds every\nquantity type unless `type` names one. The file is not paged: `cursor` and `limit` are\na 400. A failure once the file has started cuts the connection, so a truncated file\nnever looks complete. See docs/exports.md.",
+            "description": "One list of the user as a CSV or Parquet file.\n\n`GET /v1/users/{id}/exports/{dataset}`\n\nEvery record of one list in `[start, end)`, as one file streamed in a single response\n(`Content-Disposition: attachment`). The columns are the members of the list's JSON\nrecords, in the same order and with the same names and values: times in UTC, a missing\nvalue empty (CSV) or null (Parquet), `metadata` (and the daily `sources`) as JSON text. `ecg` holds the\nrecordings' metadata, not their voltage samples (in the archive and the FHIR Observation). `samples` holds every\nquantity type unless `type` names one. The file is not paged: `cursor` and `limit` are\na 400. A failure once the file has started cuts the connection, so a truncated file\nnever looks complete. See docs/exports.md.",
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/v1/users/:id/exports/:dataset",
@@ -2726,7 +3017,7 @@
           "name": "Everything held about one user, as one zip file",
           "request": {
             "method": "GET",
-            "description": "Everything held about one user, as one zip file.\n\n`GET /v1/users/{id}/archive`\n\nThe answer to a data portability request: one zip file streamed in a single response\n(`Content-Disposition: attachment`) holding `manifest.json` (user, generation time,\ninstance version, record count of each file, a description of each folder),\n`user.json` (the user and its provider connections, never a token),\n`canonical/<list>.ndjson` (every record of samples, category-samples, sleep,\nsleep-phases, workouts, workout-routes, nutrition and daily, the same JSON as the list\nitems, one per line), `fhir/bundle.json` (a FHIR R4 `collection` Bundle of every\nObservation), `omh/data-points.ndjson` (the Open mHealth data points) and `raw/...`\n(every raw payload of the user, byte for byte, under its path below the user). A\ntenant key reads any user of the tenant; a user token with scope `read` reads only its\nown user, and another user is a 404. A failure once the file has started cuts the\nconnection, so a truncated archive never looks complete. See docs/exports.md.",
+            "description": "Everything held about one user, as one zip file.\n\n`GET /v1/users/{id}/archive`\n\nThe answer to a data portability request: one zip file streamed in a single response\n(`Content-Disposition: attachment`) holding `manifest.json` (user, generation time,\ninstance version, record count of each file, a description of each folder),\n`user.json` (the user and its provider connections, never a token),\n`canonical/<list>.ndjson` (every record of samples, category-samples, sleep,\nsleep-phases, workouts, workout-routes, nutrition and daily, the same JSON as the list\nitems, one per line, and ecg, each ECG recording with its voltage samples as\n`GET /v1/users/{id}/ecg/{ecg_id}` returns it), `fhir/bundle.json` (a FHIR R4 `collection` Bundle of every\nObservation), `omh/data-points.ndjson` (the Open mHealth data points) and `raw/...`\n(every raw payload of the user, byte for byte, under its path below the user). A\ntenant key reads any user of the tenant; a user token with scope `read` reads only its\nown user, and another user is a 404. A failure once the file has started cuts the\nconnection, so a truncated archive never looks complete. See docs/exports.md.",
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/v1/users/:id/archive",
@@ -2857,6 +3148,122 @@
                 "v1",
                 "ingest",
                 "health-connect"
+              ]
+            },
+            "body": {
+              "mode": "file",
+              "file": {
+                "src": ""
+              }
+            }
+          }
+        },
+        {
+          "name": "Upload one part of a Mi Fitness data copy",
+          "request": {
+            "method": "POST",
+            "description": "Upload one part of a Mi Fitness data copy.\n\n`POST /v1/ingest/xiaomi`\n\nOne gzip NDJSON part (at most 64 MiB, never truncated), one row of the Mi Fitness data\ncopy per line, each a JSON object with a `table` and a `key` (the line format is in\ndocs/connectors/xiaomi.md; `ohs import mi-fitness` writes it). Same headers, limits and\nanswers as the Apple Health upload.\nRe-sending the same part is safe: the answer is 200 with `duplicate: true`. Other\nbytes under a (day, batch, part) already stored are a 409, and so is a part sent while\nthis provider's data is being deleted for the user (nothing is kept; send it again\nonce the deletion job is done). Each instance processes a\nbounded number of uploads at once; above it the answer is 503 with `Retry-After`.\n\nNeeds a user token (ohs_ut_) as the client's apiKey.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{userToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "X-OHS-Type",
+                "value": "fitness_data",
+                "description": "Export table of the lines of the part (fitness_data or sport_record)."
+              },
+              {
+                "key": "X-OHS-Day",
+                "value": "2026-01-01"
+              },
+              {
+                "key": "X-OHS-Batch",
+                "value": ""
+              },
+              {
+                "key": "X-OHS-Part",
+                "value": "0"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/gzip"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/ingest/xiaomi",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "ingest",
+                "xiaomi"
+              ]
+            },
+            "body": {
+              "mode": "file",
+              "file": {
+                "src": ""
+              }
+            }
+          }
+        },
+        {
+          "name": "Upload one activity file (FIT, GPX or TCX)",
+          "request": {
+            "method": "POST",
+            "description": "Upload one activity file (FIT, GPX or TCX).\n\n`POST /v1/ingest/activity-files`\n\nOne gzip NDJSON part (at most 64 MiB, never truncated) holding one activity file on one\nline: `{\"type\":\"fit\",\"data\":\"<base64 of the file>\"}`, `type` being `fit`, `gpx` or `tcx`\nand equal to `X-OHS-Type`. The file is at most 20 MiB once decoded (the line format is in\ndocs/connectors/activity-files.md; `ohs import files` writes it). The part is refused\nwith 400, and nothing is stored, unless the file parses as an activity that starts at\nmost 48 hours from now: a FIT course, settings or monitoring file, a GPX route without\ntimes or a file with a broken CRC is refused. Same headers, limits and answers as the\nApple Health upload.\nRe-sending the same part is safe: the answer is 200 with `duplicate: true`. Other\nbytes under a (day, batch, part) already stored are a 409, and so is a part sent while\nthis provider's data is being deleted for the user (nothing is kept; send it again\nonce the deletion job is done). Each instance processes a\nbounded number of uploads at once; above it the answer is 503 with `Retry-After`.\n\nNeeds a user token (ohs_ut_) as the client's apiKey.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{userToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "X-OHS-Type",
+                "value": "fit",
+                "description": "Format of the file in the part."
+              },
+              {
+                "key": "X-OHS-Day",
+                "value": "2026-01-01",
+                "description": "UTC day the activity starts (`ohs import files` sends it; the server does not check it)."
+              },
+              {
+                "key": "X-OHS-Batch",
+                "value": "",
+                "description": "`ohs import files` sends `af1-` and the first 32 hex digits of the file's SHA-256."
+              },
+              {
+                "key": "X-OHS-Part",
+                "value": "0"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/gzip"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/ingest/activity-files",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "ingest",
+                "activity-files"
               ]
             },
             "body": {
