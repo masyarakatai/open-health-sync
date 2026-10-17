@@ -34,6 +34,7 @@ import {
   providerLabel,
   providerStatusLabel,
   relTime,
+  splitFigure,
   webhookLabel,
 } from "./lib.mjs";
 
@@ -126,6 +127,45 @@ function icon(name) {
   use.setAttribute("href", `#i-${name}`);
   svg.append(use);
   return svg;
+}
+
+// numeral draws a value as a display numeral, the figure large and its
+// unit small beside it, as on the connect page.
+function numeral(value, { href = null, cls = "" } = {}) {
+  const f = splitFigure(value);
+  const parts = [f.figure, f.unit ? el("span", { class: "unit" }, f.unit) : null];
+  return el("div", { class: `numeral${f.word ? " word" : ""} ${cls}`.trim() }, href ? link(href, parts) : parts);
+}
+
+// scene is the frame's photographic background, drawn as on the connect
+// page from gradients and the noise filters of the page's sprite.
+function scene() {
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = (cls, ...rects) => {
+    const s = document.createElementNS(ns, "svg");
+    s.setAttribute("class", cls);
+    s.setAttribute("focusable", "false");
+    for (const attrs of rects) {
+      const r = document.createElementNS(ns, "rect");
+      r.setAttribute("width", "100%");
+      r.setAttribute("height", "100%");
+      for (const [k, v] of Object.entries(attrs)) r.setAttribute(k, v);
+      s.append(r);
+    }
+    return s;
+  };
+  return el(
+    "div",
+    { class: "scene", "aria-hidden": "true" },
+    el("div", { class: "base" }),
+    svg("foliage", { filter: "url(#scene-foliage)" }),
+    el("div", { class: "mist" }),
+    el("div", { class: "prism p1" }),
+    el("div", { class: "prism p2" }),
+    svg("dissolve", { fill: "url(#scene-fade)", filter: "url(#scene-specks-light)" }, { fill: "url(#scene-fade)", filter: "url(#scene-specks-dark)" }),
+    svg("grain", { filter: "url(#scene-grain)" }),
+    el("div", { class: "shade" }),
+  );
 }
 
 function pill(cls, text) {
@@ -236,23 +276,24 @@ function stats(items) {
   return el(
     "div",
     { class: "stats" },
-    items.map((s) =>
-      el("div", { class: "stat" }, el("div", { class: "stat-label" }, s.label), el("div", { class: `stat-value ${s.cls || ""}`.trim() }, s.value)),
-    ),
+    items.map((s) => el("div", { class: "stat" }, el("div", { class: "label" }, s.label), numeral(s.value, { cls: `stat-value ${s.cls || ""}` }))),
   );
 }
 
-// pageHead is the top of a page: crumbs, title, a line under it and actions.
-function pageHead({ title, sub = null, actions = null, crumbs = null, lead = null, status = null }) {
+function crumbsNav(crumbs) {
+  return el(
+    "nav",
+    { class: "crumbs", "aria-label": "Breadcrumb" },
+    crumbs.map(([text, href], i) => [i > 0 ? icon("chevron") : null, href ? link(href, text) : el("span", {}, text)]),
+  );
+}
+
+// pageHead is the top of a page: crumbs or the section's label, the title,
+// a line under it and actions.
+function pageHead({ title, sub = null, actions = null, crumbs = null, eyebrow = null, lead = null, status = null }) {
   const acts = [actions].flat().filter(Boolean);
   return [
-    crumbs
-      ? el(
-          "nav",
-          { class: "crumbs", "aria-label": "Breadcrumb" },
-          crumbs.map(([text, href], i) => [i > 0 ? icon("chevron") : null, href ? link(href, text) : el("span", {}, text)]),
-        )
-      : null,
+    crumbs ? crumbsNav(crumbs) : eyebrow ? el("div", { class: "label eyebrow" }, eyebrow) : null,
     el(
       "div",
       { class: "page-head" },
@@ -672,6 +713,7 @@ function main() {
     };
     const head = (sub) =>
       pageHead({
+        eyebrow: "Pipeline",
         title: "Overview",
         sub,
         actions: [probe(healthz, "API live", "API down"), probe(readyz, "Ready", "Not ready"), refresh],
@@ -679,29 +721,37 @@ function main() {
     if (!pipeline.ok) return el("div", {}, head(null), errorBox(pipeline.error));
     const p = pipeline.value;
 
+    // The pipeline is the overview's frame: one glass panel per stage, in
+    // the order data flows.
     const stages = pipelineStages(p);
     const flow = el(
-      "div",
-      { class: "pipeline", role: "list", "aria-label": "Pipeline, in the order data flows" },
-      stages.map((s, i) => {
-        const [big, ...rest] = s.figures;
-        return [
-          i > 0 ? el("span", { class: "flow-link", "aria-hidden": "true" }, icon("chevron")) : null,
-          el(
-            "div",
-            { class: `stage state-${s.cls}`, role: "listitem" },
-            el("div", { class: "stage-top" }, el("span", { class: "stage-name" }, icon(STAGE_ICONS[s.key] || "layers"), s.title)),
-            el("div", { class: "stage-role" }, s.role),
-            el("div", { class: "stage-big-row" }, el("div", { class: "stage-big" }, big.href ? link(big.href, big.value) : big.value), pill(s.cls, STAGE_STATES[s.cls])),
-            el("div", { class: "stage-big-label" }, big.label),
+      "section",
+      { class: "frame band", "aria-label": "Data flow" },
+      scene(),
+      el("div", { class: "frame-top" }, el("span", { class: "label" }, "Data flow"), el("span", { class: "label" }, "Updated ", when(p.generated_at))),
+      el(
+        "div",
+        { class: "pipeline", role: "list", "aria-label": "Pipeline, in the order data flows" },
+        stages.map((s, i) => {
+          const [big, ...rest] = s.figures;
+          return [
+            i > 0 ? el("span", { class: "flow-link", "aria-hidden": "true" }, icon("chevron")) : null,
             el(
-              "dl",
-              {},
-              rest.map((f) => [el("dt", {}, f.label), el("dd", { class: f.cls || null }, f.href ? link(f.href, f.value) : f.value)]),
+              "div",
+              { class: `glass stage state-${s.cls}`, role: "listitem" },
+              el("div", { class: "stage-top" }, el("span", { class: "stage-name" }, icon(STAGE_ICONS[s.key] || "layers"), s.title), pill(s.cls, STAGE_STATES[s.cls])),
+              el("div", { class: "stage-role" }, s.role),
+              numeral(big.value, { href: big.href }),
+              el("div", { class: "label stage-big-label" }, big.label),
+              el(
+                "dl",
+                {},
+                rest.map((f) => [el("dt", {}, f.label), el("dd", { class: f.cls || null }, f.href ? link(f.href, f.value) : f.value)]),
+              ),
             ),
-          ),
-        ];
-      }),
+          ];
+        }),
+      ),
     );
 
     const items = attention(p);
@@ -741,7 +791,7 @@ function main() {
     return el(
       "div",
       {},
-      head(["How data moves through this instance, from the providers to your systems. Updated ", when(p.generated_at), "."]),
+      head("How data moves through this instance, from the providers to your systems."),
       flow,
       card({ title: "Needs attention", count: items.length || null }, todo),
       card(
@@ -764,7 +814,7 @@ function main() {
       return el(
         "div",
         {},
-        pageHead({ title: "Providers", sub: "The providers this instance has on." }),
+        pageHead({ eyebrow: "Pipeline", title: "Providers", sub: "The providers this instance has on." }),
         notice(
           "warn",
           "Only a key of the instance admin tenant can turn providers on and save their keys. ",
@@ -815,7 +865,7 @@ function main() {
     return el(
       "div",
       {},
-      pageHead({ title: "Providers", sub: "Turn on the providers your users connect to. Each one needs an app registered at the provider and its keys saved here." }),
+      pageHead({ eyebrow: "Pipeline", title: "Providers", sub: "Turn on the providers your users connect to. Each one needs an app registered at the provider and its keys saved here." }),
       b.public_url
         ? null
         : notice(
@@ -854,24 +904,70 @@ function main() {
 
     // Show which key made the last change by its prefix, the name the
     // keys page uses. A revoked or unknown key falls back to its id.
+    const [keys, pipe] = await Promise.all([p.updated_by ? settle("/v1/keys") : null, settle("/v1/pipeline")]);
     let changedBy = p.updated_by ?? "-";
-    if (p.updated_by) {
-      const keys = await settle("/v1/keys");
-      const k = keys.ok && (keys.value.data || []).find((x) => x.id === p.updated_by);
-      if (k) changedBy = `${k.prefix}...`;
-    }
+    const k = keys && keys.ok && (keys.value.data || []).find((x) => x.id === p.updated_by);
+    if (k) changedBy = `${k.prefix}...`;
 
-    const head = pageHead({
-      title: p.name,
-      lead: mark(p.name, "lg"),
-      status: pill(classifyProvider(p), providerStatusLabel(p.status)),
-      sub: builtIn
-        ? "Sent by the SDKs and apps. Always on."
-        : (p.kinds || []).includes("push")
-          ? "Users connect their account; the provider notifies this server of new data, which it then pulls."
-          : "Users connect their account; this server pulls their data on a schedule.",
-      crumbs: [["Providers", "#/providers"], [p.name, null]],
-    });
+    // The top of the page is a short frame: the provider, then how far its
+    // setup is and how many users it serves.
+    const keyed = p.status !== "not_configured";
+    const registers = Boolean(p.urls && (p.urls.redirect || p.urls.inbound));
+    const steps = builtIn
+      ? []
+      : [registers ? { name: "Register an app", ok: keyed } : null, { name: "Save its keys", ok: keyed }, { name: "Turn it on", ok: p.status === "active" }].filter(Boolean);
+    const next = steps.find((x) => !x.ok);
+    const src = pipe.ok ? (pipe.value.sources || []).find((x) => x.slug === slug) : null;
+    const conns = src && src.connections;
+    const tile = (label, value, footNode, cls = "") =>
+      el("div", { class: "glass band-tile" }, el("div", { class: "label" }, label), el("div", {}, numeral(value, { cls }), el("div", { class: "tile-foot" }, footNode)));
+    const tiles = builtIn
+      ? [tile("Keys needed", "0", "Always on, nothing to set up")]
+      : [
+          tile(
+            "Setup",
+            `${steps.filter((x) => x.ok).length} of ${steps.length}`,
+            next ? `Next: ${next.name.toLowerCase()}` : "Live for your users",
+          ),
+          tile(
+            "Connections",
+            conns ? formatCount(conns.active) : "-",
+            conns && conns.needs_reauth > 0 ? pill("bad", `${formatCount(conns.needs_reauth)} to reconnect`) : conns ? "Users connected now" : "None yet",
+          ),
+        ];
+    const head = [
+      crumbsNav([["Providers", "#/providers"], [p.name, null]]),
+      el(
+        "section",
+        { class: "frame band", "aria-label": p.name },
+        scene(),
+        el(
+          "div",
+          { class: `band-row tiles-${tiles.length}` },
+          el(
+            "div",
+            { class: "glass band-main" },
+            mark(p.name, "lg"),
+            el(
+              "div",
+              { class: "band-text" },
+              el("h1", {}, p.name),
+              el(
+                "p",
+                { class: "sub" },
+                builtIn
+                  ? "Sent by the SDKs and apps. Always on."
+                  : (p.kinds || []).includes("push")
+                    ? "Users connect their account; the provider notifies this server of new data, which it then pulls."
+                    : "Users connect their account; this server pulls their data on a schedule.",
+              ),
+              el("div", { class: "tags" }, pill(classifyProvider(p), providerStatusLabel(p.status)), (p.kinds || []).map((x) => tag(KIND_LABELS[x] || x))),
+            ),
+          ),
+          tiles,
+        ),
+      ),
+    ];
     const blocks = [];
     if (p.error) blocks.push(notice("bad", el("strong", {}, "The provider refused these keys. "), p.error));
 
@@ -890,13 +986,12 @@ function main() {
 
     // The setup, in the order an operator does it: register an app at the
     // provider, save its keys here, turn it on.
-    const keyed = p.status !== "not_configured";
     let n = 0;
-    const step = (done) => {
+    const step = (ok) => {
       n++;
-      return el("span", { class: `step-num${done ? " done" : ""}`, "aria-label": done ? `Step ${n}, done` : `Step ${n}` }, done ? icon("check") : String(n));
+      return el("span", { class: `step-num${ok ? " done" : ""}`, "aria-label": ok ? `Step ${n}, done` : `Step ${n}` }, ok ? icon("check") : String(n).padStart(2, "0"));
     };
-    if (p.urls && (p.urls.redirect || p.urls.inbound)) {
+    if (registers) {
       const s = step(keyed);
       blocks.push(
         card(
@@ -1134,7 +1229,7 @@ function main() {
     return el(
       "div",
       {},
-      pageHead({ title: "Users", sub: "The people whose data this tenant collects. Each one connects their own accounts.", actions: [create] }),
+      pageHead({ eyebrow: "Pipeline", title: "Users", sub: "The people whose data this tenant collects. Each one connects their own accounts.", actions: [create] }),
       card(
         { title: "All users" },
         table(["User", "Status", "Created", ""], rows, empty("No user yet", readOnly ? null : "Create one, then send them a connection link.")),
@@ -1497,7 +1592,7 @@ function main() {
     return el(
       "div",
       {},
-      pageHead({ title: "Jobs", sub: "Work that stopped and waits for you. Everything else retries on its own." }),
+      pageHead({ eyebrow: "Pipeline", title: "Jobs", sub: "Work that stopped and waits for you. Everything else retries on its own." }),
       card(
         {
           title: "Parked processing jobs",
@@ -1597,7 +1692,7 @@ function main() {
     return el(
       "div",
       {},
-      pageHead({ title: "Webhooks", sub: "Endpoints this server notifies when data is written or deleted, or a connection breaks.", actions: [create] }),
+      pageHead({ eyebrow: "Pipeline", title: "Webhooks", sub: "Endpoints this server notifies when data is written or deleted, or a connection breaks.", actions: [create] }),
       card(
         { title: "Endpoints", count: (b.data || []).length || null },
         table(["Endpoint", "Events", "Status", "Last success", "Failing since", ""], rows, empty("No webhook endpoint", "Add one to push new data to your systems as it lands.")),
@@ -1824,7 +1919,7 @@ function main() {
     return el(
       "div",
       {},
-      pageHead({ title: "API keys", sub: `Keys of ${tenant.name}. A key can do everything this console does: treat each one as a password.`, actions: [create] }),
+      pageHead({ eyebrow: "Access", title: "API keys", sub: `Keys of ${tenant.name}. A key can do everything this console does: treat each one as a password.`, actions: [create] }),
       card(
         { title: "Keys", count: keys.filter((k) => !k.revoked_at).length },
         table(["Key", "Created", "Last used", "Status", readOnly ? null : ""].filter((h) => h !== null), rows, empty("No key")),
@@ -1888,7 +1983,7 @@ function main() {
     return el(
       "div",
       {},
-      pageHead({ title: "Audit log", sub: "Who read, exported, changed or deleted what, with which key. Kept for OHS_AUDIT_RETENTION_DAYS (a year by default).", actions: [filter] }),
+      pageHead({ eyebrow: "Access", title: "Audit log", sub: "Who read, exported, changed or deleted what, with which key. Kept for OHS_AUDIT_RETENTION_DAYS (a year by default).", actions: [filter] }),
       card(
         { title: "Events" },
         table(["When", "Action", "Key", "User", "Request", ["Status", "num"], "Detail"], rows, empty("No event", auditAction ? "Nothing matches this filter." : null)),

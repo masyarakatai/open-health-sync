@@ -160,6 +160,16 @@ export function formatWindow(start, end) {
   return a.slice(0, 10) === b.slice(0, 10) ? `${a} to ${b.slice(11)}` : `${a} to ${b}`;
 }
 
+// splitFigure parts a value for a display numeral: the figure, drawn large,
+// and what follows it, drawn small. "3 of 9" reads 3 and "of 9", "1.2 MB"
+// reads 1.2 and "MB". A value with no figure ("Never") is a word.
+export function splitFigure(value) {
+  const s = String(value ?? "").trim() || "-";
+  const m = /^([-+]?\d[\d,.]*)(?:\s+(.+))?$/.exec(s);
+  if (m) return { figure: m[1], unit: m[2] || "", word: false };
+  return { figure: s, unit: "", word: s !== "-" };
+}
+
 // formatCount groups thousands: 1234567 reads "1,234,567".
 export function formatCount(n) {
   if (n === null || n === undefined || !Number.isFinite(Number(n))) return "-";

@@ -36,6 +36,7 @@ import {
   providerLabel,
   providerStatusLabel,
   relTime,
+  splitFigure,
   webhookLabel,
 } from "./static/lib.mjs";
 
@@ -358,4 +359,15 @@ test("confirmMatches", () => {
   assert.equal(confirmMatches("Oura", "oura"), false);
   assert.equal(confirmMatches("", ""), false);
   assert.equal(confirmMatches(undefined, "x"), false);
+});
+
+test("splitFigure", () => {
+  assert.deepEqual(splitFigure("3 of 9"), { figure: "3", unit: "of 9", word: false });
+  assert.deepEqual(splitFigure("1.2 MB"), { figure: "1.2", unit: "MB", word: false });
+  assert.deepEqual(splitFigure("1,234"), { figure: "1,234", unit: "", word: false });
+  assert.deepEqual(splitFigure("12 min ago"), { figure: "12", unit: "min ago", word: false });
+  assert.deepEqual(splitFigure("-"), { figure: "-", unit: "", word: false });
+  assert.deepEqual(splitFigure(null), { figure: "-", unit: "", word: false });
+  assert.deepEqual(splitFigure("Never"), { figure: "Never", unit: "", word: true });
+  assert.deepEqual(splitFigure("just now"), { figure: "just now", unit: "", word: true });
 });
