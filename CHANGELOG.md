@@ -115,6 +115,13 @@ release may change the API, the configuration or the database schema.
 
 ### Changed
 
+- The hosted connect page and its result page are redesigned: frosted glass panels on a
+  background the page draws itself, with no image or web font. Each source is one row and one
+  button, with a line on what it shares (from the data its connector reads) and a "Connected" or
+  "Needs reconnecting" status. Two large figures give the connected sources and the minutes left
+  on the link. The page says that the access is read only and that the user signs in on each
+  source's own site. The result page says the data now syncs in the background and offers a
+  button back to the sources. Still no script, and fits a phone screen.
 - A canonical `Workout` can name its source and device (`SourceSlug`, `DeviceID`), written to
   `workouts.source_slug` and `workouts.device_id` (columns that already existed). A connector
   that leaves them empty gets the previous behavior: the provider as the source, no device.
@@ -152,6 +159,12 @@ release may change the API, the configuration or the database schema.
 
 ### Fixed
 
+- Apple Health basal and active energy recorded in `Cal` (HealthKit's large calorie, a
+  kilocalorie) is stored as is. An export written with Calories as the energy unit spells those
+  records `Cal`, and their values were stored 1,000 times too low (read as the small calorie),
+  so a derived day's `total_kcal` was close to its active energy alone. Values already stored
+  stay wrong: erase the Apple Health data (`DELETE /v1/users/{id}/data/apple_health`) and
+  import the export again.
 - Disconnecting or deleting a user now revokes the Oura access token (`GET /oauth/revoke`),
   like WHOOP, Strava and Polar.
 - A provider deletion notice (Oura, WHOOP, Strava) now updates the connection's
@@ -159,13 +172,18 @@ release may change the API, the configuration or the database schema.
   notifications were deletions.
 - MCP `get_coverage` without `start` reports the last 30 days. On years of Apple Health history
   it answered with over a megabyte of JSON, more than an agent can read.
+- `GET /v1/users/{id}/connections` and the MCP tool `list_connections` return `created_at`,
+  `initial_backfill_at`, `scopes` and `updated_at`, as `api/openapi.yaml` documents. Only
+  `connected_at` was sent, so the Swift and Kotlin SDKs could not decode the list and the
+  console showed `-` for when a source was connected and when its backfill started.
+  `connected_at` stays, with the same value as `created_at`.
 - Apple Health nights are whole again. A night recorded "in bed" had no figures; a night that
   crossed midnight, which uploads file in two parts, was split in two, or its stages went to the
-  next night's session; a nap uploaded with a night went to that night or was dropped. Each night is now one session with
-  all its stages, whatever order its parts are processed in, and its figures are the sums of
-  its stages (`total_sleep_seconds` is the Health app's time asleep). A night with no in bed
-  sample is marked `"synthesized": true`. To rebuild nights stored before, see
-  [docs/connectors/apple-health.md](docs/connectors/apple-health.md#sleep).
+  next night's session; a nap uploaded with a night went to that night or was dropped. Each
+  night is now one session with all its stages, whatever order its parts are processed in, and
+  its figures are the sums of its stages (`total_sleep_seconds` is the Health app's time
+  asleep). A night with no in bed sample is marked `"synthesized": true`. To rebuild nights
+  stored before, see [docs/connectors/apple-health.md](docs/connectors/apple-health.md#sleep).
 
 ## [0.1.0] - 2026-10-13
 

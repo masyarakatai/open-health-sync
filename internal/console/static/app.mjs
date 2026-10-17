@@ -549,7 +549,7 @@ function main() {
       ),
       el("h2", {}, "Connections"),
       conns.ok
-        ? table(["Provider", "Status", "Last sync", "Backfill done", "Connected"], connRows, "No provider connection.")
+        ? table(["Provider", "Status", "Last sync", "Backfill started", "Connected"], connRows, "No provider connection.")
         : errorBox(conns.error),
       el("h2", {}, "Freshness"),
       fresh.ok
