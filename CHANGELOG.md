@@ -181,6 +181,10 @@ release may change the API, the configuration or the database schema.
 
 ### Changed
 
+- The Polar guide has a Provenance section: the source slug and name every record gets, and
+  where the device comes from (AccessLink's `device_id` on the sleep night, kept in the session
+  metadata and on the sleep heart-rate sample; workouts keep the device name instead, and the
+  activity, heart rate, physical info and recharge samples carry none). Part of #134.
 - `OHS_CONSOLE=true` now serves the console with its actions. An instance that turned it on for
   the read-only view gets them on upgrade; set `OHS_CONSOLE=read-only` to keep the console
   without any action.

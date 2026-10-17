@@ -163,3 +163,17 @@ Notes on the mapping:
   replaceable: a later value for the same day (or sample time) replaces the stored one.
 - Polar sends no deletion events and the non-transactional endpoints do not say what was
   removed: data deleted in Polar Flow stays in Open Health Sync.
+
+## Provenance
+
+Every record has provider `polar`, source slug `polar` and source name `Polar`.
+
+The device comes from AccessLink's `device_id`, and only the sleep data carries it: a sleep
+session keeps it in its metadata (`device_id`) and the sleep heart-rate sample gets it as its
+`DeviceID`. Workouts instead keep Polar's device *name* (`device`, `Polar Test Watch` in the
+connector's fake fixtures) in their metadata. Activity, daily heart rate, physical info and
+nightly recharge samples carry no device. The id is Polar's own opaque identifier (`DEV00001`
+in the fake fixtures, never a real id).
+
+FHIR output carries the provider, source and device as
+[Provenance](../fhir.md#provenance) like any other source.
