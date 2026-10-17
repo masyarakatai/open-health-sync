@@ -186,7 +186,7 @@ All reads are `GET /v1/users/{id}/<resource>` with a tenant key, paged as above.
 | Resource | Filters | Ordered by |
 |---|---|---|
 | `samples` | `type` (required), `start`, `end`, `view` | `start_date` |
-| `samples/stats` | `type`, `start`, `end` (required), `interval`, `tz`, `provider`, `view` | interval, not paged |
+| `samples/stats` (next release) | `type`, `start`, `end` (required), `interval`, `tz`, `provider`, `view` | interval, not paged |
 | `category-samples` | `type` (optional), `start`, `end`, `view` | `start_date` |
 | `sleep` | `start`, `end`, `view` | `bedtime_start` |
 | `sleep/{session_id}/phases` | `start`, `end` | `start_date` |
@@ -340,6 +340,8 @@ rules (local days, gaps inside a period, the read limit) are in
 [menstrual-cycles.md](menstrual-cycles.md).
 
 ### ECG recordings
+
+> **Next release.** This is on `main` and ships in the next release; the 0.1.0 image does not have it.
 
 `GET /v1/users/{id}/ecg` lists the user's ECG recordings (Apple Watch through Apple Health,
 Withings) by start time, metadata only. `GET /v1/users/{id}/ecg/{ecg_id}` returns one recording

@@ -1316,7 +1316,7 @@ function main() {
         el("td", {}, pill(classifyConnection(c), humanize(c.status))),
         el("td", {}, healthCell(c.health)),
         el("td", {}, when(c.last_sync_at)),
-        el("td", {}, when(c.connected_at)),
+        el("td", {}, when(c.created_at || c.connected_at)),
         readOnly
           ? null
           : el(

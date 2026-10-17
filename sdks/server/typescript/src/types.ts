@@ -543,9 +543,12 @@ export interface Connection {
   status: "active" | "needs_reauth" | "disconnected";
   scopes?: string[];
   last_sync_at?: string | null;
+  /** When the pull of the user's history was queued. */
   initial_backfill_at?: string | null;
   created_at: string;
   updated_at?: string;
+  /** Same as created_at, under its earlier name. */
+  connected_at?: string;
   /**
    * Whether the connection syncs, and if not why and what fixes it. `reason` is `needs_reauth`
    * (the provider refused the grant: token expired or revoked), `missing_scope` (the grant lacks a
