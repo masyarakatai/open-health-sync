@@ -3640,9 +3640,10 @@ components:
           type: array
           items: { type: string }
         last_sync_at: { type: [string, "null"], format: date-time }
-        initial_backfill_at: { type: [string, "null"], format: date-time }
+        initial_backfill_at: { type: [string, "null"], format: date-time, description: "When the pull of the user's history was queued." }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+        connected_at: { type: string, format: date-time, deprecated: true, description: "Same as created_at, under its earlier name." }
         health: { $ref: "#/components/schemas/ConnectionHealth" }
 
     ConnectionHealth:

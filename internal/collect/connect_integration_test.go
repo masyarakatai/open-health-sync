@@ -265,6 +265,17 @@ func TestConnectFlowStoresSealedTokensAndBackfill(t *testing.T) {
 	assert.Equal(t, fakeSlug, got.Data[0].Provider)
 	assert.Equal(t, collect.StatusActive, got.Data[0].Status)
 	assert.Nil(t, got.Data[0].LastSyncAt)
+	require.NotNil(t, got.Data[0].InitialBackfillAt)
+	assert.Equal(t, now, *got.Data[0].InitialBackfillAt)
+	assert.False(t, got.Data[0].CreatedAt.IsZero())
+	assert.Equal(t, got.Data[0].CreatedAt, got.Data[0].ConnectedAt)
+	// Under the names api/openapi.yaml gives them, which the SDKs and the
+	// console decode.
+	var raw struct{ Data []map[string]any }
+	require.NoError(t, json.Unmarshal(list.Body.Bytes(), &raw))
+	for _, k := range []string{"scopes", "initial_backfill_at", "created_at", "updated_at"} {
+		assert.Contains(t, raw.Data[0], k)
+	}
 }
 
 func TestStateIsSingleUse(t *testing.T) {
