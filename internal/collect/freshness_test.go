@@ -4,11 +4,16 @@ package collect
 
 import (
 	"bytes"
+	"context"
+	"io"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/soma-intelligence/open-health-sync/internal/connector"
+	"github.com/soma-intelligence/open-health-sync/internal/model"
 )
 
 func TestPullEveryFollowsNotifications(t *testing.T) {
@@ -74,4 +79,44 @@ func TestWriteSyncMetrics(t *testing.T) {
 	assert.Contains(t, out, `ohs_sync_connections{provider="withings",state="failing"} 1`)
 	assert.Contains(t, out, `ohs_sync_max_lag_seconds{provider="withings"} 4200`)
 	assert.Contains(t, out, `ohs_sync_push_silent_connections{provider="withings"} 2`)
+}
+
+type fakeDevice struct{ slug string }
+
+func (f fakeDevice) Slug() string                                   { return f.slug }
+func (fakeDevice) Enabled(connector.Config) bool                    { return true }
+func (fakeDevice) Map(connector.RawRecord) (model.MapResult, error) { return model.MapResult{}, nil }
+func (fakeDevice) ParseUpload(connector.UploadMeta, io.Reader, connector.RawSink) error {
+	return nil
+}
+
+type notifiedOAuth struct{ pageOAuth }
+
+func (notifiedOAuth) FetchNotified(context.Context, connector.Connection, time.Time, time.Time, string, connector.RawSink) error {
+	return nil
+}
+
+func TestCapabilityChecks(t *testing.T) {
+	byID := map[string]connector.Connector{
+		"push":     probePush{"push"},
+		"oauth":    pageOAuth{"oauth"},
+		"device":   fakeDevice{"device"},
+		"notified": notifiedOAuth{pageOAuth{"notified"}},
+	}
+	d := Deps{Lookup: func(s string) (connector.Connector, bool) { c, ok := byID[s]; return c, ok }}
+
+	assert.True(t, d.isPush("push"), "a connector with HandleInbound sends notifications")
+	assert.False(t, d.isPush("oauth"), "an OAuth puller sends none")
+	assert.False(t, d.isPush("device"), "an upload store sends none")
+	assert.False(t, d.isPush("missing"), "an unregistered provider sends none")
+
+	assert.True(t, d.isDevice("device"), "a connector with ParseUpload takes uploads")
+	assert.False(t, d.isDevice("push"), "a push connector takes no uploads")
+	assert.False(t, d.isDevice("oauth"), "an OAuth puller takes no uploads")
+	assert.False(t, d.isDevice("missing"), "an unregistered provider takes no uploads")
+
+	assert.True(t, d.typed("notified"), "an OAuth connector that pulls only what a notification names is typed")
+	assert.False(t, d.typed("oauth"), "an OAuth puller without FetchNotified is not typed")
+	assert.False(t, d.typed("push"), "a connector without OAuth is not typed")
+	assert.False(t, d.typed("missing"), "an unregistered provider is not typed")
 }
