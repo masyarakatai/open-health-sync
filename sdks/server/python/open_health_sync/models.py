@@ -483,6 +483,8 @@ class _ProviderRequired(TypedDict):
 class Provider(_ProviderRequired, total=False):
     # Display name, the slug when the build has none. Older servers leave it out.
     name: str
+    # What the connector delivers: record kinds (`sample`, `category`, `sleep`, `workout`, `route`, `nutrition`, `ecg`, `heartbeat`, `daily`, `observation`) and, beside them, the canonical quantity names it produces (for example `heart_rate`). Older servers leave it out.
+    data_types: List[str]
 
 
 class CreateUserRequest(TypedDict, total=False):

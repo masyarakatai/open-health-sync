@@ -58,6 +58,34 @@ type OptionalKeyed interface {
 	OptionalKeys() []string
 }
 
+// Record kinds a DataTypes list may name: the MapResult tables a connector
+// writes, at the granularity an app filters a source by. Quantity names (the
+// canonical quantity_type vocabulary of internal/model, for example
+// heart_rate) sit beside them in the same list, so an app can tell that a
+// source gives sleep and heart rate, not workouts, without reading every
+// connector's docs.
+const (
+	KindSample      = "sample"      // QuantitySamples
+	KindCategory    = "category"    // CategorySamples
+	KindSleep       = "sleep"       // SleepSessions and SleepPhases
+	KindWorkout     = "workout"     // Workouts
+	KindRoute       = "route"       // RoutePoints
+	KindNutrition   = "nutrition"   // NutritionLogs
+	KindECG         = "ecg"         // ECGRecordings and ECGSamples
+	KindHeartbeat   = "heartbeat"   // HeartbeatSamples
+	KindDaily       = "daily"       // DailySummaries
+	KindObservation = "observation" // Observations
+)
+
+// DataTypes is optionally implemented by a connector that declares what it
+// delivers: its record kinds (the Kind constants above) and, where that names
+// something an app can filter on, the canonical quantity names it produces.
+// GET /v1/providers returns the list as data_types. The values are public
+// API: they stay stable across releases.
+type DataTypes interface {
+	DataTypes() []string
+}
+
 // Configurable is optionally implemented by connectors that take their
 // operator keys. The app calls Configure for every enabled connector before
 // any role starts (an error stops startup), and again whenever the keys
@@ -154,6 +182,9 @@ type PasswordConnector interface {
 // ErrBadCredentials is returned by PasswordConnector.SignIn when the provider
 // refuses the email and password. The sign-in page asks the user again.
 var ErrBadCredentials = errors.New("connector: the provider refused the email or password")
+
+// AsDataTypes reports whether c declares what it delivers.
+func AsDataTypes(c Connector) (DataTypes, bool) { d, ok := c.(DataTypes); return d, ok }
 
 // AsPassword reports whether c signs users in with their provider password.
 func AsPassword(c Connector) (PasswordConnector, bool) { p, ok := c.(PasswordConnector); return p, ok }

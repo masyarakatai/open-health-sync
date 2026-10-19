@@ -116,3 +116,43 @@ func (c *Connector) ParseUpload(_ connector.UploadMeta, body io.Reader, _ connec
 	}
 	return nil
 }
+
+// DataTypes implements connector.DataTypes: what this connector delivers.
+func (c *Connector) DataTypes() []string {
+	return []string{
+		"category",
+		"nutrition",
+		"sample",
+		"sleep",
+		"workout",
+		"active_energy_burned",
+		"basal_metabolic_rate",
+		"blood_glucose",
+		"blood_pressure_diastolic",
+		"blood_pressure_systolic",
+		"body_fat_percentage",
+		"body_mass",
+		"body_temperature",
+		"distance_walking_running",
+		"energy_consumed",
+		"fat_monounsaturated",
+		"fat_polyunsaturated",
+		"fat_saturated",
+		"fat_total",
+		"heart_rate",
+		"hrv_rmssd",
+		"oxygen_saturation",
+		"pantothenic_acid",
+		"respiratory_rate",
+		"resting_heart_rate",
+		"step_count",
+		"total_energy_burned",
+		"vitamin_a",
+		"vitamin_b12",
+		"vitamin_b6",
+		"vitamin_c",
+		"vitamin_d",
+		"vitamin_e",
+		"vitamin_k",
+	}
+}

@@ -255,3 +255,15 @@ func readOneLine(body io.Reader) (line, error) {
 	}
 	return l, nil
 }
+
+// DataTypes implements connector.DataTypes: what this connector delivers.
+func (c *Connector) DataTypes() []string {
+	return []string{
+		"route",
+		"sample",
+		"workout",
+		"cycling_power",
+		"heart_rate",
+		"running_power",
+	}
+}

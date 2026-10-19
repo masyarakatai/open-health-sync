@@ -674,7 +674,14 @@ func TestProvidersAndOps(t *testing.T) {
 	e := newEnv(t)
 	r := e.do("GET", "/v1/providers", e.keyA, nil)
 	require.Equal(t, http.StatusOK, r.code, string(r.body))
-	assert.JSONEq(t, `{"data":[{"slug":"apple_health","name":"Apple Health","kinds":["device"]}]}`, string(r.body))
+	wantProviders, err := json.Marshal(map[string]any{"data": []any{map[string]any{
+		"slug":       "apple_health",
+		"name":       "Apple Health",
+		"kinds":      []string{"device"},
+		"data_types": applehealth.New().DataTypes(),
+	}}})
+	require.NoError(t, err)
+	assert.JSONEq(t, string(wantProviders), string(r.body))
 	r = e.do("GET", "/v1/providers", "", nil)
 	assert.Equal(t, http.StatusUnauthorized, r.code)
 

@@ -22,6 +22,11 @@ type providerJSON struct {
 	// Kinds lists what the connector does: oauth (the server pulls), push (the
 	// provider notifies), device (an SDK uploads).
 	Kinds []string `json:"kinds"`
+	// DataTypes lists what the connector delivers: record kinds (the
+	// connector.Kind constants, for example sleep and workout) and, beside
+	// them, the canonical quantity names it produces (for example
+	// heart_rate), so an app can pick a source without reading its docs.
+	DataTypes []string `json:"data_types"`
 }
 
 func (s *server) mountProviders(mux *http.ServeMux) {
@@ -65,9 +70,18 @@ func (s *server) listProviders(w http.ResponseWriter, r *http.Request) {
 		if !s.providerAllowed(p.TenantID, c.Slug()) {
 			continue
 		}
-		out = append(out, providerJSON{Slug: c.Slug(), Name: collect.ProviderName(c.Slug()), Kinds: kinds(c)})
+		out = append(out, providerJSON{Slug: c.Slug(), Name: collect.ProviderName(c.Slug()), Kinds: kinds(c), DataTypes: dataTypes(c)})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"data": out})
+}
+
+// dataTypes lists what c delivers: its record kinds and quantity names, an
+// empty list when the connector declares none.
+func dataTypes(c connector.Connector) []string {
+	if dt, ok := connector.AsDataTypes(c); ok {
+		return dt.DataTypes()
+	}
+	return []string{}
 }
 
 // kinds lists what c does: oauth, push, device.

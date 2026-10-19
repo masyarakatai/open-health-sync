@@ -214,3 +214,23 @@ func (c *Connector) Map(raw connector.RawRecord) (model.MapResult, error) {
 	}
 	return *res, nil
 }
+
+// DataTypes implements connector.DataTypes: what this connector delivers.
+func (c *Connector) DataTypes() []string {
+	return []string{
+		"daily",
+		"sample",
+		"sleep",
+		"workout",
+		"body_mass",
+		"heart_rate",
+		"hrv_rmssd",
+		"oxygen_saturation",
+		"respiratory_rate",
+		"resting_heart_rate",
+		"skin_temperature",
+		"step_count",
+		"strain",
+		"workout_strain",
+	}
+}

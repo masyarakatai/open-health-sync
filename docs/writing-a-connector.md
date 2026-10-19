@@ -28,6 +28,7 @@ several at once; the registry checks which ones it implements.
 | `KeyedConnector` | `RequiredKeys` | operator keys: the connector is off until each is set |
 | `OptionalKeyed` | `OptionalKeys` | keys it reads but runs without (a webhook secret, a region), listed in the [console](console.md) |
 | `Configurable` | `Configure` | receives its keys at startup, and again when the console saves new ones: validate before changing anything, and be safe to call while the connector runs |
+| `DataTypes` | `DataTypes` | what it delivers: the record kinds and quantity names `GET /v1/providers` reports for it; required (the registry test fails without it) |
 | `PostConnectHook` | `AfterConnect` | work after a user connects, such as subscribing to notifications |
 
 Rules that matter:
@@ -144,11 +145,16 @@ Read `connectors/example/example.go` for the full version.
 1. Put the package under `connectors/<slug>/` with a package comment.
 2. Add a blank import to `connectors/all/all.go` so the binary links it:
    `_ "github.com/soma-intelligence/open-health-sync/connectors/<slug>"`.
-3. For a keyed connector, implement `RequiredKeys` (for example `CLIENT_ID`, `CLIENT_SECRET`);
+3. Implement `DataTypes`: the record kinds it writes and the quantity names it
+   delivers. `GET /v1/providers` reports them, and the registry test fails without it.
+4. For a keyed connector, implement `RequiredKeys` (for example `CLIENT_ID`, `CLIENT_SECRET`);
    the operator sets `OHS_<SLUG>_CLIENT_ID` and so on. Without them the connector stays off
    and `ohs doctor` says why. For an OAuth connector `ohs doctor` also prints the callback URL
    to register with the provider.
-4. Document it in `docs/connectors/<slug>.md`: where to get keys, the callback URL, scopes.
+5. Document it in `docs/connectors/<slug>.md`: where to get keys, the callback URL,
+   scopes. The `data_types` table in [connectors/README.md](connectors/README.md) is
+   generated: run `go run ./internal/connector/cmd/gendatatypes` after changing
+   `DataTypes`.
 
 ## Test it with fixtures
 

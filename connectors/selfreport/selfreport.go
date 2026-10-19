@@ -92,3 +92,18 @@ func (c *Connector) Map(raw connector.RawRecord) (model.MapResult, error) {
 	}
 	return model.MapResult{QuantitySamples: []model.QuantitySample{report.Sample(raw.UserID, r)}}, nil
 }
+
+// DataTypes implements connector.DataTypes: what this connector delivers.
+func (c *Connector) DataTypes() []string {
+	return []string{
+		"sample",
+		"reported_energy",
+		"reported_exertion",
+		"reported_feeling",
+		"reported_mood",
+		"reported_muscle_soreness",
+		"reported_pain",
+		"reported_sleep_quality",
+		"reported_stress",
+	}
+}
