@@ -132,6 +132,13 @@ recipe export-all "daily.csv" --dir "$E2E_WORK/export"
 head -n 1 "$E2E_WORK/export/samples.csv" | grep -q '^id,type,value' && ok "export-all wrote samples.csv" ||
   fail "samples.csv header: $(head -n 1 "$E2E_WORK/export/samples.csv")"
 recipe ai-agent "claude mcp add --transport http open-health-sync http://localhost:$OHS_E2E_PORT/mcp"
+# The fixture has no glucose or nutrition data: the recipe says so and exits 1.
+if out=$(OHS_ENV_FILE="$ENV_FILE" python3 recipes/glucose-meals.py 2>&1); then
+  fail "glucose-meals exits 0 without data: $out"
+else
+  grep -q "no glucose or nutrition data" <<<"$out" && ok "recipe glucose-meals explains missing data" ||
+    fail "glucose-meals: $out"
+fi
 # The fixture has no resting heart rate or HRV: the recipe says so and exits 1.
 if out=$(OHS_ENV_FILE="$ENV_FILE" python3 recipes/heart-trend.py 2>&1); then
   fail "heart-trend exits 0 without data: $out"
